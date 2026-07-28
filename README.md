@@ -11,6 +11,8 @@ On first activation choose:
 - **Start Reviewed** to snapshot every eligible saved file as its reviewed baseline.
 - **Start Pending** to use an empty baseline, making every saved line an addition awaiting review.
 
+Files ignored by Git (including nested `.gitignore` patterns and negated rules) are excluded. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
+
 Dismiss the prompt to leave the workspace untouched. It will appear again on the next activation.
 
 Open **Code Review: Open Review Diff** or select a file in the Code Review sidebar. The compressed baseline appears on the left and the saved source file on the right.

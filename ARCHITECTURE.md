@@ -76,76 +76,76 @@ type ReviewStatus = "pending" | "inReview" | "reviewed";
 type ChangeType = "unchanged" | "added";
 
 interface Reviewer {
-  name: string;
-  email?: string;
+    name: string;
+    email?: string;
 }
 
 interface LastReviewer {
-  name: string;
-  email?: string;
-  time: string; // ISO-8601
+    name: string;
+    email?: string;
+    time: string; // ISO-8601
 }
 
 interface SourceSnapshot {
-  modifiedAt: number;
-  size: number;
+    modifiedAt: number;
+    size: number;
 }
 
 interface BaselineDescriptor {
-  file: string;       // snapshots/<pathHash>.<baselineDigest>.gz
-  digest: string;     // SHA-256 of the exact baseline bytes
-  codec: "gzip";
-  size: number;       // uncompressed byte size
-  createdAt: string;  // ISO-8601
+    file: string; // snapshots/<pathHash>.<baselineDigest>.gz
+    digest: string; // SHA-256 of the exact baseline bytes
+    codec: "gzip";
+    size: number; // uncompressed byte size
+    createdAt: string; // ISO-8601
 }
 
 interface CurrentDescriptor extends SourceSnapshot {
-  digest: string;         // SHA-256 of the exact saved bytes
-  gitAlgorithm: "myers";
-  generatedAt: string;   // ISO-8601 reconciliation time
+    digest: string; // SHA-256 of the exact saved bytes
+    gitAlgorithm: "myers";
+    generatedAt: string; // ISO-8601 reconciliation time
 }
 
 interface DiffHunk {
-  oldStart: number;
-  oldCount: number;
-  newStart: number;
-  newCount: number;
+    oldStart: number;
+    oldCount: number;
+    newStart: number;
+    newCount: number;
 }
 
 interface StoredFile {
-  schemaVersion: 4;
-  path: string;
-  file: FileRecord;
+    schemaVersion: 4;
+    path: string;
+    file: FileRecord;
 }
 
 interface FileRecord {
-  baseline: BaselineDescriptor;
-  current: CurrentDescriptor;
-  fileStatus: ReviewStatus;
-  lastReviewTime?: string; // ISO-8601, explicit review action time
-  currentLines: readonly CurrentLineRecord[];
-  deletedLines: readonly DeletedLineRecord[];
-  hunks: readonly DiffHunk[];
-  nextRevExtId: number;
-  updatedAt: string; // ISO-8601 metadata write time
+    baseline: BaselineDescriptor;
+    current: CurrentDescriptor;
+    fileStatus: ReviewStatus;
+    lastReviewTime?: string; // ISO-8601, explicit review action time
+    currentLines: readonly CurrentLineRecord[];
+    deletedLines: readonly DeletedLineRecord[];
+    hunks: readonly DiffHunk[];
+    nextRevExtId: number;
+    updatedAt: string; // ISO-8601 metadata write time
 }
 
 interface CurrentLineRecord {
-  line: number;
-  digest: string;
-  occurrence: number;
-  changeType: ChangeType;
-  reviewStatus: ReviewStatus;
-  lastReviewer?: LastReviewer;
+    line: number;
+    digest: string;
+    occurrence: number;
+    changeType: ChangeType;
+    reviewStatus: ReviewStatus;
+    lastReviewer?: LastReviewer;
 }
 
 interface DeletedLineRecord {
-  baselineLine: number;
-  digest: string;
-  occurrence: number;
-  changeType: "deleted";
-  reviewStatus: ReviewStatus;
-  lastReviewer?: LastReviewer;
+    baselineLine: number;
+    digest: string;
+    occurrence: number;
+    changeType: "deleted";
+    reviewStatus: ReviewStatus;
+    lastReviewer?: LastReviewer;
 }
 ```
 

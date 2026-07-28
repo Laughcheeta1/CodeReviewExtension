@@ -1,171 +1,172 @@
 {
-    "name": "code-review-tracker",
-    "displayName": "Code Review Tracker",
-    "description": "Persistent, line-level code review tracking for VS Code.",
-    "version": "0.4.0",
-    "publisher": "local",
-    "license": "MIT",
-    "engines": {
-        "vscode": "^1.127.0"
+  "name": "code-review-tracker",
+  "displayName": "Code Review Tracker",
+  "description": "Persistent, line-level code review tracking for VS Code.",
+  "version": "0.4.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.127.0"
+  },
+  "categories": [
+    "Other",
+    "SCM Providers"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Review tracking works in Restricted Mode; configured terminal commands require trust."
     },
-    "categories": [
-        "Other"
-    ],
-    "main": "./dist/extension.js",
-    "extensionKind": [
-        "workspace"
-    ],
-    "activationEvents": [
-        "onStartupFinished"
-    ],
-    "capabilities": {
-        "untrustedWorkspaces": {
-            "supported": "limited",
-            "description": "Review tracking works in Restricted Mode; configured terminal commands require trust."
-        },
-        "virtualWorkspaces": {
-            "supported": false,
-            "description": "Code Review Tracker requires local workspace files and the local Git executable."
-        }
-    },
-    "contributes": {
-        "commands": [
-            {
-                "command": "codeReviewTracker.markPending",
-                "title": "Code Review: Mark Lines Pending"
-            },
-            {
-                "command": "codeReviewTracker.markInReview",
-                "title": "Code Review: Mark Lines In Review"
-            },
-            {
-                "command": "codeReviewTracker.markReviewed",
-                "title": "Code Review: Mark Lines Reviewed"
-            },
-            {
-                "command": "codeReviewTracker.openReviewDiff",
-                "title": "Code Review: Open Review Diff"
-            },
-            {
-                "command": "codeReviewTracker.initializeReviewed",
-                "title": "Code Review: Mark Entire Workspace Reviewed"
-            },
-            {
-                "command": "codeReviewTracker.initializePending",
-                "title": "Code Review: Mark Entire Workspace Pending"
-            },
-            {
-                "command": "codeReviewTracker.sendSelectionToTerminal",
-                "title": "Code Review: Send Selection to Agent"
-            },
-            {
-                "command": "codeReviewTracker.refresh",
-                "title": "Code Review: Refresh"
-            },
-            {
-                "command": "codeReviewTracker.showLogs",
-                "title": "Code Review: Show Logs"
-            }
-        ],
-        "menus": {
-            "editor/context": [
-                {
-                    "command": "codeReviewTracker.markPending",
-                    "group": "codeReview@1"
-                },
-                {
-                    "command": "codeReviewTracker.markInReview",
-                    "group": "codeReview@2"
-                },
-                {
-                    "command": "codeReviewTracker.markReviewed",
-                    "group": "codeReview@3"
-                },
-                {
-                    "command": "codeReviewTracker.sendSelectionToTerminal",
-                    "group": "codeReview@4"
-                }
-            ]
-        },
-        "keybindings": [
-            {
-                "command": "codeReviewTracker.sendSelectionToTerminal",
-                "key": "ctrl+alt+enter",
-                "when": "editorTextFocus"
-            }
-        ],
-        "configuration": {
-            "title": "Code Review Tracker",
-            "properties": {
-                "codeReviewTracker.agentCommand": {
-                    "type": "string",
-                    "default": "",
-                    "scope": "machine-overridable",
-                    "restricted": true,
-                    "description": "Optional command to start a coding agent in a newly created review terminal, for example codex."
-                },
-                "codeReviewTracker.reviewerName": {
-                    "type": "string",
-                    "default": "",
-                    "scope": "window",
-                    "description": "Fallback reviewer name when Git user.name is unavailable."
-                },
-                "codeReviewTracker.reviewerEmail": {
-                    "type": "string",
-                    "default": "",
-                    "scope": "window",
-                    "description": "Fallback reviewer email when Git user.email is unavailable."
-                },
-                "codeReviewTracker.maxFileSizeBytes": {
-                    "type": "number",
-                    "default": 1048576,
-                    "minimum": 1024,
-                    "scope": "window",
-                    "description": "Largest file the extension will read for line review tracking."
-                }
-            }
-        },
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "codeReviewTracker",
-                    "title": "Code Review",
-                    "icon": "resources/review.svg"
-                }
-            ]
-        },
-        "views": {
-            "codeReviewTracker": [
-                {
-                    "id": "codeReviewTracker.files",
-                    "name": "Review Files"
-                }
-            ]
-        }
-    },
-    "scripts": {
-        "check-types": "tsc --noEmit",
-        "compile": "npm run check-types && node esbuild.js",
-        "build": "node esbuild.js --production",
-        "watch": "node esbuild.js --watch",
-        "lint": "eslint src test --max-warnings=0 && npm run check:integration",
-        "check:integration": "node --check test/integration/run.mjs && node --check test/integration/suite/index.js",
-        "test:unit": "node --import tsx --test test/**/*.test.ts",
-        "test:integration": "npm run build && node test/integration/run.mjs",
-        "test": "npm run check-types && npm run lint && npm run test:unit && npm run test:integration",
-        "package": "npm run check-types && npm run build",
-        "package:vsix": "npm exec -- vsce package --no-dependencies --no-rewrite-relative-links --allow-missing-repository",
-        "vscode:prepublish": "npm run package"
-    },
-    "devDependencies": {
-        "@types/node": "^24.0.0",
-        "@types/vscode": "^1.125.0",
-        "@vscode/test-electron": "^3.1.0",
-        "@vscode/vsce": "^3.6.0",
-        "esbuild": "^0.25.0",
-        "eslint": "^9.0.0",
-        "tsx": "^4.0.0",
-        "typescript": "^5.8.0",
-        "typescript-eslint": "^8.0.0"
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Code Review Tracker requires local workspace files and the local Git executable."
     }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeReviewTracker.markPending",
+        "title": "Code Review: Mark Lines Pending"
+      },
+      {
+        "command": "codeReviewTracker.markInReview",
+        "title": "Code Review: Mark Lines In Review"
+      },
+      {
+        "command": "codeReviewTracker.markReviewed",
+        "title": "Code Review: Mark Lines Reviewed"
+      },
+      {
+        "command": "codeReviewTracker.openReviewDiff",
+        "title": "Code Review: Open Review Diff"
+      },
+      {
+        "command": "codeReviewTracker.initializeReviewed",
+        "title": "Code Review: Mark Entire Workspace Reviewed"
+      },
+      {
+        "command": "codeReviewTracker.initializePending",
+        "title": "Code Review: Mark Entire Workspace Pending"
+      },
+      {
+        "command": "codeReviewTracker.sendSelectionToTerminal",
+        "title": "Code Review: Send Selection to Agent"
+      },
+      {
+        "command": "codeReviewTracker.refresh",
+        "title": "Code Review: Refresh"
+      },
+      {
+        "command": "codeReviewTracker.showLogs",
+        "title": "Code Review: Show Logs"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codeReviewTracker.markPending",
+          "group": "codeReview@1"
+        },
+        {
+          "command": "codeReviewTracker.markInReview",
+          "group": "codeReview@2"
+        },
+        {
+          "command": "codeReviewTracker.markReviewed",
+          "group": "codeReview@3"
+        },
+        {
+          "command": "codeReviewTracker.sendSelectionToTerminal",
+          "group": "codeReview@4"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "codeReviewTracker.sendSelectionToTerminal",
+        "key": "ctrl+alt+enter",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Code Review Tracker",
+      "properties": {
+        "codeReviewTracker.agentCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "restricted": true,
+          "description": "Optional command to start a coding agent in a newly created review terminal, for example codex."
+        },
+        "codeReviewTracker.reviewerName": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Fallback reviewer name when Git user.name is unavailable."
+        },
+        "codeReviewTracker.reviewerEmail": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Fallback reviewer email when Git user.email is unavailable."
+        },
+        "codeReviewTracker.maxFileSizeBytes": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 1024,
+          "scope": "window",
+          "description": "Largest file the extension will read for line review tracking."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codeReviewTracker",
+          "title": "Code Review",
+          "icon": "resources/review.svg"
+        }
+      ]
+    },
+    "views": {
+      "codeReviewTracker": [
+        {
+          "id": "codeReviewTracker.files",
+          "name": "Review Files"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "compile": "npm run check-types && node esbuild.js",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src test --max-warnings=0 && npm run check:integration",
+    "check:integration": "node --check test/integration/run.mjs && node --check test/integration/suite/index.js",
+    "test:unit": "node --import tsx --test test/**/*.test.ts",
+    "test:integration": "npm run build && node test/integration/run.mjs",
+    "test": "npm run check-types && npm run lint && npm run test:unit && npm run test:integration",
+    "package": "npm run check-types && npm run build",
+    "package:vsix": "npm exec -- vsce package --no-dependencies --no-rewrite-relative-links --allow-missing-repository",
+    "vscode:prepublish": "npm run package"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.0.0"
+  }
 }
