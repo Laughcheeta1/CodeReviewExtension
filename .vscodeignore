@@ -1,0 +1,12 @@
+src/**
+test/**
+.vscode-test/**
+.vscode/**
+.gitignore
+AGENTS.md
+REVIEW.md
+TODO.md
+eslint.config.mjs
+tsconfig.json
+esbuild.js
+*.vsix
