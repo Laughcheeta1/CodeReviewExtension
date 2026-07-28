@@ -1,19 +1,24 @@
 import { createHash } from 'node:crypto';
+
 export type ReviewStatus = 'pending' | 'inReview' | 'reviewed';
 export type ChangeType = 'unchanged' | 'added';
+
 export interface Reviewer {
     readonly name: string;
     readonly email?: string;
 }
+
 export interface LastReviewer {
     readonly name: string;
     readonly email?: string;
     readonly time: string;
 }
+
 export interface SourceSnapshot {
     readonly modifiedAt: number;
     readonly size: number;
 }
+
 export interface BaselineDescriptor {
     readonly file: string;
     readonly digest: string;
@@ -21,11 +26,13 @@ export interface BaselineDescriptor {
     readonly size: number;
     readonly createdAt: string;
 }
+
 export interface CurrentDescriptor extends SourceSnapshot {
     readonly digest: string;
     readonly gitAlgorithm: 'myers';
     readonly generatedAt: string;
 }
+
 export interface CurrentLineRecord {
     readonly line: number;
     readonly digest: string;
@@ -34,6 +41,7 @@ export interface CurrentLineRecord {
     readonly occurrence: number;
     readonly lastReviewer?: LastReviewer | undefined;
 }
+
 export interface DeletedLineRecord {
     readonly baselineLine: number;
     readonly digest: string;
@@ -42,12 +50,14 @@ export interface DeletedLineRecord {
     readonly reviewStatus: ReviewStatus;
     readonly lastReviewer?: LastReviewer | undefined;
 }
+
 export interface DiffHunk {
     readonly oldStart: number;
     readonly oldCount: number;
     readonly newStart: number;
     readonly newCount: number;
 }
+
 export interface FileRecord {
     readonly baseline: BaselineDescriptor;
     readonly current: CurrentDescriptor;
@@ -59,17 +69,21 @@ export interface FileRecord {
     readonly nextRevExtId: number;
     readonly updatedAt: string;
 }
+
 export interface PhysicalLine {
     readonly digest: string;
     readonly bytes: Uint8Array;
 }
+
 export interface RawGitHunk {
     readonly oldStart: number;
     readonly oldCount: number;
     readonly newStart: number;
     readonly newCount: number;
 }
+
 export const digestBytes = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
+
 /** Splits exact bytes into editor-visible physical lines while retaining LF/CRLF identity. */
 export function physicalLines(bytes: Uint8Array): readonly PhysicalLine[] {
     const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -90,12 +104,16 @@ export function physicalLines(bytes: Uint8Array): readonly PhysicalLine[] {
     }
     return result;
 }
-export function reviewableLines(file: Pick<FileRecord, 'currentLines' | 'deletedLines'>): readonly (CurrentLineRecord | DeletedLineRecord)[] {
+
+export function reviewableLines(
+    file: Pick<FileRecord, 'currentLines' | 'deletedLines'>
+): readonly (CurrentLineRecord | DeletedLineRecord)[] {
     return [
         ...file.currentLines.filter(line => line.changeType !== 'unchanged'),
         ...file.deletedLines
     ];
 }
+
 export function fileStatus(file: Pick<FileRecord, 'currentLines' | 'deletedLines'>): ReviewStatus {
     const changed = reviewableLines(file);
     if (changed.length === 0 || changed.every(line => line.reviewStatus === 'reviewed')) {
@@ -106,6 +124,7 @@ export function fileStatus(file: Pick<FileRecord, 'currentLines' | 'deletedLines
     }
     return 'pending';
 }
+
 export function reviewCounts(file: Pick<FileRecord, 'currentLines' | 'deletedLines'>): {
     reviewed: number;
     total: number;
@@ -113,11 +132,19 @@ export function reviewCounts(file: Pick<FileRecord, 'currentLines' | 'deletedLin
     const changed = reviewableLines(file);
     return { reviewed: changed.filter(line => line.reviewStatus === 'reviewed').length, total: changed.length };
 }
-export function buildDiffRecords(baselineBytes: Uint8Array, currentBytes: Uint8Array, rawHunks: readonly RawGitHunk[], previous?: FileRecord): Pick<FileRecord, 'currentLines' | 'deletedLines' | 'hunks'> {
+
+export function buildDiffRecords(
+    baselineBytes: Uint8Array,
+    currentBytes: Uint8Array,
+    rawHunks: readonly RawGitHunk[],
+    previous?: FileRecord
+): Pick<FileRecord, 'currentLines' | 'deletedLines' | 'hunks'> {
     const baseline = physicalLines(baselineBytes);
     const current = physicalLines(currentBytes);
     const previousCurrent = groupByDigest(previous?.currentLines.filter(line => line.changeType === 'added') ?? []);
-    const previousDeleted = new Map((previous?.deletedLines ?? []).map(line => [`${line.digest}:${line.baselineLine}`, line]));
+    const previousDeleted = new Map(
+        (previous?.deletedLines ?? []).map(line => [`${line.digest}:${line.baselineLine}`, line])
+    );
     const currentOccurrences = occurrences(current.map(line => line.digest));
     const currentChangeOccurrences = new Map<string, number>();
     const deletionOccurrences = new Map<string, number>();
@@ -127,6 +154,7 @@ export function buildDiffRecords(baselineBytes: Uint8Array, currentBytes: Uint8A
     const hunks: DiffHunk[] = [];
     let oldCursor = 1;
     let newCursor = 1;
+
     for (const raw of rawHunks) {
         const oldIndex = raw.oldCount === 0 ? raw.oldStart : raw.oldStart - 1;
         const newIndex = raw.newCount === 0 ? raw.newStart : raw.newStart - 1;
@@ -134,19 +162,28 @@ export function buildDiffRecords(baselineBytes: Uint8Array, currentBytes: Uint8A
             const line = current[newCursor - 1];
             if (line !== undefined) {
                 currentLines.push({
-                    line: newCursor, digest: baselineLineDigest(baseline[oldCursor - 1]!.bytes, oldCursor), changeType: 'unchanged',
+                    line: newCursor,
+                    digest: baselineLineDigest(baseline[oldCursor - 1]!.bytes, oldCursor),
+                    changeType: 'unchanged',
                     occurrence: currentOccurrences[newCursor - 1] ?? 1, reviewStatus: 'reviewed'
                 });
             }
             oldCursor += 1;
             newCursor += 1;
         }
+
         const oldLines = baseline.slice(oldIndex, oldIndex + raw.oldCount);
         const newLines = current.slice(newIndex, newIndex + raw.newCount);
+
         for (let index = 0; index < newLines.length; index += 1) {
             const newNumber = raw.newStart + index;
             const occurrence = nextOccurrence(currentChangeOccurrences, newLines[index]!.digest);
-            const transferred = transferAddition(previousCurrent, nextAdditionCounts, newLines[index]!.digest, occurrence);
+            const transferred = transferAddition(
+                previousCurrent,
+                nextAdditionCounts,
+                newLines[index]!.digest,
+                occurrence
+            );
             currentLines.push({
                 line: newNumber, digest: newLines[index]!.digest, changeType: 'added',
                 reviewStatus: transferred?.reviewStatus ?? 'pending',
@@ -154,6 +191,7 @@ export function buildDiffRecords(baselineBytes: Uint8Array, currentBytes: Uint8A
                 lastReviewer: transferred?.lastReviewer
             });
         }
+
         for (let index = 0; index < oldLines.length; index += 1) {
             const oldNumber = raw.oldStart + index;
             const digest = baselineLineDigest(oldLines[index]!.bytes, oldNumber);
@@ -170,22 +208,32 @@ export function buildDiffRecords(baselineBytes: Uint8Array, currentBytes: Uint8A
         oldCursor = oldIndex + raw.oldCount + 1;
         newCursor = newIndex + raw.newCount + 1;
     }
+
     while (newCursor <= current.length) {
         currentLines.push({
-            line: newCursor, digest: baselineLineDigest(baseline[oldCursor - 1]!.bytes, oldCursor), changeType: 'unchanged',
+            line: newCursor,
+            digest: baselineLineDigest(baseline[oldCursor - 1]!.bytes, oldCursor),
+            changeType: 'unchanged',
             occurrence: currentOccurrences[newCursor - 1] ?? 1, reviewStatus: 'reviewed'
         });
         oldCursor += 1;
         newCursor += 1;
     }
+
     currentLines.sort((a, b) => a.line - b.line);
     return { currentLines, deletedLines, hunks };
 }
+
 /** The NUL separator is unambiguous because tracked source files reject NUL bytes. */
 export function baselineLineDigest(line: Uint8Array, lineNumber: number): string {
     return digestBytes(new Uint8Array([...line, 0, ...new TextEncoder().encode(String(lineNumber))]));
 }
-export function setReviewer(status: ReviewStatus, reviewer: Reviewer | undefined, at: string): LastReviewer | undefined {
+
+export function setReviewer(
+    status: ReviewStatus,
+    reviewer: Reviewer | undefined,
+    at: string
+): LastReviewer | undefined {
     if (status === 'pending') {
         return undefined;
     }
@@ -196,6 +244,7 @@ export function setReviewer(status: ReviewStatus, reviewer: Reviewer | undefined
         ? { name: reviewer.name, time: at }
         : { name: reviewer.name, email: reviewer.email, time: at };
 }
+
 function occurrences(digests: readonly string[]): readonly number[] {
     const seen = new Map<string, number>();
     return digests.map(digest => {
@@ -204,6 +253,7 @@ function occurrences(digests: readonly string[]): readonly number[] {
         return next;
     });
 }
+
 function groupByDigest<T extends {
     digest: string;
 }>(records: readonly T[]): ReadonlyMap<string, readonly T[]> {
@@ -215,7 +265,11 @@ function groupByDigest<T extends {
     }
     return result;
 }
-function changedDigestCounts(lines: readonly PhysicalLine[], hunks: readonly RawGitHunk[]): ReadonlyMap<string, number> {
+
+function changedDigestCounts(
+    lines: readonly PhysicalLine[],
+    hunks: readonly RawGitHunk[]
+): ReadonlyMap<string, number> {
     const result = new Map<string, number>();
     for (const hunk of hunks) {
         if (hunk.newCount === 0) {
@@ -227,18 +281,26 @@ function changedDigestCounts(lines: readonly PhysicalLine[], hunks: readonly Raw
     }
     return result;
 }
-function transferAddition(previous: ReadonlyMap<string, readonly CurrentLineRecord[]>, nextCounts: ReadonlyMap<string, number>, digest: string, occurrence: number): CurrentLineRecord | undefined {
+
+function transferAddition(
+    previous: ReadonlyMap<string, readonly CurrentLineRecord[]>,
+    nextCounts: ReadonlyMap<string, number>,
+    digest: string,
+    occurrence: number
+): CurrentLineRecord | undefined {
     const matching = previous.get(digest);
     if (matching === undefined || matching.length !== nextCounts.get(digest)) {
         return undefined;
     }
     return matching[occurrence - 1];
 }
+
 function nextOccurrence(seen: Map<string, number>, digest: string): number {
     const value = (seen.get(digest) ?? 0) + 1;
     seen.set(digest, value);
     return value;
 }
+
 export function terminalPayload(path: string, text: string, ranges: readonly {
     start: number;
     end: number;
@@ -256,4 +318,3 @@ export function terminalPayload(path: string, text: string, ranges: readonly {
     });
     return `${blocks.join('\n')}\n`;
 }
-

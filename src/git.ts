@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import type { RawGitHunk, Reviewer } from './domain';
+
 const execute = promisify(execFile);
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
 export function parseGitHunks(output: string): readonly RawGitHunk[] {
     const result: RawGitHunk[] = [];
     for (const line of output.split('\n')) {
@@ -21,6 +23,7 @@ export function parseGitHunks(output: string): readonly RawGitHunk[] {
     }
     return result;
 }
+
 export class GitService {
     async available(): Promise<boolean> {
         try {
@@ -30,6 +33,7 @@ export class GitService {
             return false;
         }
     }
+
     async diff(baseline: Uint8Array, current: Uint8Array): Promise<readonly RawGitHunk[]> {
         const directory = await mkdtemp(join(tmpdir(), 'code-review-tracker-'));
         const before = join(directory, 'baseline');
@@ -37,8 +41,10 @@ export class GitService {
         const contentChanged = !sameBytes(baseline, current);
         try {
             await Promise.all([writeFile(before, baseline), writeFile(after, current)]);
-            const args = ['diff', '--no-index', '--no-ext-diff', '--no-textconv', '--no-color', '--text', '--unified=0',
-                '--diff-algorithm=myers', '--indent-heuristic', '--', before, after];
+            const args = [
+                'diff', '--no-index', '--no-ext-diff', '--no-textconv', '--no-color', '--text', '--unified=0',
+                '--diff-algorithm=myers', '--indent-heuristic', '--', before, after
+            ];
             try {
                 const result = await execute('git', args, { maxBuffer: 32 * 1024 * 1024 });
                 if (contentChanged) {
@@ -66,6 +72,7 @@ export class GitService {
             await rm(directory, { recursive: true, force: true });
         }
     }
+
     async reviewer(folder: vscode.WorkspaceFolder | undefined): Promise<Reviewer | undefined> {
         if (folder === undefined) {
             return undefined;
@@ -77,6 +84,7 @@ export class GitService {
         return name.length === 0 ? undefined : (email.length === 0 ? { name } : { name, email });
     }
 }
+
 async function gitConfig(folder: vscode.WorkspaceFolder, key: string): Promise<string> {
     try {
         return (await execute('git', ['-C', folder.uri.fsPath, 'config', '--get', key])).stdout.trim();
@@ -84,7 +92,7 @@ async function gitConfig(folder: vscode.WorkspaceFolder, key: string): Promise<s
         return '';
     }
 }
+
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
     return left.byteLength === right.byteLength && left.every((value, index) => value === right[index]);
 }
-

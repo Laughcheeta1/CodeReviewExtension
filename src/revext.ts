@@ -2,10 +2,12 @@ export interface RevExtEdit {
     readonly line: number;
     readonly suffix: string;
 }
+
 export interface RevExtRemoval {
     readonly line: number;
     readonly start: number;
 }
+
 const lineComments = new Map<string, string>([
     ['javascript', '//'], ['javascriptreact', '//'], ['typescript', '//'], ['typescriptreact', '//'],
     ['java', '//'], ['c', '//'], ['cpp', '//'], ['csharp', '//'], ['go', '//'], ['rust', '//'],
@@ -15,7 +17,13 @@ const lineComments = new Map<string, string>([
     ['perl', '#'], ['elixir', '#'], ['sql', '--'], ['lua', '--'], ['haskell', '--'], ['erlang', '%'],
     ['clojure', ';'], ['lisp', ';'], ['scheme', ';'], ['vb', "'"], ['asm', ';'], ['assembly', ';']
 ]);
-export function revExtEdits(lines: readonly string[], addedLines: ReadonlySet<number>, languageId: string, nextId: number): {
+
+export function revExtEdits(
+    lines: readonly string[],
+    addedLines: ReadonlySet<number>,
+    languageId: string,
+    nextId: number
+): {
     readonly edits: readonly RevExtEdit[];
     readonly nextId: number;
 } {
@@ -60,7 +68,12 @@ export function revExtEdits(lines: readonly string[], addedLines: ReadonlySet<nu
     }
     return { edits, nextId };
 }
-export function revExtRemovals(lines: readonly string[], addedLines: ReadonlySet<number>, languageId: string): readonly RevExtRemoval[] {
+
+export function revExtRemovals(
+    lines: readonly string[],
+    addedLines: ReadonlySet<number>,
+    languageId: string
+): readonly RevExtRemoval[] {
     const token = lineComments.get(languageId);
     if (token === undefined) {
         return [];
@@ -78,20 +91,28 @@ export function revExtRemovals(lines: readonly string[], addedLines: ReadonlySet
     }
     return result;
 }
+
 function hasMarker(line: string, token: string): boolean {
     return markerExpression(token).test(line);
 }
+
 function markerId(line: string, token: string): number | undefined {
     const match = new RegExp(`(?:${escape(token)})\\s+RevExt: ([1-9]\\d*)$`).exec(line);
     return match === null ? undefined : Number(match[1]);
 }
+
 function withoutMarker(line: string, token: string): string {
     return line.replace(markerExpression(token), '');
 }
+
 function markerExpression(token: string): RegExp {
     return new RegExp(`\\s{2}${escape(token)}\\s+RevExt: [1-9]\\d*$|^\\s*${escape(token)}\\s+RevExt: [1-9]\\d*$`);
 }
-function escape(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function escape(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Do not append after explicit continuation markers; these contexts would change program meaning.
 function safeForSuffix(line: string, languageId: string): boolean {
     if (line.endsWith('\\')) {
@@ -102,4 +123,3 @@ function safeForSuffix(line: string, languageId: string): boolean {
     }
     return true;
 }
-

@@ -1,11 +1,23 @@
 import * as vscode from 'vscode';
-import { buildDiffRecords, digestBytes, fileStatus, physicalLines, reviewableLines, setReviewer, type FileRecord, type ReviewStatus, type Reviewer, type SourceSnapshot } from './domain';
+import {
+    buildDiffRecords,
+    digestBytes,
+    fileStatus,
+    physicalLines,
+    reviewableLines,
+    setReviewer,
+    type FileRecord,
+    type ReviewStatus,
+    type Reviewer,
+    type SourceSnapshot
+} from './domain';
 import { GitService } from './git';
 import { PersistentStore } from './store';
 import { snapshotFileName, sourceMayHaveChanged } from './storage-format';
 import { revExtEdits, revExtRemovals } from './revext';
 const BASELINE_SCHEME = 'code-review-baseline';
 const now = (): string => new Date().toISOString();
+
 interface BaselineIdentity {
     readonly source: vscode.Uri;
     readonly baselineDigest: string;
@@ -21,7 +33,11 @@ export class ReviewService implements vscode.Disposable {
     readonly onDidChange = this.changedEmitter.event;
     private readonly promotedEmitter = new vscode.EventEmitter<vscode.Uri>();
     readonly onDidPromote = this.promotedEmitter.event;
-    constructor(private readonly log: vscode.LogOutputChannel, private readonly git: GitService) { }
+    constructor(
+        private readonly log: vscode.LogOutputChannel,
+        private readonly git: GitService
+    ) { }
+
     async initialize(): Promise<void> {
         for (const folder of vscode.workspace.workspaceFolders ?? []) {
             const store = new PersistentStore(folder, this.log);
@@ -29,8 +45,14 @@ export class ReviewService implements vscode.Disposable {
             this.stores.set(folder.uri.toString(), store);
         }
     }
-    hasMetadata(folder: vscode.WorkspaceFolder): boolean { return this.stores.get(folder.uri.toString())?.hasMetadata ?? false; }
-    dispose(): void { this.changedEmitter.dispose(); this.promotedEmitter.dispose(); }
+    hasMetadata(folder: vscode.WorkspaceFolder): boolean {
+        return this.stores.get(folder.uri.toString())?.hasMetadata ?? false;
+    }
+
+    dispose(): void {
+        this.changedEmitter.dispose();
+        this.promotedEmitter.dispose();
+    }
     setEligiblePaths(folder: vscode.WorkspaceFolder, paths: readonly string[]): void {
         const key = folder.uri.toString();
         const next = new Set(paths);
@@ -98,7 +120,9 @@ export class ReviewService implements vscode.Disposable {
                 }
             } catch (error) {
                 if (!isFileNotFound(error)) {
-                    this.log.warn(`Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`);
+                    this.log.warn(
+                        `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`
+                    );
                     continue;
                 }
                 await this.withSource(uri, () => store.delete(path));
@@ -129,7 +153,9 @@ export class ReviewService implements vscode.Disposable {
             await this.withSource(document.uri, () => this.recomputeSavedDocument(document));
             this.changedEmitter.fire(document.uri);
         } catch (error) {
-            this.log.warn(`Could not reconcile saved source ${this.relativePath(document.uri) ?? document.uri.toString()}: ${String(error)}`);
+            this.log.warn(
+                `Could not reconcile saved source ${this.relativePath(document.uri) ?? document.uri.toString()}: ${String(error)}`
+            );
         }
     }
     async initializeFolder(folder: vscode.WorkspaceFolder, status: 'pending' | 'reviewed'): Promise<void> {
@@ -151,7 +177,12 @@ export class ReviewService implements vscode.Disposable {
             await store.reset();
             const maxSize = this.maxSize();
             const paths = [...eligible].sort();
-            await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Code Review: start ${status}` }, async (progress) => {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Code Review: start ${status}`
+                },
+                async progress => {
                 for (let index = 0; index < paths.length; index += 1) {
                     const path = paths[index]!;
                     const uri = vscode.Uri.joinPath(folder.uri, ...path.split('/'));
@@ -168,7 +199,8 @@ export class ReviewService implements vscode.Disposable {
                     }
                     progress.report({ increment: 100 / Math.max(paths.length, 1) });
                 }
-            });
+                }
+            );
             this.changedEmitter.fire(undefined);
         } finally {
             this.initializingFolders.delete(folderKey);
@@ -177,7 +209,11 @@ export class ReviewService implements vscode.Disposable {
     baselineUri(source: vscode.Uri, file: FileRecord): vscode.Uri {
         return vscode.Uri.from({
             scheme: BASELINE_SCHEME, path: source.path,
-            query: new URLSearchParams({ source: source.toString(), baseline: file.baseline.digest, current: file.current.digest }).toString()
+            query: new URLSearchParams({
+                source: source.toString(),
+                baseline: file.baseline.digest,
+                current: file.current.digest
+            }).toString()
         });
     }
     parseBaselineUri(uri: vscode.Uri): BaselineIdentity | undefined {
@@ -564,4 +600,3 @@ function isExcludedPath(path: string): boolean {
         || path === '.vscode/code-review-tracker' || path.startsWith('.vscode/code-review-tracker/');
 }
 function isFileNotFound(error: unknown): boolean { return error instanceof vscode.FileSystemError && error.code === 'FileNotFound'; }
-

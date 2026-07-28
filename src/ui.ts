@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import type { ReviewStatus } from './domain';
 import type { ReviewService } from './review-service';
-const statusText: Record<ReviewStatus, string> = { pending: 'Pending review', inReview: 'In review', reviewed: 'Reviewed' };
+const statusText: Record<ReviewStatus, string> = {
+    pending: 'Pending review',
+    inReview: 'In review',
+    reviewed: 'Reviewed'
+};
 const statusIcon: Record<ReviewStatus, string> = { pending: 'P', inReview: '●', reviewed: '✓' };
 export interface HunkCommand {
     readonly source: vscode.Uri;
@@ -12,16 +16,27 @@ export interface HunkCommand {
 }
 export class BaselineContentProvider implements vscode.TextDocumentContentProvider {
     constructor(private readonly service: ReviewService) { }
-    provideTextDocumentContent(uri: vscode.Uri): vscode.ProviderResult<string> { return this.service.baselineContent(uri); }
+    provideTextDocumentContent(uri: vscode.Uri): vscode.ProviderResult<string> {
+        return this.service.baselineContent(uri);
+    }
 }
 export class ReviewDecorations implements vscode.Disposable {
     private readonly types: Record<ReviewStatus, vscode.TextEditorDecorationType>;
     private readonly changeSubscription: vscode.Disposable;
     constructor(private readonly service: ReviewService) {
         this.types = {
-            pending: vscode.window.createTextEditorDecorationType({ gutterIconPath: svg('8c959f'), gutterIconSize: 'contain' }),
-            inReview: vscode.window.createTextEditorDecorationType({ gutterIconPath: svg('d29922'), gutterIconSize: 'contain' }),
-            reviewed: vscode.window.createTextEditorDecorationType({ gutterIconPath: svg('3fb950'), gutterIconSize: 'contain' })
+            pending: vscode.window.createTextEditorDecorationType({
+                gutterIconPath: svg('8c959f'),
+                gutterIconSize: 'contain'
+            }),
+            inReview: vscode.window.createTextEditorDecorationType({
+                gutterIconPath: svg('d29922'),
+                gutterIconSize: 'contain'
+            }),
+            reviewed: vscode.window.createTextEditorDecorationType({
+                gutterIconPath: svg('3fb950'),
+                gutterIconSize: 'contain'
+            })
         };
         this.changeSubscription = service.onDidChange(() => this.refresh());
     }
@@ -40,13 +55,19 @@ export class ReviewDecorations implements vscode.Disposable {
             if (file === undefined) {
                 continue;
             }
-            const options: Record<ReviewStatus, vscode.DecorationOptions[]> = { pending: [], inReview: [], reviewed: [] };
+            const options: Record<ReviewStatus, vscode.DecorationOptions[]> = {
+                pending: [],
+                inReview: [],
+                reviewed: []
+            };
             if (identity === undefined) {
                 for (const line of file.currentLines.filter(line => line.changeType !== 'unchanged')) {
                     if (line.line > editor.document.lineCount) {
                         continue;
                     }
-                    options[line.reviewStatus].push(decoration(line.line, line.changeType, line.reviewStatus, line.lastReviewer));
+                    options[line.reviewStatus].push(
+                        decoration(line.line, line.changeType, line.reviewStatus, line.lastReviewer)
+                    );
                 }
             } else if (identity.baselineDigest === file.baseline.digest && identity.currentDigest === file.current.digest) {
                 for (const line of file.deletedLines) {
@@ -69,12 +90,17 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.D
     private readonly emitter = new vscode.EventEmitter<void>();
     readonly onDidChangeCodeLenses = this.emitter.event;
     private readonly subscription: vscode.Disposable;
-    constructor(private readonly service: ReviewService) { this.subscription = service.onDidChange(() => this.emitter.fire()); }
+    constructor(private readonly service: ReviewService) {
+        this.subscription = service.onDidChange(() => this.emitter.fire());
+    }
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
         const identity = this.service.parseBaselineUri(document.uri);
         const source = identity?.source ?? document.uri;
         const file = this.service.file(source);
-        if (file === undefined || (identity !== undefined && (identity.baselineDigest !== file.baseline.digest || identity.currentDigest !== file.current.digest))) {
+        if (file === undefined || (identity !== undefined && (
+            identity.baselineDigest !== file.baseline.digest
+            || identity.currentDigest !== file.current.digest
+        ))) {
             return [];
         }
         const result: vscode.CodeLens[] = [];
@@ -186,4 +212,3 @@ function decoration(line: number, change: string, status: ReviewStatus, lastRevi
 function svg(color: string): vscode.Uri {
     return vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="5" fill="#${color}"/></svg>`)}`);
 }
-

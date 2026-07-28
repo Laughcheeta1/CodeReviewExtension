@@ -1,9 +1,16 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { digestBytes } from './domain';
+
 export function encodeSnapshot(bytes: Uint8Array): Uint8Array {
     return gzipSync(bytes);
 }
-export function decodeSnapshot(compressed: Uint8Array, expectedDigest: string, expectedSize: number, maxSize: number): Uint8Array {
+
+export function decodeSnapshot(
+    compressed: Uint8Array,
+    expectedDigest: string,
+    expectedSize: number,
+    maxSize: number
+): Uint8Array {
     if (expectedSize > maxSize) {
         throw new Error('Baseline snapshot exceeds the configured size limit');
     }
@@ -18,4 +25,3 @@ export function decodeSnapshot(compressed: Uint8Array, expectedDigest: string, e
     }
     return bytes;
 }
-

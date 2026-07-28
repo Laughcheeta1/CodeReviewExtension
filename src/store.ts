@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { digestBytes, fileStatus, type FileRecord } from './domain';
-import { parseStoredFile, storageFileName, storedFile, summarize, type FileSummary } from './storage-format';
+import {
+    parseStoredFile,
+    storageFileName,
+    storedFile,
+    summarize,
+    type FileSummary
+} from './storage-format';
 import { decodeSnapshot, encodeSnapshot } from './snapshot';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const CACHE_LIMIT = 8;
+
 export class PersistentStore {
     private readonly summaries = new Map<string, FileSummary>();
     private readonly cache = new Map<string, FileRecord | undefined>();
@@ -47,7 +54,8 @@ export class PersistentStore {
             return this.peek(path);
         }
         try {
-            const parsed = parseStoredFile(JSON.parse(decoder.decode(await vscode.workspace.fs.readFile(this.fileUri(path)))));
+            const bytes = await vscode.workspace.fs.readFile(this.fileUri(path));
+            const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
             if (parsed === undefined || parsed.path !== path) {
                 throw new Error('Invalid v4 per-file review metadata');
             }
@@ -64,7 +72,8 @@ export class PersistentStore {
         }
     }
     async loadBaseline(file: FileRecord, maxSize: number): Promise<Uint8Array> {
-        const compressed = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.snapshotsUri, file.baseline.file));
+        const snapshot = vscode.Uri.joinPath(this.snapshotsUri, file.baseline.file);
+        const compressed = await vscode.workspace.fs.readFile(snapshot);
         return decodeSnapshot(compressed, file.baseline.digest, file.baseline.size, maxSize);
     }
     async commit(path: string, file: FileRecord, baselineBytes?: Uint8Array): Promise<void> {
@@ -150,7 +159,9 @@ export class PersistentStore {
                 continue;
             }
             try {
-                const parsed = parseStoredFile(JSON.parse(decoder.decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.directoryUri, name)))));
+                const metadata = vscode.Uri.joinPath(this.directoryUri, name);
+                const bytes = await vscode.workspace.fs.readFile(metadata);
+                const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
                 if (parsed === undefined || storageFileName(parsed.path) !== name) {
                     throw new Error('Unsupported or malformed metadata');
                 }
@@ -203,7 +214,8 @@ export class PersistentStore {
         const temporary = vscode.Uri.joinPath(this.snapshotsUri, `${file.baseline.file}.tmp-${randomUUID()}`);
         try {
             await vscode.workspace.fs.writeFile(temporary, encodeSnapshot(bytes));
-            decodeSnapshot(await vscode.workspace.fs.readFile(temporary), file.baseline.digest, file.baseline.size, file.baseline.size + 1);
+            const snapshot = await vscode.workspace.fs.readFile(temporary);
+            decodeSnapshot(snapshot, file.baseline.digest, file.baseline.size, file.baseline.size + 1);
             await vscode.workspace.fs.rename(temporary, target, { overwrite: false });
         } finally {
             await this.deleteTemporary(temporary);
@@ -213,7 +225,8 @@ export class PersistentStore {
         await vscode.workspace.fs.createDirectory(this.directoryUri);
         const temporary = vscode.Uri.joinPath(this.directoryUri, `.${storageFileName(path)}.tmp-${randomUUID()}`);
         try {
-            await vscode.workspace.fs.writeFile(temporary, encoder.encode(`${JSON.stringify(storedFile(path, file), null, 2)}\n`));
+            const contents = `${JSON.stringify(storedFile(path, file), null, 2)}\n`;
+            await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));
             await vscode.workspace.fs.rename(temporary, this.fileUri(path), { overwrite: true });
         } finally {
             await this.deleteTemporary(temporary);
@@ -221,7 +234,8 @@ export class PersistentStore {
     }
     private async loadDirect(path: string): Promise<FileRecord | undefined> {
         try {
-            const parsed = parseStoredFile(JSON.parse(decoder.decode(await vscode.workspace.fs.readFile(this.fileUri(path)))));
+            const bytes = await vscode.workspace.fs.readFile(this.fileUri(path));
+            const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
             if (parsed === undefined || parsed.path !== path) {
                 throw new Error('Invalid v4 per-file review metadata');
             }
@@ -242,7 +256,9 @@ export class PersistentStore {
             }
         }
     }
-    private fileUri(path: string): vscode.Uri { return vscode.Uri.joinPath(this.directoryUri, storageFileName(path)); }
+    private fileUri(path: string): vscode.Uri {
+        return vscode.Uri.joinPath(this.directoryUri, storageFileName(path));
+    }
     private touch(path: string, file: FileRecord | undefined): void {
         this.cache.delete(path);
         this.cache.set(path, file);
@@ -276,5 +292,6 @@ export class PersistentStore {
         }
     }
 }
-function isFileNotFound(error: unknown): boolean { return error instanceof vscode.FileSystemError && error.code === 'FileNotFound'; }
-
+function isFileNotFound(error: unknown): boolean {
+    return error instanceof vscode.FileSystemError && error.code === 'FileNotFound';
+}

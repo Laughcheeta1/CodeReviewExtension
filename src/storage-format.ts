@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { fileStatus, reviewCounts, type FileRecord, type LastReviewer, type ReviewStatus, type SourceSnapshot } from './domain';
+import {
+    fileStatus,
+    reviewCounts,
+    type FileRecord,
+    type LastReviewer,
+    type ReviewStatus,
+    type SourceSnapshot
+} from './domain';
+
 export interface StoredFile {
     readonly schemaVersion: 4;
     readonly path: string;
@@ -12,16 +20,32 @@ export interface FileSummary {
     readonly source: SourceSnapshot;
     readonly baselineFile: string;
 }
-export function pathHash(path: string): string { return createHash('sha256').update(path).digest('hex'); }
-export function storageFileName(path: string): string { return `${pathHash(path)}.json`; }
-export function snapshotFileName(path: string, digest: string): string { return `${pathHash(path)}.${digest}.gz`; }
+export function pathHash(path: string): string {
+    return createHash('sha256').update(path).digest('hex');
+}
+
+export function storageFileName(path: string): string {
+    return `${pathHash(path)}.json`;
+}
+
+export function snapshotFileName(path: string, digest: string): string {
+    return `${pathHash(path)}.${digest}.gz`;
+}
+
 export function storedFile(path: string, file: FileRecord): StoredFile {
     return {
         schemaVersion: 4,
         path,
         file: {
             ...file,
-            currentLines: file.currentLines.map(({ line, digest, changeType, reviewStatus, occurrence, lastReviewer }) => {
+            currentLines: file.currentLines.map(({
+                line,
+                digest,
+                changeType,
+                reviewStatus,
+                occurrence,
+                lastReviewer
+            }) => {
                 const record = { line, digest, changeType, reviewStatus, occurrence };
                 return lastReviewer === undefined ? record : { ...record, lastReviewer };
             }),
@@ -38,11 +62,20 @@ export function summarize(file: FileRecord): FileSummary {
         baselineFile: file.baseline.file
     };
 }
-export function sourceMayHaveChanged(modifiedAt: number, size: number, source: SourceSnapshot | undefined): boolean {
+export function sourceMayHaveChanged(
+    modifiedAt: number,
+    size: number,
+    source: SourceSnapshot | undefined
+): boolean {
     return source === undefined || modifiedAt !== source.modifiedAt || size !== source.size;
 }
 export function parseStoredFile(value: unknown): StoredFile | undefined {
-    if (!isObject(value) || value.schemaVersion !== 4 || !isRelativePath(value.path) || !isFileRecord(value.file)) {
+    if (
+        !isObject(value)
+        || value.schemaVersion !== 4
+        || !isRelativePath(value.path)
+        || !isFileRecord(value.file)
+    ) {
         return undefined;
     }
     if (!isConsistent(value.path, value.file)) {
@@ -65,8 +98,12 @@ function isFileRecord(value: unknown): value is FileRecord {
         && (line.lastReviewer === undefined || isLastReviewer(line.lastReviewer)))
         && value.deletedLines.every(line => isObject(line) && line.changeType === 'deleted'
             && positiveInteger(line.baselineLine) && isDigest(line.digest) && isReviewStatus(line.reviewStatus)
-            && positiveInteger(line.occurrence) && (line.lastReviewer === undefined || isLastReviewer(line.lastReviewer)))
-        && value.hunks.every(hunk => isObject(hunk) && nonNegativeInteger(hunk.oldCount) && validRangeStart(hunk.oldStart, hunk.oldCount)
+        && positiveInteger(line.occurrence)
+        && (line.lastReviewer === undefined || isLastReviewer(line.lastReviewer)))
+        && value.hunks.every(hunk =>
+            isObject(hunk)
+            && nonNegativeInteger(hunk.oldCount)
+            && validRangeStart(hunk.oldStart, hunk.oldCount)
             && nonNegativeInteger(hunk.newCount) && validRangeStart(hunk.newStart, hunk.newCount)
             && (hunk.oldCount > 0 || hunk.newCount > 0));
 }
@@ -91,7 +128,10 @@ function isConsistent(path: string, file: FileRecord): boolean {
     if (file.fileStatus !== fileStatus(file)) {
         return false;
     }
-    if (!file.currentLines.every((line, index) => line.line === index + 1 && decisionMatches(line.reviewStatus, line.lastReviewer, line.changeType === 'unchanged'))) {
+    if (!file.currentLines.every((line, index) =>
+        line.line === index + 1
+        && decisionMatches(line.reviewStatus, line.lastReviewer, line.changeType === 'unchanged')
+    )) {
         return false;
     }
     if (!file.deletedLines.every(line => decisionMatches(line.reviewStatus, line.lastReviewer, false))) {
@@ -121,22 +161,37 @@ function decisionMatches(status: ReviewStatus, lastReviewer: LastReviewer | unde
     }
     return lastReviewer !== undefined;
 }
-function isReviewStatus(value: unknown): boolean { return value === 'pending' || value === 'inReview' || value === 'reviewed'; }
+function isReviewStatus(value: unknown): boolean {
+    return value === 'pending' || value === 'inReview' || value === 'reviewed';
+}
 function isDigest(value: unknown): value is string { return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value); }
 function isTimestamp(value: unknown): value is string {
     return typeof value === 'string'
         && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
         && Number.isFinite(Date.parse(value));
 }
-function finiteNumber(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value); }
-function nonNegativeInteger(value: unknown): value is number { return finiteNumber(value) && Number.isInteger(value) && value >= 0; }
+function finiteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function nonNegativeInteger(value: unknown): value is number {
+    return finiteNumber(value) && Number.isInteger(value) && value >= 0;
+}
 function positiveInteger(value: unknown): value is number { return nonNegativeInteger(value) && value > 0; }
 function validRangeStart(start: unknown, count: unknown): boolean {
     return positiveInteger(start) || (start === 0 && count === 0);
 }
-function isObject(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null; }
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
 function isRelativePath(value: unknown): value is string {
-    if (typeof value !== 'string' || value.length === 0 || value.startsWith('/') || value.includes('\\') || value.includes('\0')) {
+    if (
+        typeof value !== 'string'
+        || value.length === 0
+        || value.startsWith('/')
+        || value.includes('\\')
+        || value.includes('\0')
+    ) {
         return false;
     }
     return value.split('/').every(part => part.length > 0 && part !== '.' && part !== '..');
@@ -153,4 +208,3 @@ function addRange(lines: Set<number>, start: number, count: number): boolean {
 function sameValues(left: ReadonlySet<number>, right: ReadonlySet<number>): boolean {
     return left.size === right.size && [...left].every(value => right.has(value));
 }
-
