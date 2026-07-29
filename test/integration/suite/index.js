@@ -5,9 +5,9 @@ const vscode = require("vscode");
 function metadataUri(folder, path) {
   const name = createHash("sha256").update(path).digest("hex");
   return vscode.Uri.joinPath(
-    folder.uri,
-    ".vscode",
-    "code-review-tracker",
+    folder.uri,  // RevExt: 23
+    ".vscode",  // RevExt: 25
+    "code-review-tracker",  // RevExt: 27
     `${name}.json`,
   );  // RevExt: 9
 }  // RevExt: 13
@@ -30,6 +30,17 @@ async function waitForMetadata(folder, path) {
   }
   throw new Error(`Timed out waiting for review metadata for ${path}`);
 }  // RevExt: 15
+async function assertSnapshot(folder, stored) {
+  const snapshot = vscode.Uri.joinPath(
+    folder.uri,  // RevExt: 24
+    ".vscode",  // RevExt: 26
+    "code-review-tracker",  // RevExt: 28
+    "snapshots",
+    stored.file.baseline.file,
+  );  // RevExt: 29
+  const stat = await vscode.workspace.fs.stat(snapshot);
+  assert.ok((stat.type & vscode.FileType.File) !== 0);
+}  // RevExt: 21
 // RevExt: 4
 function assertPending(file) {
   assert.equal(file.file.baseline.size, 0);
@@ -54,6 +65,7 @@ async function run() {
     "codeReviewTracker.markReviewed",
     "codeReviewTracker.markHunkPending",
     "codeReviewTracker.markHunkReviewed",
+    "codeReviewTracker.setup",
     "codeReviewTracker.initializePending",
     "codeReviewTracker.initializeReviewed",
     "codeReviewTracker.refresh",
@@ -62,7 +74,10 @@ async function run() {
 // RevExt: 6
   const folder = vscode.workspace.workspaceFolders[0];
   assert.ok(folder, "integration workspace is available");
-  assertPending(await waitForMetadata(folder, "sample.txt"));
+  await vscode.commands.executeCommand("codeReviewTracker.initializePending");
+  const sample = await waitForMetadata(folder, "sample.txt");
+  assertPending(sample);  // RevExt: 20
+  await assertSnapshot(folder, sample);
 // RevExt: 7
   const createdPath = "created-after-activation.txt";
   await vscode.workspace.fs.writeFile(
@@ -73,3 +88,5 @@ async function run() {
 }  // RevExt: 17
 module.exports = { run };
 // RevExt: 8
+// RevExt: 18
+// RevExt: 22

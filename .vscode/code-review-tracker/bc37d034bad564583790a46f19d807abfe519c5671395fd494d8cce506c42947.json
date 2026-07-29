@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 4,
+  "path": ".gitignore",
+  "file": {
+    "baseline": {
+      "file": "bc37d034bad564583790a46f19d807abfe519c5671395fd494d8cce506c42947.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.gz",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "codec": "gzip",
+      "size": 0,
+      "createdAt": "2026-07-29T20:40:30.412Z"
+    },
+    "current": {
+      "digest": "9dc25bd17a1862400f722af4fe60a756decd14092fe604606c1efa5a61c56550",
+      "modifiedAt": 1785096153429,
+      "size": 41,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-07-29T20:40:30.412Z"
+    },
+    "fileStatus": "pending",
+    "nextRevExtId": 1,
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "ed19d3c9c8a5e34d0179e0b1a9c2907d2e657738733e4a432a8cf81c76ce56f1",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "621870b586261264718bcdd021ef6968dd08a9509a246a561bbc458ac02da583",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "eb06bcfc08ba600d3809317296ebda2640a1ffad73a7aaa55a3cf02447b42347",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [
+      {
+        "oldStart": 0,
+        "oldCount": 0,
+        "newStart": 1,
+        "newCount": 4
+      }
+    ],
+    "updatedAt": "2026-07-29T20:40:30.412Z"
+  }
+}

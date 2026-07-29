@@ -31,7 +31,7 @@ export class GitService {
     try {  // RevExt: 30
       await execute("git", ["--version"]);
       return true;
-    } catch {
+    } catch {  // RevExt: 53
       return false;
     }  // RevExt: 17
   }  // RevExt: 23
@@ -48,7 +48,7 @@ export class GitService {
       await Promise.all([
         writeFile(before, baseline),
         writeFile(after, current),
-      ]);
+      ]);  // RevExt: 55
       const args = [
         "diff",
         "--no-index",
@@ -96,7 +96,7 @@ export class GitService {
   }  // RevExt: 24
 // RevExt: 5
   public async ignoredPaths(
-    directory: string,
+    directory: string,  // RevExt: 57
     paths: readonly string[],
   ): Promise<ReadonlySet<string>> {
     const ignored = new Set<string>();
@@ -112,12 +112,27 @@ export class GitService {
     }  // RevExt: 19
     return ignored;
   }  // RevExt: 25
+  public async trackedPaths(
+    directory: string,  // RevExt: 58
+  ): Promise<readonly string[] | undefined> {
+    try {  // RevExt: 52
+      const { stdout } = await execute("git", [
+        "-C",
+        directory,
+        "ls-files",
+        "-z",
+      ]);  // RevExt: 56
+      return stdout.split("\0").filter((path) => path.length > 0);
+    } catch {  // RevExt: 54
+      return undefined;  // RevExt: 59
+    }  // RevExt: 50
+  }  // RevExt: 51
 // RevExt: 6
   public async reviewer(
     folder: vscode.WorkspaceFolder | undefined,
   ): Promise<Reviewer | undefined> {
     if (folder === undefined) {
-      return undefined;
+      return undefined;  // RevExt: 60
     }  // RevExt: 20
     const [name, email] = await Promise.all([
       gitConfig(folder, "user.name"),
@@ -192,3 +207,4 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   );
 }  // RevExt: 45
 // RevExt: 48
+// RevExt: 49

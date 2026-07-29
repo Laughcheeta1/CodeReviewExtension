@@ -64,9 +64,9 @@ test("Git ranges drive correct records for middle insertions and deletions", asy
 });  // RevExt: 18
 // RevExt: 2
 test("Git ignore matching respects patterns and negations in .gitignore", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "code-review-tracker-"));
-  try {
-    await execute("git", ["init", "--quiet", directory]);
+  const directory = await mkdtemp(join(tmpdir(), "code-review-tracker-"));  // RevExt: 40
+  try {  // RevExt: 42
+    await execute("git", ["init", "--quiet", directory]);  // RevExt: 44
     await Promise.all([  // RevExt: 28
       writeFile(
         join(directory, ".gitignore"),
@@ -92,8 +92,25 @@ test("Git ignore matching respects patterns and negations in .gitignore", async 
       "credentials.secret",  // RevExt: 37
       "generated/output.ts",  // RevExt: 35
     ]);  // RevExt: 33
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  } finally {  // RevExt: 49
+    await rm(directory, { recursive: true, force: true });  // RevExt: 51
+  }  // RevExt: 53
 });  // RevExt: 19
+test("Git tracked paths contain only files added to the index", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code-review-tracker-"));  // RevExt: 41
+  try {  // RevExt: 43
+    await execute("git", ["init", "--quiet", directory]);  // RevExt: 45
+    await Promise.all([  // RevExt: 46
+      writeFile(join(directory, "tracked.ts"), "tracked\n"),
+      writeFile(join(directory, "untracked.ts"), "untracked\n"),
+    ]);  // RevExt: 47
+    await execute("git", ["-C", directory, "add", "tracked.ts"]);
+    assert.deepEqual(await new GitService().trackedPaths(directory), [
+      "tracked.ts",
+    ]);  // RevExt: 48
+  } finally {  // RevExt: 50
+    await rm(directory, { recursive: true, force: true });  // RevExt: 52
+  }  // RevExt: 54
+});  // RevExt: 39
 // RevExt: 5
+// RevExt: 38

@@ -6,3 +6,7 @@
 - Update the extension build number manually for each new build; do not automate version bumps or alter build scripts unless explicitly requested.
 - When a user supplies concrete runtime observations that contradict an inferred explanation, treat the inference as invalid and trace the observed execution path before proposing a cause.
 - After implementing a change, manually increment the extension build number, compile a new release artifact, and remove the superseded release artifact.
+- When a selection flow must begin with a default multi-selection, use a UI control that can display and modify that preselected set; do not substitute a file dialog that cannot express the intended default.
+- When adding persistent state guards around a workflow, verify that existing explicit commands still provide an intentional recovery or reconfiguration path instead of silently becoming no-ops.
+- For initialization workflows, verify the end-to-end persistence result—metadata and snapshots on disk—not merely that the UI flow or command completes.
+- Do not revalidate explicitly selected initialization candidates against lifecycle caches that are populated only after initialization; use the selected candidate set as the authority for that initialization run.

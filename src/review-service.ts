@@ -54,21 +54,21 @@ export class ReviewService implements vscode.Disposable {
     return this.stores.get(folder.uri.toString())?.hasMetadata ?? false;
   }  // RevExt: 74
   initializationState(
-    folder: vscode.WorkspaceFolder,
+    folder: vscode.WorkspaceFolder,  // RevExt: 444
   ): "unconfigured" | "disabled" | "initialized" {
-    return (
+    return (  // RevExt: 445
       this.stores.get(folder.uri.toString())?.initializationState ??
       "unconfigured"
-    );
-  }
+    );  // RevExt: 446
+  }  // RevExt: 442
   async disableInitialization(folder: vscode.WorkspaceFolder): Promise<void> {
-    const store = this.stores.get(folder.uri.toString());
-    if (store === undefined) {
-      return;
-    }
+    const store = this.stores.get(folder.uri.toString());  // RevExt: 448
+    if (store === undefined) {  // RevExt: 449
+      return;  // RevExt: 450
+    }  // RevExt: 439
     await store.disableTracking();
     this.setEligiblePaths(folder, []);
-  }
+  }  // RevExt: 443
 // RevExt: 3
   dispose(): void {
     this.changedEmitter.dispose();
@@ -151,8 +151,8 @@ export class ReviewService implements vscode.Disposable {
       return;  // RevExt: 164
     }  // RevExt: 19
     if (store.initializationState !== "initialized") {
-      return;
-    }
+      return;  // RevExt: 451
+    }  // RevExt: 440
     const eligible = this.eligiblePaths.get(folder.uri.toString());  // RevExt: 206
     let changed = 0;
     let removed = 0;
@@ -168,7 +168,7 @@ export class ReviewService implements vscode.Disposable {
       {
         location: vscode.ProgressLocation.Notification,
         title: "Code Review: updating files",
-      },
+      },  // RevExt: 452
       async (progress) => {
         let completed = 0;
         progress.report({ message: `0/${paths.size}` });
@@ -184,7 +184,7 @@ export class ReviewService implements vscode.Disposable {
             if (!isFileNotFound(error)) {
               this.log.warn(
                 `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
-              );
+              );  // RevExt: 455
             } else {
               await this.withSource(uri, () => store.delete(path));
               eligible?.delete(path);
@@ -198,8 +198,8 @@ export class ReviewService implements vscode.Disposable {
             });
           }  // RevExt: 214
         }  // RevExt: 21
-      },
-    );
+      },  // RevExt: 453
+    );  // RevExt: 447
     if (changed > 0 || removed > 0) {
       this.log.info(
         `Review reconciliation updated ${changed} and removed ${removed} files.`,
@@ -216,7 +216,7 @@ export class ReviewService implements vscode.Disposable {
       store === undefined ||  // RevExt: 253
       folder === undefined ||
       !this.isEligibleSourceUri(uri) ||
-      !store.tracksPath(path)
+      !store.tracksPath(path)  // RevExt: 457
     ) {  // RevExt: 122
       return;  // RevExt: 165
     }  // RevExt: 23
@@ -243,7 +243,7 @@ export class ReviewService implements vscode.Disposable {
       store === undefined ||  // RevExt: 254
       path === undefined ||  // RevExt: 252
       !this.isEligibleSourceUri(document.uri) ||
-      !store.tracksPath(path)
+      !store.tracksPath(path)  // RevExt: 458
     ) {  // RevExt: 123
       return;  // RevExt: 169
     }  // RevExt: 28
@@ -278,7 +278,7 @@ export class ReviewService implements vscode.Disposable {
     const configuredTargets = targets ?? store.trackingTargets();
     if (configuredTargets === undefined) {
       throw new Error("Choose files or folders before initializing review tracking.");
-    }
+    }  // RevExt: 441
     const folderKey = folder.uri.toString();
     if (this.initializingFolders.has(folderKey)) {
       throw new Error("This workspace is already being initialized.");
@@ -307,7 +307,7 @@ export class ReviewService implements vscode.Disposable {
             const path = paths[index]!;
             const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
             try {
-              if (!this.isTrackableUri(uri)) {
+              if (!this.isEligibleSourceUri(uri)) {
                 continue;
               }  // RevExt: 259
               let { bytes, source } = await this.readStableSource(
@@ -337,8 +337,8 @@ export class ReviewService implements vscode.Disposable {
                 increment: progressIncrement(paths.length),
                 message: `${completed}/${paths.length}`,
               });
-            }
-          }
+            }  // RevExt: 454
+          }  // RevExt: 456
         },  // RevExt: 258
       );  // RevExt: 244
       await store.enableTracking(configuredTargets);
@@ -996,7 +996,7 @@ function initialAdditionHunks(bytes: Uint8Array): readonly RawGitHunk[] {
 }  // RevExt: 7
 function progressIncrement(total: number): number {
   return total === 0 ? 0 : 100 / total;
-}
+}  // RevExt: 438
 function selectedLines(
   selections: readonly vscode.Selection[],
 ): ReadonlySet<number> {
@@ -1031,3 +1031,5 @@ function isFileNotFound(error: unknown): boolean {
   );  // RevExt: 435
 }  // RevExt: 11
 // RevExt: 4
+// RevExt: 437
+// RevExt: 459

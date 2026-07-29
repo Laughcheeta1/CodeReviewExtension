@@ -161,7 +161,7 @@ Older schemas are ignored, not migrated. Dismissing first-launch initialization 
 
 ## Initialization choices and tracking scope
 
-Before a new repository creates review metadata, the extension asks whether to initialize it. A repository-local `initialization.json` records either a disabled state, which suppresses all future automatic initialization, or an initialized state with the selected file and folder targets. Selected folders include eligible descendants added after initialization; selected files remain exact-path targets. Startup, refresh, save, and file-creation reconciliation only create metadata for paths inside that saved scope. Existing metadata without this file remains compatible and is treated as tracking the repository root.
+Before a new repository creates review metadata, the extension asks whether to initialize it. A repository-local `initialization.json` records either a disabled state, which suppresses all future automatic initialization, or an initialized state with the selected file targets. The setup checklist starts with every candidate selected: Git-tracked files when a `.gitignore` exists, otherwise every workspace file. Startup, refresh, save, and file-creation reconciliation only create metadata for paths inside that saved scope. Existing metadata without this file remains compatible and is treated as tracking the repository root.
 
 ## Snapshot transaction
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { digestBytes, fileStatus, type FileRecord } from "./domain";
-import {
+import {  // RevExt: 197
   parseStoredFile,
   storageFileName,
   storedFile,
@@ -9,7 +9,7 @@ import {
   type FileSummary,
 } from "./storage-format";
 import { decodeSnapshot, encodeSnapshot } from "./snapshot";
-import {
+import {  // RevExt: 198
   parseInitializationConfiguration,
   tracksPath,
   type InitializationConfiguration,
@@ -41,9 +41,9 @@ export class PersistentStore {
     );  // RevExt: 7
     this.snapshotsUri = vscode.Uri.joinPath(this.directoryUri, "snapshots");
     this.initializationUri = vscode.Uri.joinPath(
-      this.directoryUri,
+      this.directoryUri,  // RevExt: 202
       INITIALIZATION_FILE,
-    );
+    );  // RevExt: 200
     this.legacyUri = vscode.Uri.joinPath(
       folder.uri,  // RevExt: 2
       ".vscode",  // RevExt: 5
@@ -63,7 +63,7 @@ export class PersistentStore {
   }  // RevExt: 17
   get initializationState(): "unconfigured" | "disabled" | "initialized" {
     return this.initializationConfiguration?.state ?? "unconfigured";
-  }
+  }  // RevExt: 205
   async initialize(): Promise<void> {
     await this.loadInitialization();
     const safeToClean = await this.loadSummaries();
@@ -73,27 +73,27 @@ export class PersistentStore {
         state: "initialized",
         targets: [{ kind: "folder", path: "" }],
       };
-    }
+    }  // RevExt: 212
     if (safeToClean) {
       await this.cleanupSnapshots();
     }  // RevExt: 38
   }  // RevExt: 18
   tracksPath(path: string): boolean {
     return tracksPath(path, this.initializationConfiguration);
-  }
+  }  // RevExt: 206
   async disableTracking(): Promise<void> {
     await this.writeInitialization({ schemaVersion: 1, state: "disabled" });
-  }
+  }  // RevExt: 207
   async enableTracking(targets: readonly TrackingTarget[]): Promise<void> {
     await this.writeInitialization({
       schemaVersion: 1,
       state: "initialized",
       targets,
-    });
-  }
+    });  // RevExt: 216
+  }  // RevExt: 208
   trackingTargets(): readonly TrackingTarget[] | undefined {
     return this.initializationConfiguration?.targets;
-  }
+  }  // RevExt: 209
   owns(uri: vscode.Uri): boolean {
     const value = uri.toString();
     return (
@@ -225,26 +225,26 @@ export class PersistentStore {
     this.writeTails.clear();
     if (initializationConfiguration !== undefined) {
       await this.writeInitialization(initializationConfiguration);
-    }
+    }  // RevExt: 213
   }  // RevExt: 27
   private async loadInitialization(): Promise<void> {
-    try {
+    try {  // RevExt: 217
       const bytes = await vscode.workspace.fs.readFile(this.initializationUri);
       const configuration = parseInitializationConfiguration(
         JSON.parse(decoder.decode(bytes)),
-      );
+      );  // RevExt: 223
       if (configuration === undefined) {
         throw new Error("Invalid initialization configuration");
-      }
-      this.initializationConfiguration = configuration;
-    } catch (error) {
-      if (!isFileNotFound(error)) {
-        this.log.warn(
+      }  // RevExt: 219
+      this.initializationConfiguration = configuration;  // RevExt: 229
+    } catch (error) {  // RevExt: 222
+      if (!isFileNotFound(error)) {  // RevExt: 228
+        this.log.warn(  // RevExt: 225
           `Unable to load initialization configuration: ${String(error)}`,
-        );
-      }
-    }
-  }
+        );  // RevExt: 226
+      }  // RevExt: 220
+    }  // RevExt: 214
+  }  // RevExt: 210
   private async loadSummaries(): Promise<boolean> {
     let entries: readonly [string, vscode.FileType][];  // RevExt: 169
     try {  // RevExt: 61
@@ -259,8 +259,8 @@ export class PersistentStore {
     let valid = true;
     for (const [name, type] of entries) {  // RevExt: 171
       if (name === INITIALIZATION_FILE) {
-        continue;
-      }
+        continue;  // RevExt: 231
+      }  // RevExt: 221
       if ((type & vscode.FileType.File) !== 0 && name.includes(".tmp-")) {
         await this.deleteTemporary(
           vscode.Uri.joinPath(this.directoryUri, name),
@@ -357,16 +357,16 @@ export class PersistentStore {
     }  // RevExt: 50
   }  // RevExt: 30
   private async writeJson(path: string, file: FileRecord): Promise<void> {
-    await vscode.workspace.fs.createDirectory(this.directoryUri);
+    await vscode.workspace.fs.createDirectory(this.directoryUri);  // RevExt: 235
     const temporary = vscode.Uri.joinPath(  // RevExt: 187
-      this.directoryUri,
+      this.directoryUri,  // RevExt: 203
       `.${storageFileName(path)}.tmp-${randomUUID()}`,
     );  // RevExt: 14
     try {  // RevExt: 65
       const contents = `${JSON.stringify(storedFile(path, file), null, 2)}\n`;
-      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));
+      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));  // RevExt: 237
       await vscode.workspace.fs.rename(temporary, this.fileUri(path), {
-        overwrite: true,
+        overwrite: true,  // RevExt: 239
       });  // RevExt: 161
     } finally {  // RevExt: 189
       await this.deleteTemporary(temporary);  // RevExt: 192
@@ -374,23 +374,23 @@ export class PersistentStore {
   }  // RevExt: 31
   private async writeInitialization(
     configuration: InitializationConfiguration,
-  ): Promise<void> {
-    await vscode.workspace.fs.createDirectory(this.directoryUri);
-    const temporary = vscode.Uri.joinPath(
-      this.directoryUri,
+  ): Promise<void> {  // RevExt: 224
+    await vscode.workspace.fs.createDirectory(this.directoryUri);  // RevExt: 236
+    const temporary = vscode.Uri.joinPath(  // RevExt: 232
+      this.directoryUri,  // RevExt: 204
       `.${INITIALIZATION_FILE}.tmp-${randomUUID()}`,
-    );
-    try {
+    );  // RevExt: 201
+    try {  // RevExt: 218
       const contents = `${JSON.stringify(configuration, null, 2)}\n`;
-      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));
+      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));  // RevExt: 238
       await vscode.workspace.fs.rename(temporary, this.initializationUri, {
-        overwrite: true,
-      });
-      this.initializationConfiguration = configuration;
-    } finally {
-      await this.deleteTemporary(temporary);
-    }
-  }
+        overwrite: true,  // RevExt: 240
+      });  // RevExt: 227
+      this.initializationConfiguration = configuration;  // RevExt: 230
+    } finally {  // RevExt: 233
+      await this.deleteTemporary(temporary);  // RevExt: 234
+    }  // RevExt: 215
+  }  // RevExt: 211
   private async loadDirect(path: string): Promise<FileRecord | undefined> {
     try {  // RevExt: 66
       const bytes = await vscode.workspace.fs.readFile(this.fileUri(path));  // RevExt: 71
@@ -465,3 +465,4 @@ function isFileNotFound(error: unknown): boolean {
   );
 }  // RevExt: 194
 // RevExt: 196
+// RevExt: 199

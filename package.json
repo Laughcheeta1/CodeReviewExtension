@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.4.6",
+  "version": "0.4.10",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -46,6 +46,10 @@
       {
         "command": "codeReviewTracker.openReviewDiff",
         "title": "Code Review: Open Review Diff"
+      },
+      {
+        "command": "codeReviewTracker.setup",
+        "title": "Code Review: Set Up Tracking"
       },
       {
         "command": "codeReviewTracker.initializeReviewed",

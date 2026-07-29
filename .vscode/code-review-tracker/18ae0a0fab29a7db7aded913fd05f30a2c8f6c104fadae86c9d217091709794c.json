@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 4,
+  "path": "pnpm-workspace.yaml",
+  "file": {
+    "baseline": {
+      "file": "18ae0a0fab29a7db7aded913fd05f30a2c8f6c104fadae86c9d217091709794c.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.gz",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "codec": "gzip",
+      "size": 0,
+      "createdAt": "2026-07-29T20:40:32.612Z"
+    },
+    "current": {
+      "digest": "ee065c86f2878d303330e85203dd55922ad708c5ccf61eb29b7199b975dffbc7",
+      "modifiedAt": 1785280348489,
+      "size": 135,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-07-29T20:40:32.612Z"
+    },
+    "fileStatus": "pending",
+    "nextRevExtId": 1,
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "a92a6707decd159199c93459580f861c08ef2ded7e5d7950f6715e1646bba41e",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "b28c5ece55b155b548010a1e5d27e6ce45262825cfb9e49810c34cb78f01cb5c",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "1ff8d0200aa899f7f2b02a79d4663f3dd278a8fdc8c50d3d24e897a6838a22e1",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "21094f30222ea011980c71a727dc8bf0f1fea517380a298350fdfed2112159a0",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [
+      {
+        "oldStart": 0,
+        "oldCount": 0,
+        "newStart": 1,
+        "newCount": 4
+      }
+    ],
+    "updatedAt": "2026-07-29T20:40:32.612Z"
+  }
+}

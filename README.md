@@ -6,14 +6,16 @@ Code Review Tracker adds saved-file, line-level review state to VS Code. It comp
 
 Git must be installed. The extension uses `git diff --no-index` as its local diff engine; it does not synchronize branches, pulls, commits, authors, or other collaborators.
 
-On first activation, choose whether to initialize Code Review Tracker for that repository. Choosing **Never Initialize** records the opt-out in the repository and prevents future automatic initialization prompts. If you choose **Initialize**, select the files and folders to track, then choose:
+On first activation, choose whether to initialize Code Review Tracker for that repository. Choosing **Never Initialize** records the opt-out in the repository and prevents future automatic initialization prompts. If you choose **Initialize**, a multi-select checklist opens with every candidate file selected. Use the Select All or Deselect All buttons, then check only the files you want to track before choosing:
 
 - **Start Reviewed** to snapshot the selected eligible saved files as their reviewed baseline.
 - **Start Pending** to use an empty baseline, making every selected saved line an addition awaiting review.
 
-Selected folders include their eligible descendants, including files added later. Files ignored by Git (including nested `.gitignore` patterns and negated rules) are excluded. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
+When a `.gitignore` exists, the checklist contains Git-tracked files; otherwise it contains all workspace files. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
 
 Dismissing a setup step leaves the workspace untouched and shows the initialization prompt again on the next activation.
+To resume setup without restarting VS Code, run **Code Review: Set Up Tracking** from the Command Palette.
+Running it again reconfigures the repository. **Code Review: Mark Entire Workspace Pending** and **Code Review: Mark Entire Workspace Reviewed** explicitly replace the current selection with the entire workspace, including eligible files added later.
 
 Open **Code Review: Open Review Diff** or select a file in the Code Review sidebar. The compressed baseline appears on the left and the saved source file on the right.
 

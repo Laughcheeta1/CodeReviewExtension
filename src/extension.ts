@@ -18,7 +18,7 @@ export async function activate(
 ): Promise<void> {  // RevExt: 205
   const log = vscode.window.createOutputChannel("Code Review Tracker", {
     log: true,
-  });
+  });  // RevExt: 384
 // RevExt: 192
   context.subscriptions.push(log);
   if (vscode.workspace.workspaceFolders === undefined) {
@@ -123,12 +123,15 @@ export async function activate(
       "codeReviewTracker.openReviewDiff",
       (uri?: vscode.Uri) => openReviewDiff(service, uri),
     ),  // RevExt: 300
+    vscode.commands.registerCommand("codeReviewTracker.setup", () =>
+      promptForInitialization(service, git, true),
+    ),  // RevExt: 399
     vscode.commands.registerCommand(  // RevExt: 317
       "codeReviewTracker.initializeReviewed",
-      () => initializeAll(service, "reviewed"),
+      () => initializeAll(service, git, "reviewed"),
     ),  // RevExt: 301
     vscode.commands.registerCommand("codeReviewTracker.initializePending", () =>
-      initializeAll(service, "pending"),
+      initializeAll(service, git, "pending"),
     ),  // RevExt: 302
     vscode.commands.registerCommand(  // RevExt: 318
       "codeReviewTracker.sendSelectionToTerminal",
@@ -137,7 +140,7 @@ export async function activate(
     vscode.commands.registerCommand("codeReviewTracker.refresh", async () => {
       for (const folder of vscode.workspace.workspaceFolders ?? []) {
         await refreshFolder(folder, true);
-      }
+      }  // RevExt: 400
     }),
     vscode.commands.registerCommand("codeReviewTracker.showLogs", () =>
       log.show(),
@@ -190,107 +193,129 @@ export async function activate(
 }  // RevExt: 323
 // RevExt: 201
 async function promptForInitialization(
-  service: ReviewService,
-  git: GitService,
-): Promise<void> {
+  service: ReviewService,  // RevExt: 404
+  git: GitService,  // RevExt: 405
+  reconfigure = false,
+): Promise<void> {  // RevExt: 383
   for (const folder of vscode.workspace.workspaceFolders ?? []) {  // RevExt: 336
-    if (service.initializationState(folder) !== "unconfigured") {
-      continue;
+    const state = service.initializationState(folder);
+    if (!reconfigure && state !== "unconfigured") {
+      continue;  // RevExt: 407
     }  // RevExt: 267
     const choice = await vscode.window.showInformationMessage(
-      `Initialize Code Review Tracker for ${folder.name}?`,
+      reconfigure
+        ? `Set up Code Review Tracker for ${folder.name}? Existing tracking will be replaced.`
+        : `Initialize Code Review Tracker for ${folder.name}?`,
       { modal: true },
-      "Initialize",
-      "Never Initialize",
+      reconfigure ? "Set Up Tracking" : "Initialize",
+      ...(reconfigure ? [] : ["Never Initialize"]),
     );  // RevExt: 251
     if (choice === "Never Initialize") {
       await service.disableInitialization(folder);
-      continue;
-    }
-    if (choice !== "Initialize") {
-      continue;
-    }
-    const targets = await chooseTrackingTargets(folder);
+      continue;  // RevExt: 408
+    }  // RevExt: 394
+    if (choice !== (reconfigure ? "Set Up Tracking" : "Initialize")) {
+      continue;  // RevExt: 409
+    }  // RevExt: 395
+    const paths = await eligibleWorkspacePaths(folder, git);
+    const targets = await chooseTrackingTargets(folder, paths);
     if (targets === undefined) {
-      continue;
-    }
+      continue;  // RevExt: 410
+    }  // RevExt: 396
     const status = await vscode.window.showQuickPick(
       [
-        {
+        {  // RevExt: 412
           label: "Start Reviewed",
           description: "Use the current saved content as the reviewed baseline.",
           status: "reviewed" as const,
-        },
-        {
+        },  // RevExt: 414
+        {  // RevExt: 413
           label: "Start Pending",
           description: "Treat every current saved line as pending review.",
           status: "pending" as const,
-        },
+        },  // RevExt: 415
       ],
       {
         placeHolder: "Choose the initial review state for the selected files.",
       },
-    );
+    );  // RevExt: 390
     if (status === undefined) {
-      continue;
-    }
-    try {
-      await service.initializeFolder(
-        folder,
+      continue;  // RevExt: 411
+    }  // RevExt: 397
+    try {  // RevExt: 416
+      await service.initializeFolder(  // RevExt: 418
+        folder,  // RevExt: 420
         status.status,
         targets,
-        await eligibleWorkspacePaths(folder, git),
-      );
-    } catch (error) {
-      void vscode.window.showErrorMessage(errorMessage(error));
+        paths,  // RevExt: 422
+      );  // RevExt: 424
+    } catch (error) {  // RevExt: 426
+      void vscode.window.showErrorMessage(errorMessage(error));  // RevExt: 428
     }  // RevExt: 269
   }  // RevExt: 224
 }  // RevExt: 324
 async function chooseTrackingTargets(
-  folder: vscode.WorkspaceFolder,
+  folder: vscode.WorkspaceFolder,  // RevExt: 430
+  paths: readonly string[],
 ): Promise<readonly TrackingTarget[] | undefined> {
-  const selected = await vscode.window.showOpenDialog({
-    canSelectFiles: true,
-    canSelectFolders: true,
-    canSelectMany: true,
-    defaultUri: folder.uri,
-    openLabel: "Track Selected Paths",
-    title: `Choose files or folders to track in ${folder.name}`,
-  });
-  if (selected === undefined) {
-    return undefined;
-  }
-  const targets = new Map<string, TrackingTarget>();
-  for (const uri of selected) {
-    if (vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() !== folder.uri.toString()) {
-      void vscode.window.showWarningMessage(
-        "Choose files or folders from the current workspace folder.",
-      );
-      return undefined;
-    }
-    const path = vscode.workspace
-      .asRelativePath(uri, false)
-      .replaceAll("\\", "/");
-    const stat = await vscode.workspace.fs.stat(uri);
-    const kind =
-      (stat.type & vscode.FileType.Directory) !== 0
-        ? "folder"
-        : (stat.type & vscode.FileType.File) !== 0
-          ? "file"
-          : undefined;
-    if (kind === undefined) {
-      void vscode.window.showWarningMessage(
-        "Only regular files and folders can be tracked.",
-      );
-      return undefined;
-    }
-    targets.set(`${kind}:${path}`, { kind, path });
-  }
-  if (targets.size === 0) {
-    return undefined;
-  }
-  return [...targets.values()];
-}
+  interface TrackingItem extends vscode.QuickPickItem {
+    readonly target: TrackingTarget;
+  }  // RevExt: 386
+  const items: TrackingItem[] = [...paths]
+    .sort((left, right) => left.localeCompare(right))
+    .map((path) => ({
+      label: path,
+      target: { kind: "file", path },
+    }));
+  if (items.length === 0) {
+    void vscode.window.showInformationMessage(
+      "There are no eligible files to track in this workspace.",
+    );  // RevExt: 391
+    return undefined;  // RevExt: 432
+  }  // RevExt: 387
+  const selectAll: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon("check-all"),
+    tooltip: "Select all files",
+  };  // RevExt: 392
+  const deselectAll: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon("clear-all"),
+    tooltip: "Deselect all files",
+  };  // RevExt: 393
+  return new Promise((resolve) => {
+    const picker = vscode.window.createQuickPick<TrackingItem>();
+    let accepted = false;
+    picker.canSelectMany = true;
+    picker.items = items;
+    picker.selectedItems = items;
+    picker.buttons = [selectAll, deselectAll];
+    picker.title = `Choose files to track in ${folder.name}`;
+    picker.placeholder = `${items.length}/${items.length} files selected`;
+    picker.onDidChangeSelection((selected) => {
+      picker.placeholder = `${selected.length}/${items.length} files selected`;
+    });  // RevExt: 434
+    picker.onDidTriggerButton((button) => {
+      picker.selectedItems = button === selectAll ? items : [];
+    });  // RevExt: 435
+    picker.onDidAccept(() => {
+      if (picker.selectedItems.length === 0) {
+        void vscode.window.showWarningMessage(
+          "Select at least one file to continue.",
+        );
+        return;
+      }  // RevExt: 401
+      accepted = true;
+      resolve(picker.selectedItems.map((item) => item.target));
+      picker.hide();
+    });  // RevExt: 436
+    picker.onDidHide(() => {
+      if (!accepted) {
+        resolve(undefined);
+      }  // RevExt: 402
+      picker.dispose();
+    });  // RevExt: 437
+    picker.show();
+  });  // RevExt: 385
+}  // RevExt: 403
 // RevExt: 202
 async function openReviewDiff(
   service: ReviewService,  // RevExt: 338
@@ -364,7 +389,7 @@ async function reviewer(
       )?.trim() ?? "";  // RevExt: 371
   }  // RevExt: 229
   if (name.length === 0) {  // RevExt: 362
-    return undefined;
+    return undefined;  // RevExt: 433
   }  // RevExt: 230
   if (email.length === 0) {
     email =
@@ -448,13 +473,20 @@ async function markHunk(
 }  // RevExt: 329
 async function initializeAll(
   service: ReviewService,  // RevExt: 341
+  git: GitService,  // RevExt: 406
   status: "pending" | "reviewed",
 ): Promise<void> {  // RevExt: 209
   for (const folder of vscode.workspace.workspaceFolders ?? []) {  // RevExt: 337
-    try {
-      await service.initializeFolder(folder, status);
-    } catch (error) {
-      void vscode.window.showErrorMessage(errorMessage(error));
+    try {  // RevExt: 417
+      const paths = await eligibleWorkspacePaths(folder, git);
+      await service.initializeFolder(  // RevExt: 419
+        folder,  // RevExt: 421
+        status,
+        [{ kind: "folder", path: "" }],
+        paths,  // RevExt: 423
+      );  // RevExt: 425
+    } catch (error) {  // RevExt: 427
+      void vscode.window.showErrorMessage(errorMessage(error));  // RevExt: 429
     }  // RevExt: 274
   }  // RevExt: 240
 }  // RevExt: 330
@@ -516,7 +548,7 @@ function sendSelection(service: ReviewService): void {
   terminal.sendText(payload, false);
 }  // RevExt: 332
 async function eligibleWorkspacePaths(
-  folder: vscode.WorkspaceFolder,
+  folder: vscode.WorkspaceFolder,  // RevExt: 431
   git: GitService,  // RevExt: 360
 ): Promise<readonly string[]> {
   const excluded = new vscode.RelativePattern(
@@ -525,11 +557,23 @@ async function eligibleWorkspacePaths(
   );  // RevExt: 286
   const uris = await vscode.workspace.findFiles(
     new vscode.RelativePattern(folder, "**/*"),
-    excluded,
+    excluded,  // RevExt: 438
   );  // RevExt: 287
   const paths = uris.map((uri) =>
     vscode.workspace.asRelativePath(uri, false).replaceAll("\\", "/"),
   );  // RevExt: 288
+  const ignoreFiles = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(folder, "**/.gitignore"),
+    excluded,  // RevExt: 439
+  );  // RevExt: 398
+  if (ignoreFiles.length === 0) {
+    return paths;
+  }  // RevExt: 388
+  const tracked = await git.trackedPaths(folder.uri.fsPath);
+  if (tracked !== undefined) {
+    const available = new Set(paths);
+    return tracked.filter((path) => available.has(path));
+  }  // RevExt: 389
   const ignored = await git.ignoredPaths(folder.uri.fsPath, paths);
   return paths.filter((path) => !ignored.has(path));
 }  // RevExt: 333
@@ -546,3 +590,4 @@ function runLogged(
   );  // RevExt: 289
 }  // RevExt: 335
 // RevExt: 381
+// RevExt: 382

@@ -14,13 +14,12 @@ try {
   await writeFile(path.join(workspace, "sample.txt"), "saved content\n");
   await mkdir(path.join(workspace, ".vscode", "code-review-tracker"), {
     recursive: true,
-  });
+  });  // RevExt: 3
   await writeFile(
     path.join(workspace, ".vscode", "code-review-tracker", "initialization.json"),
     `${JSON.stringify({
       schemaVersion: 1,
-      state: "initialized",
-      targets: [{ kind: "folder", path: "" }],
+      state: "disabled",
     })}\n`,
   );
   await runTests({
@@ -35,7 +34,7 @@ try {
       `--user-data-dir=${userData}`,
       workspace,
     ],
-  });
+  });  // RevExt: 4
 } finally {
   await Promise.all([
     rm(workspace, { recursive: true, force: true }),

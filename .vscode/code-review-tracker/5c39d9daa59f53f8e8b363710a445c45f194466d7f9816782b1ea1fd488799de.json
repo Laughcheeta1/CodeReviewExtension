@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 4,
+  "path": "resources/review.svg",
+  "file": {
+    "baseline": {
+      "file": "5c39d9daa59f53f8e8b363710a445c45f194466d7f9816782b1ea1fd488799de.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.gz",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "codec": "gzip",
+      "size": 0,
+      "createdAt": "2026-07-29T20:40:32.884Z"
+    },
+    "current": {
+      "digest": "e3dddf4a8069ba45ae8e10a8b68e810063e746047daae847b952799bde34122c",
+      "modifiedAt": 1785096154353,
+      "size": 203,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-07-29T20:40:32.884Z"
+    },
+    "fileStatus": "pending",
+    "nextRevExtId": 1,
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "e3dddf4a8069ba45ae8e10a8b68e810063e746047daae847b952799bde34122c",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [
+      {
+        "oldStart": 0,
+        "oldCount": 0,
+        "newStart": 1,
+        "newCount": 1
+      }
+    ],
+    "updatedAt": "2026-07-29T20:40:32.884Z"
+  }
+}
