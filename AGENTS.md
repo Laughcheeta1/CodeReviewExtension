@@ -12,3 +12,4 @@
 - Do not revalidate explicitly selected initialization candidates against lifecycle caches that are populated only after initialization; use the selected candidate set as the authority for that initialization run.
 - When a user asks to reduce editor clutter, remove the inline UI affordance and retain the action through the requested context menu and existing shortcut.
 - File-level status actions must support the same meaningful state transitions as their workspace-level counterparts without resetting unrelated tracked files.
+- Do not add prominent editor controls such as CodeLens actions unless the user explicitly requests them; keep review actions in the requested menus and shortcuts.

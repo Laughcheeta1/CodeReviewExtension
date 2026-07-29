@@ -73,8 +73,6 @@ async function run() {
     "codeReviewTracker.markFilePending",
     "codeReviewTracker.markFileInReview",
     "codeReviewTracker.markFileReviewed",
-    "codeReviewTracker.markHunkPending",
-    "codeReviewTracker.markHunkReviewed",
     "codeReviewTracker.sendSelectionToTerminal",
     "codeReviewTracker.setup",
     "codeReviewTracker.initializePending",

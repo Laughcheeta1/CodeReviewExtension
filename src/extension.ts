@@ -5,11 +5,9 @@ import { ReviewService } from "./review-service";
 import type { TrackingTarget } from "./tracking";
 import {
   BaselineContentProvider,
-  ReviewCodeLensProvider,
   ReviewDecorations,
   ReviewFileDecorations,
   ReviewTree,
-  type HunkCommand,
 } from "./ui";
 // RevExt: 191
 export async function activate(
@@ -60,13 +58,11 @@ export async function activate(
   }  // RevExt: 221
 // RevExt: 194
   const decorations = new ReviewDecorations(service);
-  const codeLens = new ReviewCodeLensProvider(service);
   const tree = new ReviewTree(service);
   const fileDecorations = new ReviewFileDecorations(service);
 // RevExt: 195
   context.subscriptions.push(  // RevExt: 279
     decorations,
-    codeLens,
     tree,
     fileDecorations,
   );  // RevExt: 281
@@ -75,10 +71,6 @@ export async function activate(
       "code-review-baseline",
       new BaselineContentProvider(service),
     ),  // RevExt: 290
-    vscode.languages.registerCodeLensProvider(
-      [{ scheme: "file" }, { scheme: "code-review-baseline" }],
-      codeLens,
-    ),  // RevExt: 291
     vscode.window.registerTreeDataProvider("codeReviewTracker.files", tree),
     vscode.window.registerFileDecorationProvider(fileDecorations),
     vscode.workspace.onDidOpenTextDocument((document) =>
@@ -120,14 +112,6 @@ export async function activate(
       "codeReviewTracker.markFileReviewed",
       (uri?: vscode.Uri) => markFile(service, git, uri, "reviewed"),
     ),
-    vscode.commands.registerCommand(  // RevExt: 314
-      "codeReviewTracker.markHunkPending",
-      (command: HunkCommand) => markHunk(service, git, command),  // RevExt: 319
-    ),  // RevExt: 298
-    vscode.commands.registerCommand(  // RevExt: 315
-      "codeReviewTracker.markHunkReviewed",
-      (command: HunkCommand) => markHunk(service, git, command),  // RevExt: 320
-    ),  // RevExt: 299
     vscode.commands.registerCommand(  // RevExt: 316
       "codeReviewTracker.openReviewDiff",
       (uri?: vscode.Uri) => openReviewDiff(service, uri),
@@ -452,34 +436,6 @@ async function markActive(
     void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 355
   }  // RevExt: 236
 }  // RevExt: 328
-async function markHunk(
-  service: ReviewService,  // RevExt: 340
-  git: GitService,  // RevExt: 359
-  command: HunkCommand | undefined,
-): Promise<void> {  // RevExt: 208
-  if (command === undefined) {
-    return;  // RevExt: 215
-  }  // RevExt: 237
-  const identity =  // RevExt: 380
-    command.status === "pending"
-      ? undefined
-      : await reviewer(git, command.source);
-  if (command.status !== "pending" && identity === undefined) {
-    return;  // RevExt: 216
-  }  // RevExt: 238
-  try {  // RevExt: 346
-    await service.markHunk(
-      command.source,
-      command.baselineDigest,
-      command.currentDigest,
-      command.hunkIndex,
-      command.status,
-      identity,
-    );  // RevExt: 256
-  } catch (error) {  // RevExt: 353
-    void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 356
-  }  // RevExt: 239
-}  // RevExt: 329
 async function markFile(
   service: ReviewService,
   git: GitService,

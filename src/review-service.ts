@@ -523,39 +523,6 @@ export class ReviewService implements vscode.Disposable {
     this.changedEmitter.fire(source);
     return true;
   }
-  async markHunk(
-    source: vscode.Uri,  // RevExt: 310
-    baselineDigest: string,
-    currentDigest: string,
-    hunkIndex: number,
-    status: ReviewStatus,  // RevExt: 288
-    reviewer?: Reviewer,  // RevExt: 291
-  ): Promise<void> {  // RevExt: 198
-    await this.withSource(source, async () => {
-      if (this.dirtyDocument(source) !== undefined) {  // RevExt: 284
-        throw new Error("Save the file before changing review state.");  // RevExt: 297
-      }  // RevExt: 219
-      const file = await this.requireFresh(source, {
-        source,  // RevExt: 299
-        baselineDigest,
-        currentDigest,
-      });  // RevExt: 193
-      const hunk = file.hunks[hunkIndex];
-      if (hunk === undefined) {
-        throw new Error("The selected review hunk is stale.");
-      }  // RevExt: 220
-      await this.applyReview(
-        source,  // RevExt: 300
-        file,  // RevExt: 303
-        status,  // RevExt: 305
-        reviewer,  // RevExt: 307
-        (line) =>  // RevExt: 309
-          line.changeType === "added" &&
-          inRange(line.line, hunk.newStart, hunk.newCount),
-        (line) => inRange(line.baselineLine, hunk.oldStart, hunk.oldCount),
-      );  // RevExt: 247
-    });  // RevExt: 271
-  }  // RevExt: 92
   summary(folder?: vscode.WorkspaceFolder): readonly {
     uri: vscode.Uri;
     path: string;
@@ -1103,9 +1070,6 @@ function selectedLines(
   }  // RevExt: 110
   return result;
 }  // RevExt: 8
-function inRange(line: number, start: number, count: number): boolean {
-  return count > 0 && line >= start && line < start + count;
-}  // RevExt: 9
 function isExcludedPath(path: string): boolean {
   return (  // RevExt: 432
     path === ".git" ||

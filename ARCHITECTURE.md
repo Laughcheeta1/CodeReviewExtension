@@ -19,7 +19,7 @@ Git is not used for pulls, HEAD synchronization, commit-author inference, or imp
 - `storage-format.ts` validates schema 4 and derives lightweight summaries.
 - `store.ts` owns per-path transactions, the eight-entry detail cache, snapshot verification, and orphan cleanup.
 - `review-service.ts` owns stable reads, per-source operation serialization, recomputation, selection/hunk mutations, initialization, deletion, and promotion.
-- `ui.ts` owns the baseline provider, native-diff decorations, CodeLens, sidebar, and explorer badges.
+- `ui.ts` owns the baseline provider, native-diff decorations, sidebar, and explorer badges.
 - `extension.ts` registers commands and lifecycle events.
 
 ## Exact content identity
@@ -61,7 +61,7 @@ Each `<sha256(relative-path)>.json` has `schemaVersion: 4`, the normalized relat
 
 - a baseline snapshot filename, SHA-256 digest, `gzip` codec, uncompressed byte size, and creation time;
 - a current SHA-256 digest, last reconciled filesystem mtime/size, `myers` algorithm identifier, and reconciliation time;
-- `lastReviewTime`, updated only by an explicit line or hunk review action;
+- `lastReviewTime`, updated only by an explicit line or file review action;
 - `updatedAt`, recording the last metadata write;
 - `fileStatus`, a fast sidebar cache that must equal the status derived from line records;
 - `nextRevExtId`, the next per-file marker number for the current baseline generation;
@@ -220,7 +220,7 @@ Both `reviewed` and `inReview` decisions transfer when identity remains unambigu
 
 ### Operation serialization
 
-Saved-file reconciliation, diff preparation, baseline reads, line/hunk decisions, deletion, and promotion are serialized per source URI. This prevents two asynchronous VS Code events from reading the same old generation and committing conflicting successors. Workspace initialization temporarily blocks new source operations and waits for existing source operations before resetting metadata. The persistence layer also serializes writes per path; a failed write does not poison the next queued operation.
+Saved-file reconciliation, diff preparation, baseline reads, line/file decisions, deletion, and promotion are serialized per source URI. This prevents two asynchronous VS Code events from reading the same old generation and committing conflicting successors. Workspace initialization temporarily blocks new source operations and waits for existing source operations before resetting metadata. The persistence layer also serializes writes per path; a failed write does not poison the next queued operation.
 
 ### Duplicate-addition safety
 
@@ -253,7 +253,6 @@ The read-only `code-review-baseline:` provider validates the digest-addressed sn
 - Left selections map only to deleted records.
 - Unchanged-only selections report that no reviewable changes were selected.
 - Decorations and hover text appear in both panes.
-- CodeLens commands apply a status to all additions and deletions covered by one stored Git hunk range.
 
 Before every mutation the service stable-reads the source and validates both URI digests. A stale diff is rejected and must be reopened. Dirty source editors are rejected with a save-first message.
 
@@ -287,12 +286,11 @@ Run the extension in an Extension Development Host, open a local filesystem work
 3. Edit and save a file with additions, deletions, blank lines, and a replacement.
 4. Open **Code Review: Open Review Diff**. Confirm the replacement is an independent left deletion and right addition.
 5. Review a right-side selection and a left-side selection. Confirm unchanged selections are ignored.
-6. Mark a complete hunk pending and reviewed through CodeLens.
-7. Leave an editor dirty and confirm diff opening/review mutations require a save.
-8. Change and save the file while an old diff is open; confirm old actions are rejected as stale.
-9. Review every addition/deletion and confirm automatic promotion closes the diff.
-10. Delete the source and confirm its JSON, gzip, summary, and sidebar row disappear.
-11. Repeat with **Start Pending** and confirm every physical current line, including blanks, is an addition.
+6. Leave an editor dirty and confirm diff opening/review mutations require a save.
+7. Change and save the file while an old diff is open; confirm old actions are rejected as stale.
+8. Review every addition/deletion and confirm automatic promotion closes the diff.
+9. Delete the source and confirm its JSON, gzip, summary, and sidebar row disappear after the next startup.
+10. Repeat with **Start Pending** and confirm every physical current line, including blanks, is an addition.
 
 ### Package smoke test
 

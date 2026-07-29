@@ -12,13 +12,6 @@ const statusIcon: Record<ReviewStatus, string> = {
   inReview: "●",
   reviewed: "✓",
 };  // RevExt: 2
-export interface HunkCommand {
-  readonly source: vscode.Uri;
-  readonly baselineDigest: string;
-  readonly currentDigest: string;
-  readonly hunkIndex: number;
-  readonly status: "pending" | "reviewed";
-}  // RevExt: 3
 export class BaselineContentProvider
   implements vscode.TextDocumentContentProvider {
   constructor(private readonly service: ReviewService) {}
@@ -137,76 +130,6 @@ function revExtDecorations(
   }  // RevExt: 19
   return result;
 }  // RevExt: 6
-export class ReviewCodeLensProvider
-  implements vscode.CodeLensProvider, vscode.Disposable {
-  private readonly emitter = new vscode.EventEmitter<void>();  // RevExt: 96
-  readonly onDidChangeCodeLenses = this.emitter.event;
-  private readonly subscription: vscode.Disposable;  // RevExt: 98
-  constructor(private readonly service: ReviewService) {  // RevExt: 34
-    this.subscription = service.onDidChange(() => this.emitter.fire());
-  }  // RevExt: 20
-  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
-    const identity = this.service.parseBaselineUri(document.uri);
-    const source = identity?.source ?? document.uri;
-    const file = this.service.file(source);
-    if (  // RevExt: 101
-      file === undefined ||
-      (identity !== undefined &&
-        (identity.baselineDigest !== file.baseline.digest ||
-          identity.currentDigest !== file.current.digest))
-    ) {  // RevExt: 103
-      return [];  // RevExt: 105
-    }  // RevExt: 78
-    const result: vscode.CodeLens[] = [];
-    file.hunks.forEach((hunk, hunkIndex) => {
-      const hasReviewableLines =
-        file.currentLines.some(
-          (line) =>
-            line.changeType === "added" &&
-            inRange(line.line, hunk.newStart, hunk.newCount),
-        ) ||
-        file.deletedLines.some((line) =>
-          inRange(line.baselineLine, hunk.oldStart, hunk.oldCount),
-        );
-      if (!hasReviewableLines) {
-        return;  // RevExt: 108
-      }  // RevExt: 54
-      const line = identity === undefined ? hunk.newStart : hunk.oldStart;
-      const count = identity === undefined ? hunk.newCount : hunk.oldCount;
-      if (count === 0 || line < 1 || line > document.lineCount) {
-        return;  // RevExt: 109
-      }  // RevExt: 55
-      const range = new vscode.Range(line - 1, 0, line - 1, 0);
-      const base = {
-        source,
-        baselineDigest: file.baseline.digest,
-        currentDigest: file.current.digest,
-        hunkIndex,
-      };  // RevExt: 58
-      result.push(
-        new vscode.CodeLens(range, {  // RevExt: 110
-          command: "codeReviewTracker.markHunkReviewed",
-          title: "$(pass-filled) Mark hunk reviewed",
-          arguments: [{ ...base, status: "reviewed" }],
-        }),  // RevExt: 112
-        new vscode.CodeLens(range, {  // RevExt: 111
-          command: "codeReviewTracker.markHunkPending",
-          title: "$(circle-outline) Mark hunk pending",
-          arguments: [{ ...base, status: "pending" }],
-        }),  // RevExt: 113
-      );  // RevExt: 114
-    });  // RevExt: 94
-    return result;
-  }  // RevExt: 21
-  dispose(): void {  // RevExt: 86
-    this.subscription.dispose();  // RevExt: 118
-    this.emitter.dispose();  // RevExt: 121
-  }  // RevExt: 22
-}  // RevExt: 7
-// RevExt: 91
-function inRange(line: number, start: number, count: number): boolean {
-  return count > 0 && line >= start && line < start + count;
-}  // RevExt: 8
 export class ReviewFileDecorations
   implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<
