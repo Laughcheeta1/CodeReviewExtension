@@ -470,6 +470,9 @@ export class ReviewService implements vscode.Disposable {
         throw new Error("Save the file before changing review state.");
       }
       const file = await this.requireFresh(source);
+      if (status === "pending" && reviewableLines(file).length === 0) {
+        return this.initializePendingFile(source);
+      }
       return this.applyReview(
         source,
         file,
@@ -479,6 +482,46 @@ export class ReviewService implements vscode.Disposable {
         () => true,
       );
     });
+  }
+  private async initializePendingFile(source: vscode.Uri): Promise<boolean> {
+    const path = this.relativePath(source);
+    const store = this.storeFor(source);
+    if (
+      path === undefined ||
+      store === undefined ||
+      store.initializationState !== "initialized" ||
+      !store.tracksPath(path) ||
+      !this.isTrackableUri(source)
+    ) {
+      throw new Error("This file has not been initialized for review.");
+    }
+    let { bytes, source: snapshot } = await this.readStableSource(
+      source,
+      this.maxSize(),
+    );
+    const nextRevExtId = await this.annotatePendingDocument(source);
+    ({ bytes, source: snapshot } = await this.readStableSource(
+      source,
+      this.maxSize(),
+    ));
+    const baseline = new Uint8Array();
+    await store.commit(
+      path,
+      {
+        ...(await this.createRecord(
+          path,
+          baseline,
+          bytes,
+          snapshot,
+          undefined,
+          initialAdditionHunks(bytes),
+        )),
+        nextRevExtId,
+      },
+      baseline,
+    );
+    this.changedEmitter.fire(source);
+    return true;
   }
   async markHunk(
     source: vscode.Uri,  // RevExt: 310

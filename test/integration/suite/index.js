@@ -104,6 +104,20 @@ async function run() {
     vscode.Uri.joinPath(folder.uri, "sample.txt"),
   );
   assertPending(await metadata(folder, "sample.txt"));
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.markFileReviewed",
+    vscode.Uri.joinPath(folder.uri, "sample.txt"),
+  );
+  const reviewed = await metadata(folder, "sample.txt");
+  assert.ok(reviewed.file.baseline.size > 0);
+  assert.ok(
+    reviewed.file.currentLines.every((line) => line.changeType === "unchanged"),
+  );
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.markFilePending",
+    vscode.Uri.joinPath(folder.uri, "sample.txt"),
+  );
+  assertPending(await metadata(folder, "sample.txt"));
   await vscode.workspace.fs.delete(vscode.Uri.joinPath(folder.uri, "sample.txt"));
   await new Promise((resolve) => setTimeout(resolve, 250));
   assertPending(await metadata(folder, "sample.txt"));
