@@ -55,6 +55,7 @@ export async function activate(
 // RevExt: 193
   context.subscriptions.push(service);
   for (const folder of vscode.workspace.workspaceFolders) {  // RevExt: 277
+    await service.cleanupMissingSources(folder);
     await refreshFolder(folder);
   }  // RevExt: 221
 // RevExt: 194
@@ -172,7 +173,7 @@ export async function activate(
       ),  // RevExt: 313
     );  // RevExt: 247
     const deletion = watcher.onDidDelete((uri) =>
-      runLogged(log, "Source deletion", service.removeSources([uri])),
+      service.hideSources([uri]),
     );  // RevExt: 248
 // RevExt: 198
     const gitIgnoreWatcher = vscode.workspace.createFileSystemWatcher(

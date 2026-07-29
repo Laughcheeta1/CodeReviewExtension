@@ -104,6 +104,9 @@ async function run() {
     vscode.Uri.joinPath(folder.uri, "sample.txt"),
   );
   assertPending(await metadata(folder, "sample.txt"));
+  await vscode.workspace.fs.delete(vscode.Uri.joinPath(folder.uri, "sample.txt"));
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assertPending(await metadata(folder, "sample.txt"));
 // RevExt: 7
   const createdPath = "created-after-activation.txt";
   await vscode.workspace.fs.writeFile(

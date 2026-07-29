@@ -4,6 +4,10 @@ import path from "node:path";
 import { runTests } from "@vscode/test-electron";
 const extensionDevelopmentPath = path.resolve(import.meta.dirname, "../..");
 const extensionTestsPath = path.resolve(import.meta.dirname, "suite/index.js");
+const startupCleanupTestsPath = path.resolve(
+  import.meta.dirname,
+  "suite/startup-cleanup.js",
+);
 const workspace = await mkdtemp(
   path.join(tmpdir(), "code-review-tracker-integration-"),
 );  // RevExt: 1
@@ -35,6 +39,19 @@ try {
       workspace,
     ],
   });  // RevExt: 4
+  await runTests({
+    version: "1.127.0",
+    extensionDevelopmentPath,
+    extensionTestsPath: startupCleanupTestsPath,
+    launchArgs: [
+      "--disable-extensions",
+      "--disable-workspace-trust",
+      "--no-sandbox",
+      "--disable-gpu",
+      `--user-data-dir=${userData}`,
+      workspace,
+    ],
+  });
 } finally {
   await Promise.all([
     rm(workspace, { recursive: true, force: true }),

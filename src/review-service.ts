@@ -155,15 +155,8 @@ export class ReviewService implements vscode.Disposable {
     }  // RevExt: 440
     const eligible = this.eligiblePaths.get(folder.uri.toString());  // RevExt: 206
     let changed = 0;
-    let removed = 0;
+    let hidden = 0;
     const paths = new Set(eligible ?? []);
-    for (const path of store.paths) {
-      if (paths.has(path)) {
-        continue;  // RevExt: 208
-      }  // RevExt: 213
-      await store.delete(path);
-      removed += 1;
-    }  // RevExt: 20
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -186,9 +179,9 @@ export class ReviewService implements vscode.Disposable {
                 `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
               );  // RevExt: 455
             } else {
-              await this.withSource(uri, () => store.delete(path));
-              eligible?.delete(path);
-              removed += 1;
+              if (eligible?.delete(path)) {
+                hidden += 1;
+              }
             }  // RevExt: 189
           } finally {
             completed += 1;
@@ -200,13 +193,42 @@ export class ReviewService implements vscode.Disposable {
         }  // RevExt: 21
       },  // RevExt: 453
     );  // RevExt: 447
-    if (changed > 0 || removed > 0) {
+    if (changed > 0 || hidden > 0) {
       this.log.info(
-        `Review reconciliation updated ${changed} and removed ${removed} files.`,
+        `Review reconciliation updated ${changed} and hid ${hidden} missing files.`,
       );  // RevExt: 241
       this.changedEmitter.fire(undefined);  // RevExt: 129
     }  // RevExt: 22
   }  // RevExt: 83
+  async cleanupMissingSources(folder: vscode.WorkspaceFolder): Promise<void> {
+    const store = this.stores.get(folder.uri.toString());
+    if (store === undefined) {
+      return;
+    }
+    let removed = 0;
+    for (const path of store.paths) {
+      const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        if ((stat.type & vscode.FileType.File) !== 0) {
+          continue;
+        }
+      } catch (error) {
+        if (!isFileNotFound(error)) {
+          this.log.warn(
+            `Could not check whether ${path} still exists: ${String(error)}`,
+          );
+          continue;
+        }
+      }
+      await store.delete(path);
+      removed += 1;
+    }
+    if (removed > 0) {
+      this.log.info(`Removed metadata for ${removed} missing files at startup.`);
+      this.changedEmitter.fire(undefined);
+    }
+  }
   async reconcileCreatedSource(uri: vscode.Uri): Promise<void> {
     const path = this.relativePath(uri);  // RevExt: 151
     const store = this.storeFor(uri);  // RevExt: 155
@@ -512,7 +534,11 @@ export class ReviewService implements vscode.Disposable {
       if (store === undefined) {  // RevExt: 279
         continue;  // RevExt: 209
       }  // RevExt: 221
+      const eligible = this.eligiblePaths.get(workspaceFolder.uri.toString());
       for (const path of store.paths) {
+        if (eligible !== undefined && !eligible.has(path)) {
+          continue;
+        }
         const summary = store.summary(path);
         if (summary === undefined) {
           continue;  // RevExt: 240
@@ -528,7 +554,7 @@ export class ReviewService implements vscode.Disposable {
     }  // RevExt: 37
     return result;
   }  // RevExt: 93
-  async removeSources(uris: readonly vscode.Uri[]): Promise<void> {
+  hideSources(uris: readonly vscode.Uri[]): void {
     let changed = false;
     for (const uri of uris) {
       const store = this.storeFor(uri);
@@ -539,11 +565,13 @@ export class ReviewService implements vscode.Disposable {
       if (path === undefined) {
         continue;  // RevExt: 211
       }  // RevExt: 224
-      await this.withSource(uri, () => store.delete(path));
-      this.eligiblePaths  // RevExt: 315
-        .get(vscode.workspace.getWorkspaceFolder(uri)!.uri.toString())
-        ?.delete(path);
-      changed = true;
+      if (
+        this.eligiblePaths  // RevExt: 315
+          .get(vscode.workspace.getWorkspaceFolder(uri)!.uri.toString())
+          ?.delete(path)
+      ) {
+        changed = true;
+      }
     }  // RevExt: 38
     if (changed) {
       this.changedEmitter.fire(undefined);  // RevExt: 131
