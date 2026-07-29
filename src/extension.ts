@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { terminalPayload, type ReviewStatus, type Reviewer } from "./domain";
 import { GitService } from "./git";
 import { ReviewService } from "./review-service";
+import type { TrackingTarget } from "./tracking";
 import {
   BaselineContentProvider,
   ReviewCodeLensProvider,
@@ -183,29 +184,113 @@ export async function activate(
   for (const editor of vscode.window.visibleTextEditors) {
     await service.ensureDocument(editor.document);
   }  // RevExt: 223
-  runLogged(log, "Initialization prompt", promptForInitialization(service));
+  runLogged(log, "Initialization prompt", promptForInitialization(service, git));
   decorations.refresh();
   log.info("Code Review Tracker 0.4.0 activated.");
 }  // RevExt: 323
 // RevExt: 201
-async function promptForInitialization(service: ReviewService): Promise<void> {
+async function promptForInitialization(
+  service: ReviewService,
+  git: GitService,
+): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {  // RevExt: 336
-    if (service.hasMetadata(folder)) {
+    if (service.initializationState(folder) !== "unconfigured") {
       continue;
     }  // RevExt: 267
     const choice = await vscode.window.showInformationMessage(
-      `Initialize code review baselines for ${folder.name}?`,
-      "Start Reviewed",
-      "Start Pending",
+      `Initialize Code Review Tracker for ${folder.name}?`,
+      { modal: true },
+      "Initialize",
+      "Never Initialize",
     );  // RevExt: 251
-    if (choice === "Start Reviewed") {
-      await service.initializeFolder(folder, "reviewed");
-    }  // RevExt: 268
-    if (choice === "Start Pending") {
-      await service.initializeFolder(folder, "pending");
+    if (choice === "Never Initialize") {
+      await service.disableInitialization(folder);
+      continue;
+    }
+    if (choice !== "Initialize") {
+      continue;
+    }
+    const targets = await chooseTrackingTargets(folder);
+    if (targets === undefined) {
+      continue;
+    }
+    const status = await vscode.window.showQuickPick(
+      [
+        {
+          label: "Start Reviewed",
+          description: "Use the current saved content as the reviewed baseline.",
+          status: "reviewed" as const,
+        },
+        {
+          label: "Start Pending",
+          description: "Treat every current saved line as pending review.",
+          status: "pending" as const,
+        },
+      ],
+      {
+        placeHolder: "Choose the initial review state for the selected files.",
+      },
+    );
+    if (status === undefined) {
+      continue;
+    }
+    try {
+      await service.initializeFolder(
+        folder,
+        status.status,
+        targets,
+        await eligibleWorkspacePaths(folder, git),
+      );
+    } catch (error) {
+      void vscode.window.showErrorMessage(errorMessage(error));
     }  // RevExt: 269
   }  // RevExt: 224
 }  // RevExt: 324
+async function chooseTrackingTargets(
+  folder: vscode.WorkspaceFolder,
+): Promise<readonly TrackingTarget[] | undefined> {
+  const selected = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: true,
+    canSelectMany: true,
+    defaultUri: folder.uri,
+    openLabel: "Track Selected Paths",
+    title: `Choose files or folders to track in ${folder.name}`,
+  });
+  if (selected === undefined) {
+    return undefined;
+  }
+  const targets = new Map<string, TrackingTarget>();
+  for (const uri of selected) {
+    if (vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() !== folder.uri.toString()) {
+      void vscode.window.showWarningMessage(
+        "Choose files or folders from the current workspace folder.",
+      );
+      return undefined;
+    }
+    const path = vscode.workspace
+      .asRelativePath(uri, false)
+      .replaceAll("\\", "/");
+    const stat = await vscode.workspace.fs.stat(uri);
+    const kind =
+      (stat.type & vscode.FileType.Directory) !== 0
+        ? "folder"
+        : (stat.type & vscode.FileType.File) !== 0
+          ? "file"
+          : undefined;
+    if (kind === undefined) {
+      void vscode.window.showWarningMessage(
+        "Only regular files and folders can be tracked.",
+      );
+      return undefined;
+    }
+    targets.set(`${kind}:${path}`, { kind, path });
+  }
+  if (targets.size === 0) {
+    return undefined;
+  }
+  return [...targets.values()];
+}
 // RevExt: 202
 async function openReviewDiff(
   service: ReviewService,  // RevExt: 338

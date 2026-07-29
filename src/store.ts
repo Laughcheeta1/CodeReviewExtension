@@ -9,9 +9,16 @@ import {
   type FileSummary,
 } from "./storage-format";
 import { decodeSnapshot, encodeSnapshot } from "./snapshot";
+import {
+  parseInitializationConfiguration,
+  tracksPath,
+  type InitializationConfiguration,
+  type TrackingTarget,
+} from "./tracking";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const CACHE_LIMIT = 8;
+const INITIALIZATION_FILE = "initialization.json";
 // RevExt: 195
 export class PersistentStore {
   private readonly summaries = new Map<string, FileSummary>();
@@ -19,8 +26,10 @@ export class PersistentStore {
   private readonly writeTails = new Map<string, Promise<void>>();
   private readonly directoryUri: vscode.Uri;
   private readonly snapshotsUri: vscode.Uri;
+  private readonly initializationUri: vscode.Uri;
   private readonly legacyUri: vscode.Uri;
   private readonly legacyBackupUri: vscode.Uri;
+  private initializationConfiguration: InitializationConfiguration | undefined;
   constructor(
     private readonly folder: vscode.WorkspaceFolder,
     private readonly log: vscode.LogOutputChannel,
@@ -31,6 +40,10 @@ export class PersistentStore {
       "code-review-tracker",
     );  // RevExt: 7
     this.snapshotsUri = vscode.Uri.joinPath(this.directoryUri, "snapshots");
+    this.initializationUri = vscode.Uri.joinPath(
+      this.directoryUri,
+      INITIALIZATION_FILE,
+    );
     this.legacyUri = vscode.Uri.joinPath(
       folder.uri,  // RevExt: 2
       ".vscode",  // RevExt: 5
@@ -48,12 +61,39 @@ export class PersistentStore {
   get hasMetadata(): boolean {
     return this.summaries.size > 0;
   }  // RevExt: 17
+  get initializationState(): "unconfigured" | "disabled" | "initialized" {
+    return this.initializationConfiguration?.state ?? "unconfigured";
+  }
   async initialize(): Promise<void> {
+    await this.loadInitialization();
     const safeToClean = await this.loadSummaries();
+    if (this.initializationConfiguration === undefined && this.hasMetadata) {
+      this.initializationConfiguration = {
+        schemaVersion: 1,
+        state: "initialized",
+        targets: [{ kind: "folder", path: "" }],
+      };
+    }
     if (safeToClean) {
       await this.cleanupSnapshots();
     }  // RevExt: 38
   }  // RevExt: 18
+  tracksPath(path: string): boolean {
+    return tracksPath(path, this.initializationConfiguration);
+  }
+  async disableTracking(): Promise<void> {
+    await this.writeInitialization({ schemaVersion: 1, state: "disabled" });
+  }
+  async enableTracking(targets: readonly TrackingTarget[]): Promise<void> {
+    await this.writeInitialization({
+      schemaVersion: 1,
+      state: "initialized",
+      targets,
+    });
+  }
+  trackingTargets(): readonly TrackingTarget[] | undefined {
+    return this.initializationConfiguration?.targets;
+  }
   owns(uri: vscode.Uri): boolean {
     const value = uri.toString();
     return (
@@ -159,6 +199,7 @@ export class PersistentStore {
     });  // RevExt: 138
   }  // RevExt: 26
   async reset(): Promise<void> {
+    const initializationConfiguration = this.initializationConfiguration;
     await Promise.allSettled(this.writeTails.values());
     try {  // RevExt: 60
       await vscode.workspace.fs.delete(this.directoryUri, {
@@ -182,7 +223,28 @@ export class PersistentStore {
     this.summaries.clear();
     this.cache.clear();
     this.writeTails.clear();
+    if (initializationConfiguration !== undefined) {
+      await this.writeInitialization(initializationConfiguration);
+    }
   }  // RevExt: 27
+  private async loadInitialization(): Promise<void> {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(this.initializationUri);
+      const configuration = parseInitializationConfiguration(
+        JSON.parse(decoder.decode(bytes)),
+      );
+      if (configuration === undefined) {
+        throw new Error("Invalid initialization configuration");
+      }
+      this.initializationConfiguration = configuration;
+    } catch (error) {
+      if (!isFileNotFound(error)) {
+        this.log.warn(
+          `Unable to load initialization configuration: ${String(error)}`,
+        );
+      }
+    }
+  }
   private async loadSummaries(): Promise<boolean> {
     let entries: readonly [string, vscode.FileType][];  // RevExt: 169
     try {  // RevExt: 61
@@ -196,6 +258,9 @@ export class PersistentStore {
     }  // RevExt: 44
     let valid = true;
     for (const [name, type] of entries) {  // RevExt: 171
+      if (name === INITIALIZATION_FILE) {
+        continue;
+      }
       if ((type & vscode.FileType.File) !== 0 && name.includes(".tmp-")) {
         await this.deleteTemporary(
           vscode.Uri.joinPath(this.directoryUri, name),
@@ -307,6 +372,25 @@ export class PersistentStore {
       await this.deleteTemporary(temporary);  // RevExt: 192
     }  // RevExt: 51
   }  // RevExt: 31
+  private async writeInitialization(
+    configuration: InitializationConfiguration,
+  ): Promise<void> {
+    await vscode.workspace.fs.createDirectory(this.directoryUri);
+    const temporary = vscode.Uri.joinPath(
+      this.directoryUri,
+      `.${INITIALIZATION_FILE}.tmp-${randomUUID()}`,
+    );
+    try {
+      const contents = `${JSON.stringify(configuration, null, 2)}\n`;
+      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));
+      await vscode.workspace.fs.rename(temporary, this.initializationUri, {
+        overwrite: true,
+      });
+      this.initializationConfiguration = configuration;
+    } finally {
+      await this.deleteTemporary(temporary);
+    }
+  }
   private async loadDirect(path: string): Promise<FileRecord | undefined> {
     try {  // RevExt: 66
       const bytes = await vscode.workspace.fs.readFile(this.fileUri(path));  // RevExt: 71

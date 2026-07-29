@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runTests } from "@vscode/test-electron";
@@ -12,6 +12,17 @@ const userData = await mkdtemp(
 );  // RevExt: 2
 try {
   await writeFile(path.join(workspace, "sample.txt"), "saved content\n");
+  await mkdir(path.join(workspace, ".vscode", "code-review-tracker"), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(workspace, ".vscode", "code-review-tracker", "initialization.json"),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      state: "initialized",
+      targets: [{ kind: "folder", path: "" }],
+    })}\n`,
+  );
   await runTests({
     version: "1.127.0",
     extensionDevelopmentPath,

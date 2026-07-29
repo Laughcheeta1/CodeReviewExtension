@@ -6,14 +6,14 @@ Code Review Tracker adds saved-file, line-level review state to VS Code. It comp
 
 Git must be installed. The extension uses `git diff --no-index` as its local diff engine; it does not synchronize branches, pulls, commits, authors, or other collaborators.
 
-On first activation choose:
+On first activation, choose whether to initialize Code Review Tracker for that repository. Choosing **Never Initialize** records the opt-out in the repository and prevents future automatic initialization prompts. If you choose **Initialize**, select the files and folders to track, then choose:
 
-- **Start Reviewed** to snapshot every eligible saved file as its reviewed baseline.
-- **Start Pending** to use an empty baseline, making every saved line an addition awaiting review.
+- **Start Reviewed** to snapshot the selected eligible saved files as their reviewed baseline.
+- **Start Pending** to use an empty baseline, making every selected saved line an addition awaiting review.
 
-Files ignored by Git (including nested `.gitignore` patterns and negated rules) are excluded. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
+Selected folders include their eligible descendants, including files added later. Files ignored by Git (including nested `.gitignore` patterns and negated rules) are excluded. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
 
-Dismiss the prompt to leave the workspace untouched. It will appear again on the next activation.
+Dismissing a setup step leaves the workspace untouched and shows the initialization prompt again on the next activation.
 
 Open **Code Review: Open Review Diff** or select a file in the Code Review sidebar. The compressed baseline appears on the left and the saved source file on the right.
 
@@ -32,6 +32,7 @@ Shared state lives under:
 
 ```text
 .vscode/code-review-tracker/
+  initialization.json
   <path-hash>.json
   snapshots/
     <path-hash>.<baseline-digest>.gz

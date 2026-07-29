@@ -15,6 +15,7 @@ import {
 import { GitService } from "./git";
 import { PersistentStore } from "./store";
 import { snapshotFileName, sourceMayHaveChanged } from "./storage-format";
+import { tracksPath, type TrackingTarget } from "./tracking";
 import { revExtEdits, revExtRemovals } from "./revext";
 // RevExt: 436
 const BASELINE_SCHEME = "code-review-baseline";
@@ -52,6 +53,22 @@ export class ReviewService implements vscode.Disposable {
   hasMetadata(folder: vscode.WorkspaceFolder): boolean {
     return this.stores.get(folder.uri.toString())?.hasMetadata ?? false;
   }  // RevExt: 74
+  initializationState(
+    folder: vscode.WorkspaceFolder,
+  ): "unconfigured" | "disabled" | "initialized" {
+    return (
+      this.stores.get(folder.uri.toString())?.initializationState ??
+      "unconfigured"
+    );
+  }
+  async disableInitialization(folder: vscode.WorkspaceFolder): Promise<void> {
+    const store = this.stores.get(folder.uri.toString());
+    if (store === undefined) {
+      return;
+    }
+    await store.disableTracking();
+    this.setEligiblePaths(folder, []);
+  }
 // RevExt: 3
   dispose(): void {
     this.changedEmitter.dispose();
@@ -62,7 +79,8 @@ export class ReviewService implements vscode.Disposable {
     paths: readonly string[],
   ): void {
     const key = folder.uri.toString();
-    const next = new Set(paths);
+    const store = this.stores.get(key);
+    const next = new Set(paths.filter((path) => store?.tracksPath(path)));
     const previous = this.eligiblePaths.get(key);
     this.eligiblePaths.set(key, next);
     if (  // RevExt: 114
@@ -132,6 +150,9 @@ export class ReviewService implements vscode.Disposable {
     if (store === undefined) {  // RevExt: 204
       return;  // RevExt: 164
     }  // RevExt: 19
+    if (store.initializationState !== "initialized") {
+      return;
+    }
     const eligible = this.eligiblePaths.get(folder.uri.toString());  // RevExt: 206
     let changed = 0;
     let removed = 0;
@@ -143,26 +164,42 @@ export class ReviewService implements vscode.Disposable {
       await store.delete(path);
       removed += 1;
     }  // RevExt: 20
-    for (const path of paths) {
-      const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-      try {  // RevExt: 237
-        if (
-          await this.withSource(uri, () => this.recompute(uri, force, true))
-        ) {
-          changed += 1;
-        }  // RevExt: 188
-      } catch (error) {
-        if (!isFileNotFound(error)) {
-          this.log.warn(
-            `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
-          );
-          continue;  // RevExt: 239
-        }  // RevExt: 189
-        await this.withSource(uri, () => store.delete(path));
-        eligible?.delete(path);
-        removed += 1;
-      }  // RevExt: 214
-    }  // RevExt: 21
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Code Review: updating files",
+      },
+      async (progress) => {
+        let completed = 0;
+        progress.report({ message: `0/${paths.size}` });
+        for (const path of paths) {
+          const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+          try {  // RevExt: 237
+            if (
+              await this.withSource(uri, () => this.recompute(uri, force, true))
+            ) {
+              changed += 1;
+            }  // RevExt: 188
+          } catch (error) {
+            if (!isFileNotFound(error)) {
+              this.log.warn(
+                `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
+              );
+            } else {
+              await this.withSource(uri, () => store.delete(path));
+              eligible?.delete(path);
+              removed += 1;
+            }  // RevExt: 189
+          } finally {
+            completed += 1;
+            progress.report({
+              increment: progressIncrement(paths.size),
+              message: `${completed}/${paths.size}`,
+            });
+          }  // RevExt: 214
+        }  // RevExt: 21
+      },
+    );
     if (changed > 0 || removed > 0) {
       this.log.info(
         `Review reconciliation updated ${changed} and removed ${removed} files.`,
@@ -178,7 +215,8 @@ export class ReviewService implements vscode.Disposable {
       path === undefined ||  // RevExt: 251
       store === undefined ||  // RevExt: 253
       folder === undefined ||
-      !this.isEligibleSourceUri(uri)
+      !this.isEligibleSourceUri(uri) ||
+      !store.tracksPath(path)
     ) {  // RevExt: 122
       return;  // RevExt: 165
     }  // RevExt: 23
@@ -205,7 +243,7 @@ export class ReviewService implements vscode.Disposable {
       store === undefined ||  // RevExt: 254
       path === undefined ||  // RevExt: 252
       !this.isEligibleSourceUri(document.uri) ||
-      !store.hasMetadata
+      !store.tracksPath(path)
     ) {  // RevExt: 123
       return;  // RevExt: 169
     }  // RevExt: 28
@@ -226,15 +264,21 @@ export class ReviewService implements vscode.Disposable {
   async initializeFolder(
     folder: vscode.WorkspaceFolder,  // RevExt: 113
     status: "pending" | "reviewed",
+    targets?: readonly TrackingTarget[],
+    candidatePaths?: readonly string[],
   ): Promise<void> {  // RevExt: 197
     const store = this.stores.get(folder.uri.toString());  // RevExt: 202
     if (store === undefined) {  // RevExt: 205
       return;  // RevExt: 170
     }  // RevExt: 30
-    const eligible = this.eligiblePaths.get(folder.uri.toString());  // RevExt: 207
+    const eligible = candidatePaths ?? this.eligiblePaths.get(folder.uri.toString());  // RevExt: 207
     if (eligible === undefined) {
       throw new Error("Workspace files have not been enumerated.");
     }  // RevExt: 31
+    const configuredTargets = targets ?? store.trackingTargets();
+    if (configuredTargets === undefined) {
+      throw new Error("Choose files or folders before initializing review tracking.");
+    }
     const folderKey = folder.uri.toString();
     if (this.initializingFolders.has(folderKey)) {
       throw new Error("This workspace is already being initialized.");
@@ -244,13 +288,21 @@ export class ReviewService implements vscode.Disposable {
       await Promise.allSettled(this.sourceTails.values());
       await store.reset();
       const maxSize = this.maxSize();
-      const paths = [...eligible].sort();
+      const paths = [...eligible]
+        .filter((path) => tracksPath(path, {
+          schemaVersion: 1,
+          state: "initialized",
+          targets: configuredTargets,
+        }))
+        .sort();
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Code Review: start ${status}`,
+          title: `Code Review: adding ${status} files`,
         },  // RevExt: 257
         async (progress) => {
+          let completed = 0;
+          progress.report({ message: `0/${paths.length}` });
           for (let index = 0; index < paths.length; index += 1) {
             const path = paths[index]!;
             const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
@@ -279,13 +331,18 @@ export class ReviewService implements vscode.Disposable {
               await store.commit(path, { ...file, nextRevExtId }, baseline);
             } catch (error) {
               this.log.warn(`Skipping ${path}: ${String(error)}`);
+            } finally {
+              completed += 1;
+              progress.report({
+                increment: progressIncrement(paths.length),
+                message: `${completed}/${paths.length}`,
+              });
             }
-            progress.report({
-              increment: 100 / Math.max(paths.length, 1),
-            });
           }
         },  // RevExt: 258
       );  // RevExt: 244
+      await store.enableTracking(configuredTargets);
+      this.setEligiblePaths(folder, paths);
       this.changedEmitter.fire(undefined);  // RevExt: 130
     } finally {  // RevExt: 263
       this.initializingFolders.delete(folderKey);
@@ -937,6 +994,9 @@ function initialAdditionHunks(bytes: Uint8Array): readonly RawGitHunk[] {
     ? []
     : [{ oldStart: 0, oldCount: 0, newStart: 1, newCount: count }];
 }  // RevExt: 7
+function progressIncrement(total: number): number {
+  return total === 0 ? 0 : 100 / total;
+}
 function selectedLines(
   selections: readonly vscode.Selection[],
 ): ReadonlySet<number> {
