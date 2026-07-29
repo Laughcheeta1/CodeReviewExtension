@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.4.10",
+  "version": "0.4.12",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -42,6 +42,18 @@
       {
         "command": "codeReviewTracker.markReviewed",
         "title": "Code Review: Mark Lines Reviewed"
+      },
+      {
+        "command": "codeReviewTracker.markFilePending",
+        "title": "Code Review: Mark File Pending"
+      },
+      {
+        "command": "codeReviewTracker.markFileInReview",
+        "title": "Code Review: Mark File In Review"
+      },
+      {
+        "command": "codeReviewTracker.markFileReviewed",
+        "title": "Code Review: Mark File Reviewed"
       },
       {
         "command": "codeReviewTracker.openReviewDiff",
@@ -89,6 +101,23 @@
         {
           "command": "codeReviewTracker.sendSelectionToTerminal",
           "group": "codeReview@4"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "codeReviewTracker.markFilePending",
+          "when": "resourceScheme == file && explorerResourceIsFolder == false",
+          "group": "codeReview@1"
+        },
+        {
+          "command": "codeReviewTracker.markFileInReview",
+          "when": "resourceScheme == file && explorerResourceIsFolder == false",
+          "group": "codeReview@2"
+        },
+        {
+          "command": "codeReviewTracker.markFileReviewed",
+          "when": "resourceScheme == file && explorerResourceIsFolder == false",
+          "group": "codeReview@3"
         }
       ]
     },

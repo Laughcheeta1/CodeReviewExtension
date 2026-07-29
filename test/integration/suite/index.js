@@ -51,6 +51,13 @@ function assertPending(file) {
     ),
   );  // RevExt: 11
 }  // RevExt: 16
+function assertInReview(file) {
+  assert.ok(
+    file.file.currentLines.every(
+      (line) => line.changeType === "added" && line.reviewStatus === "inReview",
+    ),
+  );
+}
 // RevExt: 5
 async function run() {
   const extension = vscode.extensions.getExtension("local.code-review-tracker");
@@ -63,8 +70,12 @@ async function run() {
     "codeReviewTracker.markPending",
     "codeReviewTracker.markInReview",
     "codeReviewTracker.markReviewed",
+    "codeReviewTracker.markFilePending",
+    "codeReviewTracker.markFileInReview",
+    "codeReviewTracker.markFileReviewed",
     "codeReviewTracker.markHunkPending",
     "codeReviewTracker.markHunkReviewed",
+    "codeReviewTracker.sendSelectionToTerminal",
     "codeReviewTracker.setup",
     "codeReviewTracker.initializePending",
     "codeReviewTracker.initializeReviewed",
@@ -78,6 +89,21 @@ async function run() {
   const sample = await waitForMetadata(folder, "sample.txt");
   assertPending(sample);  // RevExt: 20
   await assertSnapshot(folder, sample);
+  await vscode.workspace.getConfiguration("codeReviewTracker").update(
+    "reviewerName",
+    "Integration Reviewer",
+    vscode.ConfigurationTarget.Workspace,
+  );
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.markFileInReview",
+    vscode.Uri.joinPath(folder.uri, "sample.txt"),
+  );
+  assertInReview(await metadata(folder, "sample.txt"));
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.markFilePending",
+    vscode.Uri.joinPath(folder.uri, "sample.txt"),
+  );
+  assertPending(await metadata(folder, "sample.txt"));
 // RevExt: 7
   const createdPath = "created-after-activation.txt";
   await vscode.workspace.fs.writeFile(

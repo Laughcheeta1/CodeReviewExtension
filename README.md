@@ -22,7 +22,8 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 - Git additions are reviewed on the right.
 - Git deletions are reviewed on the left.
 - A replacement remains one deletion plus one addition; the extension does not guess that they form a “modified” line.
-- Use the line commands for selections or the CodeLens actions for an entire Git hunk.
+- Use the line commands for selections or the CodeLens actions for an entire Git hunk. In the Explorer, right-click a tracked file to mark all of its reviewable changes as pending, in review, or reviewed.
+- To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>.
 - Lines that contain only a line ending are ignored; whitespace-only lines still count. LF, CRLF, and missing-final-newline identity are preserved.
 - The default shortcuts are <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> for pending review, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> for in review, and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> for reviewed. Rebind them in **Preferences: Open Keyboard Shortcuts**.
 - Unsaved editors cannot be reviewed. Save first so disk content remains authoritative.

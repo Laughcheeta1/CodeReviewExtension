@@ -438,6 +438,26 @@ export class ReviewService implements vscode.Disposable {
       );  // RevExt: 246
     });  // RevExt: 270
   }  // RevExt: 91
+  async markFile(
+    source: vscode.Uri,
+    status: ReviewStatus,
+    reviewer?: Reviewer,
+  ): Promise<boolean> {
+    return this.withSource(source, async () => {
+      if (this.dirtyDocument(source) !== undefined) {
+        throw new Error("Save the file before changing review state.");
+      }
+      const file = await this.requireFresh(source);
+      return this.applyReview(
+        source,
+        file,
+        status,
+        reviewer,
+        (line) => line.changeType !== "unchanged",
+        () => true,
+      );
+    });
+  }
   async markHunk(
     source: vscode.Uri,  // RevExt: 310
     baselineDigest: string,

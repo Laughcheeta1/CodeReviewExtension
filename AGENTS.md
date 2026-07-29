@@ -10,3 +10,4 @@
 - When adding persistent state guards around a workflow, verify that existing explicit commands still provide an intentional recovery or reconfiguration path instead of silently becoming no-ops.
 - For initialization workflows, verify the end-to-end persistence result—metadata and snapshots on disk—not merely that the UI flow or command completes.
 - Do not revalidate explicitly selected initialization candidates against lifecycle caches that are populated only after initialization; use the selected candidate set as the authority for that initialization run.
+- When a user asks to reduce editor clutter, remove the inline UI affordance and retain the action through the requested context menu and existing shortcut.

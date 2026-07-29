@@ -8,7 +8,6 @@ import {
   ReviewCodeLensProvider,
   ReviewDecorations,
   ReviewFileDecorations,
-  ReviewInlayHints,
   ReviewTree,
   type HunkCommand,
 } from "./ui";
@@ -63,14 +62,12 @@ export async function activate(
   const codeLens = new ReviewCodeLensProvider(service);
   const tree = new ReviewTree(service);
   const fileDecorations = new ReviewFileDecorations(service);
-  const inlayHints = new ReviewInlayHints();
 // RevExt: 195
   context.subscriptions.push(  // RevExt: 279
     decorations,
     codeLens,
     tree,
     fileDecorations,
-    inlayHints,
   );  // RevExt: 281
   context.subscriptions.push(  // RevExt: 280
     vscode.workspace.registerTextDocumentContentProvider(
@@ -83,7 +80,6 @@ export async function activate(
     ),  // RevExt: 291
     vscode.window.registerTreeDataProvider("codeReviewTracker.files", tree),
     vscode.window.registerFileDecorationProvider(fileDecorations),
-    vscode.languages.registerInlayHintsProvider({ scheme: "file" }, inlayHints),
     vscode.workspace.onDidOpenTextDocument((document) =>
       runLogged(log, "Document loading", service.ensureDocument(document)),
     ),  // RevExt: 292
@@ -111,6 +107,18 @@ export async function activate(
     vscode.commands.registerCommand("codeReviewTracker.markReviewed", () =>
       markActive(service, git, "reviewed"),
     ),  // RevExt: 297
+    vscode.commands.registerCommand(
+      "codeReviewTracker.markFilePending",
+      (uri?: vscode.Uri) => markFile(service, git, uri, "pending"),
+    ),
+    vscode.commands.registerCommand(
+      "codeReviewTracker.markFileInReview",
+      (uri?: vscode.Uri) => markFile(service, git, uri, "inReview"),
+    ),
+    vscode.commands.registerCommand(
+      "codeReviewTracker.markFileReviewed",
+      (uri?: vscode.Uri) => markFile(service, git, uri, "reviewed"),
+    ),
     vscode.commands.registerCommand(  // RevExt: 314
       "codeReviewTracker.markHunkPending",
       (command: HunkCommand) => markHunk(service, git, command),  // RevExt: 319
@@ -471,6 +479,29 @@ async function markHunk(
     void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 356
   }  // RevExt: 239
 }  // RevExt: 329
+async function markFile(
+  service: ReviewService,
+  git: GitService,
+  uri: vscode.Uri | undefined,
+  status: ReviewStatus,
+): Promise<void> {
+  if (uri === undefined || uri.scheme !== "file") {
+    return;
+  }
+  const identity = status === "pending" ? undefined : await reviewer(git, uri);
+  if (status !== "pending" && identity === undefined) {
+    return;
+  }
+  try {
+    if (!(await service.markFile(uri, status, identity))) {
+      void vscode.window.showInformationMessage(
+        "The file contains no reviewable changes.",
+      );
+    }
+  } catch (error) {
+    void vscode.window.showWarningMessage(errorMessage(error));
+  }
+}
 async function initializeAll(
   service: ReviewService,  // RevExt: 341
   git: GitService,  // RevExt: 406

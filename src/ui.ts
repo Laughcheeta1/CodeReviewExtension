@@ -207,52 +207,6 @@ export class ReviewCodeLensProvider
 function inRange(line: number, start: number, count: number): boolean {
   return count > 0 && line >= start && line < start + count;
 }  // RevExt: 8
-export class ReviewInlayHints
-  implements vscode.InlayHintsProvider<vscode.InlayHint>, vscode.Disposable {
-  private readonly emitter = new vscode.EventEmitter<void>();  // RevExt: 97
-  readonly onDidChangeInlayHints = this.emitter.event;
-  private readonly subscriptions = vscode.Disposable.from(
-    vscode.window.onDidChangeTextEditorSelection(() => this.emitter.fire()),
-    vscode.window.onDidChangeActiveTextEditor(() => this.emitter.fire()),
-  );  // RevExt: 125
-  provideInlayHints(
-    document: vscode.TextDocument,
-  ): vscode.ProviderResult<vscode.InlayHint[]> {
-    const editor = vscode.window.activeTextEditor;
-    if (  // RevExt: 102
-      editor === undefined ||
-      editor.document.uri.toString() !== document.uri.toString() ||
-      document.uri.scheme !== "file"
-    ) {  // RevExt: 104
-      return [];  // RevExt: 106
-    }  // RevExt: 79
-    const targets = new Set(
-      editor.selections.map((selection) =>
-        selection.isEmpty
-          ? selection.active.line
-          : Math.max(
-              selection.start.line,
-              selection.end.line - (selection.end.character === 0 ? 1 : 0),
-            ),  // RevExt: 70
-      ),
-    );  // RevExt: 47
-    return [...targets].map((line) => {
-      const part = new vscode.InlayHintLabelPart(" $(terminal) Send to Agent");
-      part.command = {
-        command: "codeReviewTracker.sendSelectionToTerminal",
-        title: "Send selection to coding agent",
-      };  // RevExt: 59
-      return new vscode.InlayHint(
-        new vscode.Position(line, document.lineAt(line).text.length),
-        [part],
-      );  // RevExt: 115
-    });  // RevExt: 95
-  }  // RevExt: 23
-  dispose(): void {  // RevExt: 87
-    this.subscriptions.dispose();
-    this.emitter.dispose();  // RevExt: 122
-  }  // RevExt: 24
-}  // RevExt: 9
 export class ReviewFileDecorations
   implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<
