@@ -638,7 +638,7 @@ export class ReviewService implements vscode.Disposable {
       return true;  // RevExt: 337
     }  // RevExt: 43
     const baseline = await store.loadBaseline(existing, this.maxSize());  // RevExt: 347
-    const rawHunks = await this.git.diff(baseline, bytes);
+    const rawHunks = await this.diffWithProgress(uri, baseline, bytes);
     const diff = buildDiffRecords(baseline, bytes, rawHunks, existing);
     await store.commit(path, {
       ...existing,
@@ -667,7 +667,7 @@ export class ReviewService implements vscode.Disposable {
     }  // RevExt: 45
     const { bytes } = await this.readStableSource(document.uri, this.maxSize());
     const baseline = await store.loadBaseline(existing, this.maxSize());  // RevExt: 348
-    const hunks = await this.git.diff(baseline, bytes);
+    const hunks = await this.diffWithProgress(document.uri, baseline, bytes);
     const addedLines = new Set<number>();
     for (const hunk of hunks) {
       for (
@@ -754,6 +754,20 @@ export class ReviewService implements vscode.Disposable {
     }  // RevExt: 56
     return annotation.nextId;
   }  // RevExt: 97
+  private async diffWithProgress(
+    source: vscode.Uri,
+    baseline: Uint8Array,
+    current: Uint8Array,
+  ): Promise<readonly RawGitHunk[]> {
+    const path = this.relativePath(source) ?? source.fsPath;
+    return vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Window,
+        title: `Code Review: comparing ${path}`,
+      },
+      () => this.git.diff(baseline, current),
+    );
+  }
   private async createRecord(
     path: string,
     baseline: Uint8Array,

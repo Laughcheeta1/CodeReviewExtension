@@ -116,7 +116,10 @@ async function run() {
     vscode.window.tabGroups.all.flatMap((group) => group.tabs),
     true,
   );
-  await vscode.window.showTextDocument(source);
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.openReviewDiff",
+    source,
+  );
   const reviewView = await waitForReviewDiff(source);
   assert.equal(reviewView.modified.toString(), source.toString());
   assert.equal(reviewView.original.scheme, "code-review-baseline");
