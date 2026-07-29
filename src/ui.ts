@@ -1,73 +1,81 @@
 import * as vscode from "vscode";
 import type { ReviewStatus } from "./domain";
+import { revExtMarkerStart } from "./revext";
 import type { ReviewService } from "./review-service";
 const statusText: Record<ReviewStatus, string> = {
   pending: "Pending review",
   inReview: "In review",
   reviewed: "Reviewed",
-};
+};  // RevExt: 1
 const statusIcon: Record<ReviewStatus, string> = {
   pending: "P",
   inReview: "●",
   reviewed: "✓",
-};
+};  // RevExt: 2
 export interface HunkCommand {
   readonly source: vscode.Uri;
   readonly baselineDigest: string;
   readonly currentDigest: string;
   readonly hunkIndex: number;
   readonly status: "pending" | "reviewed";
-}
+}  // RevExt: 3
 export class BaselineContentProvider
-  implements vscode.TextDocumentContentProvider
-{
+  implements vscode.TextDocumentContentProvider {
   constructor(private readonly service: ReviewService) {}
   provideTextDocumentContent(uri: vscode.Uri): vscode.ProviderResult<string> {
     return this.service.baselineContent(uri);
-  }
-}
+  }  // RevExt: 14
+}  // RevExt: 4
 export class ReviewDecorations implements vscode.Disposable {
   private readonly types: Record<ReviewStatus, vscode.TextEditorDecorationType>;
+  private readonly revExtType = vscode.window.createTextEditorDecorationType({
+    color: "transparent",
+  });
   private readonly changeSubscription: vscode.Disposable;
-  constructor(private readonly service: ReviewService) {
+  private readonly documentSubscription: vscode.Disposable;
+  constructor(private readonly service: ReviewService) {  // RevExt: 33
     this.types = {
       pending: vscode.window.createTextEditorDecorationType({
         gutterIconPath: svg("8c959f"),
-        gutterIconSize: "contain",
-      }),
+        gutterIconSize: "contain",  // RevExt: 37
+      }),  // RevExt: 40
       inReview: vscode.window.createTextEditorDecorationType({
         gutterIconPath: svg("d29922"),
-        gutterIconSize: "contain",
-      }),
+        gutterIconSize: "contain",  // RevExt: 38
+      }),  // RevExt: 41
       reviewed: vscode.window.createTextEditorDecorationType({
         gutterIconPath: svg("3fb950"),
-        gutterIconSize: "contain",
-      }),
-    };
+        gutterIconSize: "contain",  // RevExt: 39
+      }),  // RevExt: 42
+    };  // RevExt: 43
     this.changeSubscription = service.onDidChange(() => this.refresh());
-  }
+    this.documentSubscription = vscode.workspace.onDidChangeTextDocument(() =>
+      this.refresh(),
+    );  // RevExt: 46
+  }  // RevExt: 15
   refresh(): void {
     void this.refreshVisible();
-  }
+  }  // RevExt: 16
   private refreshVisible(): void {
     for (const editor of vscode.window.visibleTextEditors) {
       for (const type of Object.values(this.types)) {
         editor.setDecorations(type, []);
-      }
+      }  // RevExt: 49
+      editor.setDecorations(this.revExtType, revExtDecorations(editor.document));
       const identity = this.service.parseBaselineUri(editor.document.uri);
       const source = identity?.source ?? editor.document.uri;
       if (identity === undefined && this.service.isTrackable(editor.document)) {
         void this.service.ensureDocument(editor.document);
-      }
+      }  // RevExt: 50
       const file = this.service.file(source);
       if (file === undefined) {
         continue;
-      }
+      }  // RevExt: 51
       const options: Record<ReviewStatus, vscode.DecorationOptions[]> = {
         pending: [],
         inReview: [],
         reviewed: [],
-      };
+      };  // RevExt: 57
       if (identity === undefined) {
         for (const line of file.currentLines.filter(
           (line) => line.changeType !== "unchanged",
@@ -75,117 +83,149 @@ export class ReviewDecorations implements vscode.Disposable {
           if (line.line > editor.document.lineCount) {
             continue;
           }
-          options[line.reviewStatus].push(
-            decoration(
+          options[line.reviewStatus].push(  // RevExt: 60
+            decoration(  // RevExt: 62
               line.line,
               line.changeType,
-              line.reviewStatus,
-              line.lastReviewer,
-            ),
-          );
-        }
+              line.reviewStatus,  // RevExt: 64
+              line.lastReviewer,  // RevExt: 66
+            ),  // RevExt: 68
+          );  // RevExt: 71
+        }  // RevExt: 73
       } else if (
         identity.baselineDigest === file.baseline.digest &&
         identity.currentDigest === file.current.digest
       ) {
         for (const line of file.deletedLines) {
-          options[line.reviewStatus].push(
-            decoration(
+          options[line.reviewStatus].push(  // RevExt: 61
+            decoration(  // RevExt: 63
               line.baselineLine,
               "deleted",
-              line.reviewStatus,
-              line.lastReviewer,
-            ),
-          );
-        }
-      }
+              line.reviewStatus,  // RevExt: 65
+              line.lastReviewer,  // RevExt: 67
+            ),  // RevExt: 69
+          );  // RevExt: 72
+        }  // RevExt: 74
+      }  // RevExt: 52
       for (const status of ["pending", "inReview", "reviewed"] as const) {
         editor.setDecorations(this.types[status], options[status]);
-      }
-    }
-  }
-  dispose(): void {
+      }  // RevExt: 53
+    }  // RevExt: 75
+  }  // RevExt: 17
+  dispose(): void {  // RevExt: 85
     this.changeSubscription.dispose();
+    this.documentSubscription.dispose();
     for (const type of Object.values(this.types)) {
       type.dispose();
-    }
-  }
-}
+    }  // RevExt: 76
+    this.revExtType.dispose();
+  }  // RevExt: 18
+}  // RevExt: 5
+// RevExt: 90
+function revExtDecorations(
+  document: vscode.TextDocument,
+): readonly vscode.DecorationOptions[] {
+  const result: vscode.DecorationOptions[] = [];
+  for (let line = 0; line < document.lineCount; line += 1) {
+    const start = revExtMarkerStart(document.lineAt(line).text, document.languageId);
+    if (start === undefined) {
+      continue;
+    }  // RevExt: 77
+    result.push({
+      range: new vscode.Range(line, start, line, document.lineAt(line).text.length),
+    });  // RevExt: 93
+  }  // RevExt: 19
+  return result;
+}  // RevExt: 6
 export class ReviewCodeLensProvider
-  implements vscode.CodeLensProvider, vscode.Disposable
-{
-  private readonly emitter = new vscode.EventEmitter<void>();
+  implements vscode.CodeLensProvider, vscode.Disposable {
+  private readonly emitter = new vscode.EventEmitter<void>();  // RevExt: 96
   readonly onDidChangeCodeLenses = this.emitter.event;
-  private readonly subscription: vscode.Disposable;
-  constructor(private readonly service: ReviewService) {
+  private readonly subscription: vscode.Disposable;  // RevExt: 98
+  constructor(private readonly service: ReviewService) {  // RevExt: 34
     this.subscription = service.onDidChange(() => this.emitter.fire());
-  }
+  }  // RevExt: 20
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const identity = this.service.parseBaselineUri(document.uri);
     const source = identity?.source ?? document.uri;
     const file = this.service.file(source);
-    if (
+    if (  // RevExt: 101
       file === undefined ||
       (identity !== undefined &&
         (identity.baselineDigest !== file.baseline.digest ||
           identity.currentDigest !== file.current.digest))
-    ) {
-      return [];
-    }
+    ) {  // RevExt: 103
+      return [];  // RevExt: 105
+    }  // RevExt: 78
     const result: vscode.CodeLens[] = [];
     file.hunks.forEach((hunk, hunkIndex) => {
+      const hasReviewableLines =
+        file.currentLines.some(
+          (line) =>
+            line.changeType === "added" &&
+            inRange(line.line, hunk.newStart, hunk.newCount),
+        ) ||
+        file.deletedLines.some((line) =>
+          inRange(line.baselineLine, hunk.oldStart, hunk.oldCount),
+        );
+      if (!hasReviewableLines) {
+        return;  // RevExt: 108
+      }  // RevExt: 54
       const line = identity === undefined ? hunk.newStart : hunk.oldStart;
       const count = identity === undefined ? hunk.newCount : hunk.oldCount;
       if (count === 0 || line < 1 || line > document.lineCount) {
-        return;
-      }
+        return;  // RevExt: 109
+      }  // RevExt: 55
       const range = new vscode.Range(line - 1, 0, line - 1, 0);
       const base = {
         source,
         baselineDigest: file.baseline.digest,
         currentDigest: file.current.digest,
         hunkIndex,
-      };
+      };  // RevExt: 58
       result.push(
-        new vscode.CodeLens(range, {
+        new vscode.CodeLens(range, {  // RevExt: 110
           command: "codeReviewTracker.markHunkReviewed",
           title: "$(pass-filled) Mark hunk reviewed",
           arguments: [{ ...base, status: "reviewed" }],
-        }),
-        new vscode.CodeLens(range, {
+        }),  // RevExt: 112
+        new vscode.CodeLens(range, {  // RevExt: 111
           command: "codeReviewTracker.markHunkPending",
           title: "$(circle-outline) Mark hunk pending",
           arguments: [{ ...base, status: "pending" }],
-        }),
-      );
-    });
+        }),  // RevExt: 113
+      );  // RevExt: 114
+    });  // RevExt: 94
     return result;
-  }
-  dispose(): void {
-    this.subscription.dispose();
-    this.emitter.dispose();
-  }
-}
+  }  // RevExt: 21
+  dispose(): void {  // RevExt: 86
+    this.subscription.dispose();  // RevExt: 118
+    this.emitter.dispose();  // RevExt: 121
+  }  // RevExt: 22
+}  // RevExt: 7
+// RevExt: 91
+function inRange(line: number, start: number, count: number): boolean {
+  return count > 0 && line >= start && line < start + count;
+}  // RevExt: 8
 export class ReviewInlayHints
-  implements vscode.InlayHintsProvider<vscode.InlayHint>, vscode.Disposable
-{
-  private readonly emitter = new vscode.EventEmitter<void>();
+  implements vscode.InlayHintsProvider<vscode.InlayHint>, vscode.Disposable {
+  private readonly emitter = new vscode.EventEmitter<void>();  // RevExt: 97
   readonly onDidChangeInlayHints = this.emitter.event;
   private readonly subscriptions = vscode.Disposable.from(
     vscode.window.onDidChangeTextEditorSelection(() => this.emitter.fire()),
     vscode.window.onDidChangeActiveTextEditor(() => this.emitter.fire()),
-  );
+  );  // RevExt: 125
   provideInlayHints(
     document: vscode.TextDocument,
   ): vscode.ProviderResult<vscode.InlayHint[]> {
     const editor = vscode.window.activeTextEditor;
-    if (
+    if (  // RevExt: 102
       editor === undefined ||
       editor.document.uri.toString() !== document.uri.toString() ||
       document.uri.scheme !== "file"
-    ) {
-      return [];
-    }
+    ) {  // RevExt: 104
+      return [];  // RevExt: 106
+    }  // RevExt: 79
     const targets = new Set(
       editor.selections.map((selection) =>
         selection.isEmpty
@@ -193,44 +233,43 @@ export class ReviewInlayHints
           : Math.max(
               selection.start.line,
               selection.end.line - (selection.end.character === 0 ? 1 : 0),
-            ),
+            ),  // RevExt: 70
       ),
-    );
+    );  // RevExt: 47
     return [...targets].map((line) => {
       const part = new vscode.InlayHintLabelPart(" $(terminal) Send to Agent");
       part.command = {
         command: "codeReviewTracker.sendSelectionToTerminal",
         title: "Send selection to coding agent",
-      };
+      };  // RevExt: 59
       return new vscode.InlayHint(
         new vscode.Position(line, document.lineAt(line).text.length),
         [part],
-      );
-    });
-  }
-  dispose(): void {
+      );  // RevExt: 115
+    });  // RevExt: 95
+  }  // RevExt: 23
+  dispose(): void {  // RevExt: 87
     this.subscriptions.dispose();
-    this.emitter.dispose();
-  }
-}
+    this.emitter.dispose();  // RevExt: 122
+  }  // RevExt: 24
+}  // RevExt: 9
 export class ReviewFileDecorations
-  implements vscode.FileDecorationProvider, vscode.Disposable
-{
+  implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<
     vscode.Uri | vscode.Uri[] | undefined
   >();
   readonly onDidChangeFileDecorations = this.emitter.event;
-  private readonly subscription: vscode.Disposable;
-  constructor(private readonly service: ReviewService) {
+  private readonly subscription: vscode.Disposable;  // RevExt: 99
+  constructor(private readonly service: ReviewService) {  // RevExt: 35
     this.subscription = service.onDidChange((uri) => this.emitter.fire(uri));
-  }
+  }  // RevExt: 25
   provideFileDecoration(
     uri: vscode.Uri,
   ): vscode.ProviderResult<vscode.FileDecoration> {
     const status = this.service.status(uri);
     if (status === undefined) {
       return undefined;
-    }
+    }  // RevExt: 80
     const color =
       status === "reviewed"
         ? new vscode.ThemeColor("testing.iconPassed")
@@ -241,52 +280,51 @@ export class ReviewFileDecorations
       statusIcon[status],
       statusText[status],
       color,
-    );
+    );  // RevExt: 48
     item.propagate = true;
-    return item;
-  }
-  dispose(): void {
-    this.subscription.dispose();
-    this.emitter.dispose();
-  }
-}
+    return item;  // RevExt: 127
+  }  // RevExt: 26
+  dispose(): void {  // RevExt: 88
+    this.subscription.dispose();  // RevExt: 119
+    this.emitter.dispose();  // RevExt: 123
+  }  // RevExt: 27
+}  // RevExt: 10
 type TreeNode =
-  | {
+  | {  // RevExt: 129
       readonly kind: "group";
-      readonly status: ReviewStatus;
-    }
-  | {
+      readonly status: ReviewStatus;  // RevExt: 131
+    }  // RevExt: 81
+  | {  // RevExt: 130
       readonly kind: "file";
       readonly uri: vscode.Uri;
       readonly label: string;
-      readonly status: ReviewStatus;
+      readonly status: ReviewStatus;  // RevExt: 132
       readonly reviewed: number;
       readonly total: number;
-    };
+    };  // RevExt: 44
 export class ReviewTree
-  implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable
-{
+  implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined>();
   readonly onDidChangeTreeData = this.emitter.event;
-  private readonly subscription: vscode.Disposable;
-  constructor(private readonly service: ReviewService) {
+  private readonly subscription: vscode.Disposable;  // RevExt: 100
+  constructor(private readonly service: ReviewService) {  // RevExt: 36
     this.subscription = service.onDidChange(() => this.emitter.fire(undefined));
-  }
+  }  // RevExt: 28
   getTreeItem(node: TreeNode): vscode.TreeItem {
     if (node.kind === "group") {
       const item = new vscode.TreeItem(
         statusText[node.status],
         vscode.TreeItemCollapsibleState.Expanded,
-      );
+      );  // RevExt: 116
       item.iconPath = new vscode.ThemeIcon(
         node.status === "reviewed"
           ? "pass-filled"
           : node.status === "inReview"
             ? "circle-filled"
             : "circle-outline",
-      );
+      );  // RevExt: 117
       return item;
-    }
+    }  // RevExt: 82
     const item = new vscode.TreeItem(node.label);
     item.description = `${node.reviewed}/${node.total}`;
     item.tooltip = `${statusText[node.status]} — ${node.reviewed}/${node.total} changes reviewed`;
@@ -295,19 +333,19 @@ export class ReviewTree
       command: "codeReviewTracker.openReviewDiff",
       title: "Open review diff",
       arguments: [node.uri],
-    };
-    return item;
-  }
+    };  // RevExt: 45
+    return item;  // RevExt: 128
+  }  // RevExt: 29
   getChildren(node?: TreeNode): vscode.ProviderResult<TreeNode[]> {
     if (node === undefined) {
       return (["pending", "inReview", "reviewed"] as const).map((status) => ({
         kind: "group",
         status,
-      }));
-    }
+      }));  // RevExt: 133
+    }  // RevExt: 83
     if (node.kind === "file") {
-      return [];
-    }
+      return [];  // RevExt: 107
+    }  // RevExt: 84
     return this.service
       .summary()
       .filter((file) => file.status === node.status)
@@ -319,13 +357,13 @@ export class ReviewTree
         status: file.status,
         reviewed: file.reviewed,
         total: file.total,
-      }));
-  }
-  dispose(): void {
-    this.subscription.dispose();
-    this.emitter.dispose();
-  }
-}
+      }));  // RevExt: 134
+  }  // RevExt: 30
+  dispose(): void {  // RevExt: 89
+    this.subscription.dispose();  // RevExt: 120
+    this.emitter.dispose();  // RevExt: 124
+  }  // RevExt: 31
+}  // RevExt: 11
 function decoration(
   line: number,
   change: string,
@@ -334,18 +372,19 @@ function decoration(
     | {
         name: string;
         time: string;
-      }
+      }  // RevExt: 56
     | undefined,
 ): vscode.DecorationOptions {
   const hoverMessage = new vscode.MarkdownString();
   hoverMessage.appendText(`${change}: ${statusText[status]}`);
   if (lastReviewer !== undefined) {
     hoverMessage.appendText(` by ${lastReviewer.name} on ${lastReviewer.time}`);
-  }
+  }  // RevExt: 32
   return { range: new vscode.Range(line - 1, 0, line - 1, 0), hoverMessage };
-}
+}  // RevExt: 12
 function svg(color: string): vscode.Uri {
   return vscode.Uri.parse(
     `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="5" fill="#${color}"/></svg>`)}`,
-  );
-}
+  );  // RevExt: 126
+}  // RevExt: 13
+// RevExt: 92

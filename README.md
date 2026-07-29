@@ -21,7 +21,8 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 - Git deletions are reviewed on the left.
 - A replacement remains one deletion plus one addition; the extension does not guess that they form a “modified” line.
 - Use the line commands for selections or the CodeLens actions for an entire Git hunk.
-- Blank and whitespace-only lines count, and LF, CRLF, and missing-final-newline identity are preserved.
+- Lines that contain only a line ending are ignored; whitespace-only lines still count. LF, CRLF, and missing-final-newline identity are preserved.
+- The default shortcuts are <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> for pending review, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> for in review, and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> for reviewed. Rebind them in **Preferences: Open Keyboard Shortcuts**.
 - Unsaved editors cannot be reviewed. Save first so disk content remains authoritative.
 - Only duplicate added lines receive a temporary `RevExt` end-of-line comment. The complete tagged line becomes its identity, so later insertions do not disturb the review state of its duplicate peers. The comments are removed when the file is promoted.
 

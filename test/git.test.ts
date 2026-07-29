@@ -5,62 +5,50 @@ import test from "node:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { GitService, parseGitHunks } from "../src/git.ts";
+import { GitService } from "../src/git.ts";
 import { buildDiffRecords } from "../src/domain.ts";
-
+// RevExt: 1
 const execute = promisify(execFile);
-test("parses zero-context Git hunk ranges including zero counts", () => {
-  assert.deepEqual(
-    parseGitHunks(
-      "@@ -1 +1 @@\n@@ -2,0 +3,2 @@\n@@ -8,4 +10,0 @@\nnot a hunk\n",
-    ),
-    [
-      { oldStart: 1, oldCount: 1, newStart: 1, newCount: 1 },
-      { oldStart: 2, oldCount: 0, newStart: 3, newCount: 2 },
-      { oldStart: 8, oldCount: 4, newStart: 10, newCount: 0 },
-    ],
-  );
-});
 test("required Git no-index diff handles replacement, blanks, and missing final newline", async () => {
   const hunks = await new GitService().diff(
     new TextEncoder().encode("a\n\nold"),
     new TextEncoder().encode("a\n\nnew\n"),
-  );
+  );  // RevExt: 6
   assert.deepEqual(hunks, [
     { oldStart: 3, oldCount: 1, newStart: 3, newCount: 1 },
-  ]);
-});
+  ]);  // RevExt: 12
+});  // RevExt: 15
 test("Git no-index reports unchanged content as no hunks", async () => {
   const value = new TextEncoder().encode("same\r\n");
   assert.deepEqual(await new GitService().diff(value, value), []);
-});
+});  // RevExt: 16
 test("Git no-index reports pure additions and pure deletions", async () => {
-  const git = new GitService();
+  const git = new GitService();  // RevExt: 20
   const additions = await git.diff(
-    new Uint8Array(),
-    new TextEncoder().encode("one\n\ntwo\n"),
-  );
+    new Uint8Array(),  // RevExt: 22
+    new TextEncoder().encode("one\n\ntwo\n"),  // RevExt: 24
+  );  // RevExt: 7
   assert.deepEqual(additions, [
     { oldStart: 0, oldCount: 0, newStart: 1, newCount: 3 },
-  ]);
+  ]);  // RevExt: 13
   const deletions = await git.diff(
-    new TextEncoder().encode("one\n\ntwo\n"),
-    new Uint8Array(),
-  );
+    new TextEncoder().encode("one\n\ntwo\n"),  // RevExt: 25
+    new Uint8Array(),  // RevExt: 23
+  );  // RevExt: 8
   assert.deepEqual(deletions, [
     { oldStart: 1, oldCount: 3, newStart: 0, newCount: 0 },
-  ]);
-});
+  ]);  // RevExt: 14
+});  // RevExt: 17
 test("Git ranges drive correct records for middle insertions and deletions", async () => {
-  const git = new GitService();
+  const git = new GitService();  // RevExt: 21
   const baseline = new TextEncoder().encode("a\nb\nc\n");
   const current = new TextEncoder().encode("a\nx\nc\nd\n");
   const result = buildDiffRecords(
     baseline,
     current,
     await git.diff(baseline, current),
-  );
-  assert.deepEqual(
+  );  // RevExt: 9
+  assert.deepEqual(  // RevExt: 26
     result.currentLines.map((line) => [line.line, line.changeType]),
     [
       [1, "unchanged"],
@@ -68,43 +56,44 @@ test("Git ranges drive correct records for middle insertions and deletions", asy
       [3, "unchanged"],
       [4, "added"],
     ],
-  );
-  assert.deepEqual(
+  );  // RevExt: 10
+  assert.deepEqual(  // RevExt: 27
     result.deletedLines.map((line) => line.baselineLine),
     [2],
-  );
-});
-
+  );  // RevExt: 11
+});  // RevExt: 18
+// RevExt: 2
 test("Git ignore matching respects patterns and negations in .gitignore", async () => {
   const directory = await mkdtemp(join(tmpdir(), "code-review-tracker-"));
   try {
     await execute("git", ["init", "--quiet", directory]);
-    await Promise.all([
+    await Promise.all([  // RevExt: 28
       writeFile(
         join(directory, ".gitignore"),
         "generated/\n*.secret\n!allowed.secret\n",
       ),
       mkdir(join(directory, "generated"), { recursive: true }),
-    ]);
-    await Promise.all([
+    ]);  // RevExt: 30
+    await Promise.all([  // RevExt: 29
       writeFile(join(directory, "generated", "output.ts"), "generated"),
       writeFile(join(directory, "credentials.secret"), "secret"),
       writeFile(join(directory, "allowed.secret"), "allowed"),
       writeFile(join(directory, "source.ts"), "source"),
-    ]);
-
+    ]);  // RevExt: 31
+// RevExt: 3
     const ignored = await new GitService().ignoredPaths(directory, [
-      "generated/output.ts",
-      "credentials.secret",
+      "generated/output.ts",  // RevExt: 34
+      "credentials.secret",  // RevExt: 36
       "allowed.secret",
       "source.ts",
-    ]);
-
+    ]);  // RevExt: 32
+// RevExt: 4
     assert.deepEqual([...ignored].sort(), [
-      "credentials.secret",
-      "generated/output.ts",
-    ]);
+      "credentials.secret",  // RevExt: 37
+      "generated/output.ts",  // RevExt: 35
+    ]);  // RevExt: 33
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-});
+});  // RevExt: 19
+// RevExt: 5

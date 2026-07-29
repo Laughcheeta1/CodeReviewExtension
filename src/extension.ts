@@ -11,116 +11,128 @@ import {
   ReviewTree,
   type HunkCommand,
 } from "./ui";
-
+// RevExt: 191
 export async function activate(
   context: vscode.ExtensionContext,
-): Promise<void> {
+): Promise<void> {  // RevExt: 205
   const log = vscode.window.createOutputChannel("Code Review Tracker", {
     log: true,
   });
-
+// RevExt: 192
   context.subscriptions.push(log);
   if (vscode.workspace.workspaceFolders === undefined) {
     log.info("No workspace folder is open.");
-    return;
-  }
+    return;  // RevExt: 210
+  }  // RevExt: 219
   const git = new GitService();
-  if (!(await git.available())) {
+  if (!(await git.gitAvailable())) {
     void vscode.window.showErrorMessage(
       "Code Review Tracker requires the Git executable for baseline diffs.",
-    );
-    return;
-  }
+    );  // RevExt: 245
+    return;  // RevExt: 211
+  }  // RevExt: 220
   const service = new ReviewService(log, git);
   await service.initialize();
   const refreshFolder = async (
-    folder: vscode.WorkspaceFolder,
+    folder: vscode.WorkspaceFolder,  // RevExt: 257
     force = false,
-  ): Promise<void> => {
+  ): Promise<void> => {  // RevExt: 259
     service.setEligiblePaths(folder, await eligibleWorkspacePaths(folder, git));
     await service.reconcileExternalChanges(folder, force);
-  };
-
+  };  // RevExt: 261
+  const reconcileCreatedSource = async (
+    folder: vscode.WorkspaceFolder,  // RevExt: 258
+    uri: vscode.Uri,
+  ): Promise<void> => {  // RevExt: 260
+    const path = vscode.workspace
+      .asRelativePath(uri, false)
+      .replaceAll("\\", "/");
+    if ((await git.ignoredPaths(folder.uri.fsPath, [path])).has(path)) {
+      return;  // RevExt: 263
+    }  // RevExt: 266
+    await service.reconcileCreatedSource(uri);
+  };  // RevExt: 262
+// RevExt: 193
   context.subscriptions.push(service);
-  for (const folder of vscode.workspace.workspaceFolders) {
+  for (const folder of vscode.workspace.workspaceFolders) {  // RevExt: 277
     await refreshFolder(folder);
-  }
-
+  }  // RevExt: 221
+// RevExt: 194
   const decorations = new ReviewDecorations(service);
   const codeLens = new ReviewCodeLensProvider(service);
   const tree = new ReviewTree(service);
   const fileDecorations = new ReviewFileDecorations(service);
   const inlayHints = new ReviewInlayHints();
-
-  context.subscriptions.push(
+// RevExt: 195
+  context.subscriptions.push(  // RevExt: 279
     decorations,
     codeLens,
     tree,
     fileDecorations,
     inlayHints,
-  );
-  context.subscriptions.push(
+  );  // RevExt: 281
+  context.subscriptions.push(  // RevExt: 280
     vscode.workspace.registerTextDocumentContentProvider(
       "code-review-baseline",
       new BaselineContentProvider(service),
-    ),
+    ),  // RevExt: 290
     vscode.languages.registerCodeLensProvider(
       [{ scheme: "file" }, { scheme: "code-review-baseline" }],
       codeLens,
-    ),
+    ),  // RevExt: 291
     vscode.window.registerTreeDataProvider("codeReviewTracker.files", tree),
     vscode.window.registerFileDecorationProvider(fileDecorations),
     vscode.languages.registerInlayHintsProvider({ scheme: "file" }, inlayHints),
     vscode.workspace.onDidOpenTextDocument((document) =>
       runLogged(log, "Document loading", service.ensureDocument(document)),
-    ),
+    ),  // RevExt: 292
     vscode.workspace.onDidSaveTextDocument((document) =>
-      runLogged(
-        log,
+      runLogged(  // RevExt: 305
+        log,  // RevExt: 308
         "Saved-file reconciliation",
         service.reconcileSavedDocument(document),
-      ),
-    ),
+      ),  // RevExt: 311
+    ),  // RevExt: 293
     service.onDidPromote((source) =>
-      runLogged(
-        log,
+      runLogged(  // RevExt: 306
+        log,  // RevExt: 309
         "Closing promoted diff tabs",
         closePromotedDiffTabs(source),
-      ),
-    ),
+      ),  // RevExt: 312
+    ),  // RevExt: 294
     vscode.window.onDidChangeVisibleTextEditors(() => decorations.refresh()),
     vscode.commands.registerCommand("codeReviewTracker.markPending", () =>
       markActive(service, git, "pending"),
-    ),
+    ),  // RevExt: 295
     vscode.commands.registerCommand("codeReviewTracker.markInReview", () =>
       markActive(service, git, "inReview"),
-    ),
+    ),  // RevExt: 296
     vscode.commands.registerCommand("codeReviewTracker.markReviewed", () =>
       markActive(service, git, "reviewed"),
-    ),
-    vscode.commands.registerCommand(
+    ),  // RevExt: 297
+    vscode.commands.registerCommand(  // RevExt: 314
       "codeReviewTracker.markHunkPending",
-      (command: HunkCommand) => markHunk(service, git, command),
-    ),
-    vscode.commands.registerCommand(
+      (command: HunkCommand) => markHunk(service, git, command),  // RevExt: 319
+    ),  // RevExt: 298
+    vscode.commands.registerCommand(  // RevExt: 315
       "codeReviewTracker.markHunkReviewed",
-      (command: HunkCommand) => markHunk(service, git, command),
-    ),
-    vscode.commands.registerCommand(
+      (command: HunkCommand) => markHunk(service, git, command),  // RevExt: 320
+    ),  // RevExt: 299
+    vscode.commands.registerCommand(  // RevExt: 316
       "codeReviewTracker.openReviewDiff",
       (uri?: vscode.Uri) => openReviewDiff(service, uri),
-    ),
-    vscode.commands.registerCommand(
+    ),  // RevExt: 300
+    vscode.commands.registerCommand(  // RevExt: 317
       "codeReviewTracker.initializeReviewed",
       () => initializeAll(service, "reviewed"),
-    ),
+    ),  // RevExt: 301
     vscode.commands.registerCommand("codeReviewTracker.initializePending", () =>
       initializeAll(service, "pending"),
-    ),
-    vscode.commands.registerCommand(
+    ),  // RevExt: 302
+    vscode.commands.registerCommand(  // RevExt: 318
       "codeReviewTracker.sendSelectionToTerminal",
       () => sendSelection(service),
-    ),
+    ),  // RevExt: 303
     vscode.commands.registerCommand("codeReviewTracker.refresh", async () => {
       for (const folder of vscode.workspace.workspaceFolders ?? []) {
         await refreshFolder(folder, true);
@@ -128,98 +140,106 @@ export async function activate(
     }),
     vscode.commands.registerCommand("codeReviewTracker.showLogs", () =>
       log.show(),
-    ),
-  );
-
-  for (const folder of vscode.workspace.workspaceFolders) {
+    ),  // RevExt: 304
+  );  // RevExt: 282
+// RevExt: 196
+  for (const folder of vscode.workspace.workspaceFolders) {  // RevExt: 278
     const pattern = new vscode.RelativePattern(folder, "**/*");
     const watcher = vscode.workspace.createFileSystemWatcher(
       pattern,
+      false,  // RevExt: 321
       true,
-      true,
-      false,
-    );
-
+      false,  // RevExt: 322
+    );  // RevExt: 246
+// RevExt: 197
+    const creation = watcher.onDidCreate((uri) =>
+      runLogged(  // RevExt: 307
+        log,  // RevExt: 310
+        "Source creation",
+        reconcileCreatedSource(folder, uri),
+      ),  // RevExt: 313
+    );  // RevExt: 247
     const deletion = watcher.onDidDelete((uri) =>
       runLogged(log, "Source deletion", service.removeSources([uri])),
-    );
-
+    );  // RevExt: 248
+// RevExt: 198
     const gitIgnoreWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(folder, "**/.gitignore"),
-    );
+    );  // RevExt: 249
     const refreshIgnoredPaths = () =>
       runLogged(log, "Git ignore refresh", refreshFolder(folder));
-
+// RevExt: 199
     context.subscriptions.push(
       watcher,
+      creation,
       deletion,
       gitIgnoreWatcher,
       gitIgnoreWatcher.onDidCreate(refreshIgnoredPaths),
       gitIgnoreWatcher.onDidChange(refreshIgnoredPaths),
       gitIgnoreWatcher.onDidDelete(refreshIgnoredPaths),
-    );
-  }
-
+    );  // RevExt: 250
+  }  // RevExt: 222
+// RevExt: 200
   for (const editor of vscode.window.visibleTextEditors) {
     await service.ensureDocument(editor.document);
-  }
+  }  // RevExt: 223
   runLogged(log, "Initialization prompt", promptForInitialization(service));
   decorations.refresh();
   log.info("Code Review Tracker 0.4.0 activated.");
-}
-
+}  // RevExt: 323
+// RevExt: 201
 async function promptForInitialization(service: ReviewService): Promise<void> {
-  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {  // RevExt: 336
     if (service.hasMetadata(folder)) {
       continue;
-    }
+    }  // RevExt: 267
     const choice = await vscode.window.showInformationMessage(
       `Initialize code review baselines for ${folder.name}?`,
       "Start Reviewed",
       "Start Pending",
-    );
+    );  // RevExt: 251
     if (choice === "Start Reviewed") {
       await service.initializeFolder(folder, "reviewed");
-    }
+    }  // RevExt: 268
     if (choice === "Start Pending") {
       await service.initializeFolder(folder, "pending");
-    }
-  }
-}
-
+    }  // RevExt: 269
+  }  // RevExt: 224
+}  // RevExt: 324
+// RevExt: 202
 async function openReviewDiff(
-  service: ReviewService,
-  uri?: vscode.Uri,
-): Promise<void> {
+  service: ReviewService,  // RevExt: 338
+  uri?: vscode.Uri,  // RevExt: 342
+): Promise<void> {  // RevExt: 206
   const requested = uri ?? vscode.window.activeTextEditor?.document.uri;
   if (requested === undefined) {
-    return;
-  }
+    return;  // RevExt: 212
+  }  // RevExt: 225
   const source = service.parseBaselineUri(requested)?.source ?? requested;
-  try {
+  try {  // RevExt: 344
     const prepared = await service.prepareDiff(source);
     if (prepared === undefined) {
-      void vscode.window.showInformationMessage(
+      void vscode.window.showInformationMessage(  // RevExt: 347
         "Initialize this workspace before opening review diffs.",
-      );
-      return;
-    }
+      );  // RevExt: 349
+      return;  // RevExt: 264
+    }  // RevExt: 270
     if (prepared.file.hunks.length === 0) {
       await vscode.window.showTextDocument(source);
-      return;
-    }
+      return;  // RevExt: 265
+    }  // RevExt: 271
     const path = service.relativePath(source) ?? source.path;
     await vscode.commands.executeCommand(
       "vscode.diff",
       prepared.baseline,
       source,
       `Code Review: ${path}`,
-    );
-  } catch (error) {
-    void vscode.window.showWarningMessage(errorMessage(error));
-  }
-}
-
+    );  // RevExt: 252
+  } catch (error) {  // RevExt: 351
+    void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 354
+  }  // RevExt: 226
+}  // RevExt: 325
+// RevExt: 203
 async function closePromotedDiffTabs(source: vscode.Uri): Promise<void> {
   for (const group of vscode.window.tabGroups.all) {
     const stale = group.tabs.filter(
@@ -227,108 +247,108 @@ async function closePromotedDiffTabs(source: vscode.Uri): Promise<void> {
         tab.input instanceof vscode.TabInputTextDiff &&
         tab.input.original.scheme === "code-review-baseline" &&
         tab.input.modified.toString() === source.toString(),
-    );
+    );  // RevExt: 253
     if (stale.length > 0) {
       await vscode.window.tabGroups.close(stale, true);
-    }
-  }
-}
-
+    }  // RevExt: 272
+  }  // RevExt: 227
+}  // RevExt: 326
+// RevExt: 204
 async function reviewer(
-  git: GitService,
-  uri?: vscode.Uri,
+  git: GitService,  // RevExt: 357
+  uri?: vscode.Uri,  // RevExt: 343
 ): Promise<Reviewer | undefined> {
   const fromGit = await git.reviewer(
     uri === undefined ? undefined : vscode.workspace.getWorkspaceFolder(uri),
-  );
+  );  // RevExt: 283
   if (fromGit !== undefined) {
     return fromGit;
-  }
+  }  // RevExt: 228
   const config = vscode.workspace.getConfiguration("codeReviewTracker");
   const configuredName = config.get<string>("reviewerName", "").trim();
   const configuredEmail = config.get<string>("reviewerEmail", "").trim();
   let name = configuredName;
   let email = configuredEmail;
-  if (name.length === 0) {
+  if (name.length === 0) {  // RevExt: 361
     name =
-      (
-        await vscode.window.showInputBox({
+      (  // RevExt: 363
+        await vscode.window.showInputBox({  // RevExt: 365
           prompt: "Reviewer name",
-          ignoreFocusOut: true,
-        })
-      )?.trim() ?? "";
-  }
-  if (name.length === 0) {
+          ignoreFocusOut: true,  // RevExt: 367
+        })  // RevExt: 369
+      )?.trim() ?? "";  // RevExt: 371
+  }  // RevExt: 229
+  if (name.length === 0) {  // RevExt: 362
     return undefined;
-  }
+  }  // RevExt: 230
   if (email.length === 0) {
     email =
-      (
-        await vscode.window.showInputBox({
+      (  // RevExt: 364
+        await vscode.window.showInputBox({  // RevExt: 366
           prompt: "Reviewer email (optional)",
-          ignoreFocusOut: true,
-        })
-      )?.trim() ?? "";
-  }
+          ignoreFocusOut: true,  // RevExt: 368
+        })  // RevExt: 370
+      )?.trim() ?? "";  // RevExt: 372
+  }  // RevExt: 231
   if (configuredName.length === 0) {
-    await config.update(
+    await config.update(  // RevExt: 373
       "reviewerName",
       name,
-      vscode.ConfigurationTarget.Global,
-    );
-  }
+      vscode.ConfigurationTarget.Global,  // RevExt: 375
+    );  // RevExt: 254
+  }  // RevExt: 232
   if (email.length > 0 && configuredEmail.length === 0) {
-    await config.update(
+    await config.update(  // RevExt: 374
       "reviewerEmail",
       email,
-      vscode.ConfigurationTarget.Global,
-    );
-  }
+      vscode.ConfigurationTarget.Global,  // RevExt: 376
+    );  // RevExt: 255
+  }  // RevExt: 233
   return email.length > 0 ? { name, email } : { name };
-}
+}  // RevExt: 327
 async function markActive(
-  service: ReviewService,
-  git: GitService,
+  service: ReviewService,  // RevExt: 339
+  git: GitService,  // RevExt: 358
   status: ReviewStatus,
-): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
+): Promise<void> {  // RevExt: 207
+  const editor = vscode.window.activeTextEditor;  // RevExt: 377
   if (editor === undefined) {
-    return;
-  }
+    return;  // RevExt: 213
+  }  // RevExt: 234
   const source =
     service.parseBaselineUri(editor.document.uri)?.source ??
     editor.document.uri;
-  const identity =
+  const identity =  // RevExt: 379
     status === "pending" ? undefined : await reviewer(git, source);
   if (status !== "pending" && identity === undefined) {
-    return;
-  }
-  try {
+    return;  // RevExt: 214
+  }  // RevExt: 235
+  try {  // RevExt: 345
     if (!(await service.markEditor(editor, status, identity))) {
-      void vscode.window.showInformationMessage(
+      void vscode.window.showInformationMessage(  // RevExt: 348
         "The selection contains no reviewable changes.",
-      );
-    }
-  } catch (error) {
-    void vscode.window.showWarningMessage(errorMessage(error));
-  }
-}
+      );  // RevExt: 350
+    }  // RevExt: 273
+  } catch (error) {  // RevExt: 352
+    void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 355
+  }  // RevExt: 236
+}  // RevExt: 328
 async function markHunk(
-  service: ReviewService,
-  git: GitService,
+  service: ReviewService,  // RevExt: 340
+  git: GitService,  // RevExt: 359
   command: HunkCommand | undefined,
-): Promise<void> {
+): Promise<void> {  // RevExt: 208
   if (command === undefined) {
-    return;
-  }
-  const identity =
+    return;  // RevExt: 215
+  }  // RevExt: 237
+  const identity =  // RevExt: 380
     command.status === "pending"
       ? undefined
       : await reviewer(git, command.source);
   if (command.status !== "pending" && identity === undefined) {
-    return;
-  }
-  try {
+    return;  // RevExt: 216
+  }  // RevExt: 238
+  try {  // RevExt: 346
     await service.markHunk(
       command.source,
       command.baselineDigest,
@@ -336,23 +356,23 @@ async function markHunk(
       command.hunkIndex,
       command.status,
       identity,
-    );
-  } catch (error) {
-    void vscode.window.showWarningMessage(errorMessage(error));
-  }
-}
+    );  // RevExt: 256
+  } catch (error) {  // RevExt: 353
+    void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 356
+  }  // RevExt: 239
+}  // RevExt: 329
 async function initializeAll(
-  service: ReviewService,
+  service: ReviewService,  // RevExt: 341
   status: "pending" | "reviewed",
-): Promise<void> {
-  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+): Promise<void> {  // RevExt: 209
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {  // RevExt: 337
     try {
       await service.initializeFolder(folder, status);
     } catch (error) {
       void vscode.window.showErrorMessage(errorMessage(error));
-    }
-  }
-}
+    }  // RevExt: 274
+  }  // RevExt: 240
+}  // RevExt: 330
 function selectionRanges(editor: vscode.TextEditor): readonly {
   start: number;
   end: number;
@@ -362,7 +382,7 @@ function selectionRanges(editor: vscode.TextEditor): readonly {
     {
       start: number;
       end: number;
-    }
+    }  // RevExt: 275
   >();
   for (const selection of editor.selections) {
     const start = selection.isEmpty
@@ -370,25 +390,25 @@ function selectionRanges(editor: vscode.TextEditor): readonly {
       : selection.start.line;
     const end = selection.isEmpty ? start : selection.end.line;
     unique.set(`${start}:${end}`, { start, end });
-  }
+  }  // RevExt: 241
   return [...unique.values()].sort(
     (a, b) => a.start - b.start || a.end - b.end,
-  );
-}
+  );  // RevExt: 284
+}  // RevExt: 331
 function sendSelection(service: ReviewService): void {
-  const editor = vscode.window.activeTextEditor;
+  const editor = vscode.window.activeTextEditor;  // RevExt: 378
   if (editor === undefined || editor.document.uri.scheme !== "file") {
-    return;
-  }
+    return;  // RevExt: 217
+  }  // RevExt: 242
   const path = service.relativePath(editor.document.uri);
   if (path === undefined) {
-    return;
-  }
+    return;  // RevExt: 218
+  }  // RevExt: 243
   const payload = terminalPayload(
     path,
     editor.document.getText(),
     selectionRanges(editor),
-  );
+  );  // RevExt: 285
   let terminal = vscode.window.activeTerminal;
   if (terminal === undefined) {
     const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
@@ -406,31 +426,31 @@ function sendSelection(service: ReviewService): void {
       .trim();
     if (command.length > 0 && vscode.workspace.isTrusted) {
       terminal.sendText(command, true);
-    }
-  }
+    }  // RevExt: 276
+  }  // RevExt: 244
   terminal.sendText(payload, false);
-}
+}  // RevExt: 332
 async function eligibleWorkspacePaths(
   folder: vscode.WorkspaceFolder,
-  git: GitService,
+  git: GitService,  // RevExt: 360
 ): Promise<readonly string[]> {
   const excluded = new vscode.RelativePattern(
     folder,
     "**/{.git,node_modules,.vscode/code-review-tracker}/**",
-  );
+  );  // RevExt: 286
   const uris = await vscode.workspace.findFiles(
     new vscode.RelativePattern(folder, "**/*"),
     excluded,
-  );
+  );  // RevExt: 287
   const paths = uris.map((uri) =>
     vscode.workspace.asRelativePath(uri, false).replaceAll("\\", "/"),
-  );
+  );  // RevExt: 288
   const ignored = await git.ignoredPaths(folder.uri.fsPath, paths);
   return paths.filter((path) => !ignored.has(path));
-}
+}  // RevExt: 333
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
+}  // RevExt: 334
 function runLogged(
   log: vscode.LogOutputChannel,
   action: string,
@@ -438,5 +458,6 @@ function runLogged(
 ): void {
   void operation.catch((error) =>
     log.warn(`${action} failed: ${errorMessage(error)}`),
-  );
-}
+  );  // RevExt: 289
+}  // RevExt: 335
+// RevExt: 381

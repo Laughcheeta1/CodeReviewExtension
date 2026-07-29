@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.4.0",
+  "version": "0.4.4",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -90,8 +90,23 @@
     },
     "keybindings": [
       {
+        "command": "codeReviewTracker.markPending",
+        "key": "ctrl+alt+j",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeReviewTracker.markInReview",
+        "key": "ctrl+alt+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeReviewTracker.markReviewed",
+        "key": "ctrl+alt+l",
+        "when": "editorTextFocus"
+      },
+      {
         "command": "codeReviewTracker.sendSelectionToTerminal",
-        "key": "ctrl+alt+enter",
+        "key": "ctrl+alt+p",
         "when": "editorTextFocus"
       }
     ],

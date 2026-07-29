@@ -6,10 +6,10 @@ const extensionDevelopmentPath = path.resolve(import.meta.dirname, "../..");
 const extensionTestsPath = path.resolve(import.meta.dirname, "suite/index.js");
 const workspace = await mkdtemp(
   path.join(tmpdir(), "code-review-tracker-integration-"),
-);
+);  // RevExt: 1
 const userData = await mkdtemp(
   path.join(tmpdir(), "code-review-tracker-user-data-"),
-);
+);  // RevExt: 2
 try {
   await writeFile(path.join(workspace, "sample.txt"), "saved content\n");
   await runTests({

@@ -101,7 +101,7 @@ Review decorations now refresh from review-state changes and visible-editor chan
 
 Selection changes now invalidate the selection-dependent inlay hints directly instead of refreshing unrelated gutter decorations.
 
-One deletion-only filesystem watcher handles both editor and external deletes. The duplicate `onDidDeleteFiles` path was removed, and create/change watcher traffic is disabled.
+One filesystem watcher handles source creation and deletion, including files created outside the editor. Change watcher traffic remains disabled; saved-document reconciliation is authoritative for edits.
 
 ### Logged asynchronous event failures
 

@@ -3,13 +3,13 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
-  {
+  {  // RevExt: 1
     languageOptions: {
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
-    },
+    },  // RevExt: 4
     rules: {
       "@typescript-eslint/no-floating-promises": "error",
       "array-bracket-spacing": ["error", "never"],
@@ -31,18 +31,18 @@ export default tseslint.config(
       "space-infix-ops": "error",
       "space-unary-ops": ["error", { words: true, nonwords: false }],
       "spaced-comment": ["error", "always"],
-    },
-  },
-  {
+    },  // RevExt: 5
+  },  // RevExt: 6
+  {  // RevExt: 2
     files: ["test/**/*.ts"],
     rules: { "@typescript-eslint/no-floating-promises": "off" },
-  },
-  {
+  },  // RevExt: 7
+  {  // RevExt: 3
     ignores: [
       "dist/**",
       "node_modules/**",
       "test/integration/**/*.js",
       "test/integration/**/*.mjs",
     ],
-  },
+  },  // RevExt: 8
 );
