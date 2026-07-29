@@ -74,7 +74,7 @@ export async function activate(
     vscode.window.registerTreeDataProvider("codeReviewTracker.files", tree),
     vscode.window.registerFileDecorationProvider(fileDecorations),
     vscode.workspace.onDidOpenTextDocument((document) =>
-      runLogged(log, "Document loading", service.ensureDocument(document)),
+      runLogged(log, "Document loading", openDocumentInReviewView(service, document)),
     ),  // RevExt: 292
     vscode.workspace.onDidSaveTextDocument((document) =>
       runLogged(  // RevExt: 305
@@ -178,7 +178,7 @@ export async function activate(
   }  // RevExt: 222
 // RevExt: 200
   for (const editor of vscode.window.visibleTextEditors) {
-    await service.ensureDocument(editor.document);
+    await openDocumentInReviewView(service, editor.document);
   }  // RevExt: 223
   runLogged(log, "Initialization prompt", promptForInitialization(service, git));
   decorations.refresh();
@@ -342,6 +342,25 @@ async function openReviewDiff(
     void vscode.window.showWarningMessage(errorMessage(error));  // RevExt: 354
   }  // RevExt: 226
 }  // RevExt: 325
+async function openDocumentInReviewView(
+  service: ReviewService,
+  document: vscode.TextDocument,
+): Promise<void> {
+  await service.ensureDocument(document);
+  const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+  const openInReviewView = vscode.workspace
+    .getConfiguration("codeReviewTracker", document.uri)
+    .get<boolean>("openFilesInReviewView", true);
+  if (
+    document.uri.scheme !== "file" ||
+    folder === undefined ||
+    service.initializationState(folder) !== "initialized" ||
+    !openInReviewView
+  ) {
+    return;
+  }
+  await openReviewDiff(service, document.uri);
+}
 // RevExt: 203
 async function closePromotedDiffTabs(source: vscode.Uri): Promise<void> {
   for (const group of vscode.window.tabGroups.all) {

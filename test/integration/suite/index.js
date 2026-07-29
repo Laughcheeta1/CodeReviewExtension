@@ -58,6 +58,24 @@ function assertInReview(file) {
     ),
   );
 }
+async function waitForReviewDiff(source) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (
+          tab.input instanceof vscode.TabInputTextDiff &&
+          tab.input.original.scheme === "code-review-baseline" &&
+          tab.input.modified.toString() === source.toString()
+        ) {
+          return tab.input;
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for review view for ${source.fsPath}`);
+}
 // RevExt: 5
 async function run() {
   const extension = vscode.extensions.getExtension("local.code-review-tracker");
@@ -87,6 +105,21 @@ async function run() {
   const sample = await waitForMetadata(folder, "sample.txt");
   assertPending(sample);  // RevExt: 20
   await assertSnapshot(folder, sample);
+  assert.equal(
+    vscode.workspace
+      .getConfiguration("codeReviewTracker")
+      .get("openFilesInReviewView"),
+    true,
+  );
+  const source = vscode.Uri.joinPath(folder.uri, "sample.txt");
+  await vscode.window.tabGroups.close(
+    vscode.window.tabGroups.all.flatMap((group) => group.tabs),
+    true,
+  );
+  await vscode.window.showTextDocument(source);
+  const reviewView = await waitForReviewDiff(source);
+  assert.equal(reviewView.modified.toString(), source.toString());
+  assert.equal(reviewView.original.scheme, "code-review-baseline");
   await vscode.workspace.getConfiguration("codeReviewTracker").update(
     "reviewerName",
     "Integration Reviewer",

@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.4.15",
+  "version": "0.4.17",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -57,7 +57,8 @@
       },
       {
         "command": "codeReviewTracker.openReviewDiff",
-        "title": "Code Review: Open Review Diff"
+        "title": "Go to Review View",
+        "icon": "$(preview)"
       },
       {
         "command": "codeReviewTracker.setup",
@@ -87,6 +88,11 @@
     "menus": {
       "editor/context": [
         {
+          "command": "codeReviewTracker.openReviewDiff",
+          "when": "resourceScheme == file",
+          "group": "codeReview@0"
+        },
+        {
           "command": "codeReviewTracker.markPending",
           "group": "codeReview@1"
         },
@@ -101,6 +107,13 @@
         {
           "command": "codeReviewTracker.sendSelectionToTerminal",
           "group": "codeReview@4"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "codeReviewTracker.openReviewDiff",
+          "when": "resourceScheme == file",
+          "group": "navigation@1"
         }
       ],
       "explorer/context": [
@@ -171,6 +184,12 @@
           "minimum": 1024,
           "scope": "window",
           "description": "Largest file the extension will read for line review tracking."
+        },
+        "codeReviewTracker.openFilesInReviewView": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Open tracked files in the review view by default. The baseline on the left is read-only; the current file on the right remains editable."
         }
       }
     },
