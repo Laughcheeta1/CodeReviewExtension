@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.4.18",
+  "version": "0.4.20",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -213,17 +213,17 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "compile": "npm run check-types && node esbuild.js",
+    "compile": "pnpm run check-types && node esbuild.js",
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
-    "lint": "eslint src test --max-warnings=0 && npm run check:integration",
+    "lint": "eslint src test --max-warnings=0 && pnpm run check:integration",
     "check:integration": "node --check test/integration/run.mjs && node --check test/integration/suite/index.js",
     "test:unit": "node --import tsx --test test/**/*.test.ts",
-    "test:integration": "npm run build && node test/integration/run.mjs",
-    "test": "npm run check-types && npm run lint && npm run test:unit && npm run test:integration",
-    "package": "npm run check-types && npm run build",
-    "package:vsix": "npm exec -- vsce package --no-dependencies --no-rewrite-relative-links --allow-missing-repository",
-    "vscode:prepublish": "npm run package"
+    "test:integration": "pnpm run build && node test/integration/run.mjs",
+    "test": "pnpm run check-types && pnpm run lint && pnpm run test:unit && pnpm run test:integration",
+    "package": "pnpm run check-types && pnpm run build",
+    "package:vsix": "pnpm exec vsce package --no-dependencies --no-rewrite-relative-links --allow-missing-repository",
+    "vscode:prepublish": "pnpm run package"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

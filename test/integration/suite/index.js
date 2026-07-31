@@ -162,6 +162,25 @@ async function run() {
     new TextEncoder().encode("newly created\nfile\n"),
   );  // RevExt: 12
   assertPending(await waitForMetadata(folder, createdPath));
+  const openedPath = "opened-after-initialization.txt";
+  const opened = vscode.Uri.joinPath(folder.uri, openedPath);
+  await vscode.workspace.fs.writeFile(
+    opened,
+    new TextEncoder().encode("opened\nafter\ninitialization\n"),
+  );
+  await vscode.workspace.openTextDocument(opened);
+  assertPending(await waitForMetadata(folder, openedPath));
+  const interactionPath = "interacted-after-initialization.txt";
+  const interaction = vscode.Uri.joinPath(folder.uri, interactionPath);
+  await vscode.workspace.fs.writeFile(
+    interaction,
+    new TextEncoder().encode("interacted\nafter\ninitialization\n"),
+  );
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.markFilePending",
+    interaction,
+  );
+  assertPending(await waitForMetadata(folder, interactionPath));
 }  // RevExt: 17
 module.exports = { run };
 // RevExt: 8

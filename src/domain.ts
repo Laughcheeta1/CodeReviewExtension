@@ -350,10 +350,7 @@ export function terminalPayload(
 ): string {  // RevExt: 131
   const source = text.split(/\r?\n/);
   const blocks = ranges.map((range) => {
-    const last =
-      range.end > range.start && range.end < source.length
-        ? range.end - 1
-        : range.end;
+    const last = range.end > range.start ? range.end - 1 : range.end;
     const firstOneBased = range.start + 1;
     const lastOneBased = Math.max(firstOneBased, last + 1);
     const label =

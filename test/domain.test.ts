@@ -315,4 +315,11 @@ test("terminal context supports multiple ranges", () => {
   assert.match(payload, /> Line 1 - 2, file src\/example.ts:/);
   assert.match(payload, /> Line 3, file src\/example.ts:/);
 });  // RevExt: 24
+test("terminal context includes a selection ending on the final line", () => {
+  const payload = terminalPayload("src/example.ts", "one\ntwo\nthree", [
+    { start: 0, end: 3 },
+  ]);
+  assert.match(payload, /> Line 1 - 3, file src\/example.ts:/);
+  assert.match(payload, /one\ntwo\nthree/);
+});
 // RevExt: 93

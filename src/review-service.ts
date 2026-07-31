@@ -142,6 +142,35 @@ export class ReviewService implements vscode.Disposable {
       /* The store logged read failures; initialization intentionally blocks this load. */
     }  // RevExt: 18
   }  // RevExt: 82
+  async initializeOpenedDocument(document: vscode.TextDocument): Promise<void> {
+    if (document.isDirty) {
+      return;
+    }
+    await this.initializeMissingSource(document.uri);
+  }
+  private async initializeMissingSource(uri: vscode.Uri): Promise<boolean> {
+    if (this.dirtyDocument(uri) !== undefined || !this.isTrackableUri(uri)) {
+      return false;
+    }
+    const path = this.relativePath(uri);
+    const store = this.storeFor(uri);
+    if (
+      path === undefined ||
+      store === undefined ||
+      store.initializationState !== "initialized" ||
+      !store.tracksPath(path)
+    ) {
+      return false;
+    }
+    const initialized = await this.withSource(uri, () =>
+      this.recompute(uri, true, true),
+    );
+    if (initialized) {
+      this.log.info(`Initialized review metadata for opened file ${path}.`);
+      this.changedEmitter.fire(uri);
+    }
+    return initialized;
+  }
   async reconcileExternalChanges(
     folder: vscode.WorkspaceFolder,  // RevExt: 112
     force = false,
@@ -421,6 +450,7 @@ export class ReviewService implements vscode.Disposable {
       }  // RevExt: 216
     | undefined
   > {
+    await this.initializeMissingSource(source);
     return this.withSource(source, async () => {  // RevExt: 280
       if (this.dirtyDocument(source) !== undefined) {  // RevExt: 282
         throw new Error("Save the file before opening its review diff.");
@@ -442,6 +472,7 @@ export class ReviewService implements vscode.Disposable {
     const identity = this.parseBaselineUri(editor.document.uri);
     const source = identity?.source ?? editor.document.uri;
     const selected = selectedLines(editor.selections);
+    await this.initializeMissingSource(source);
     return this.withSource(source, async () => {  // RevExt: 281
       if (this.dirtyDocument(source) !== undefined) {  // RevExt: 283
         throw new Error("Save the file before changing review state.");  // RevExt: 296
@@ -465,6 +496,7 @@ export class ReviewService implements vscode.Disposable {
     status: ReviewStatus,
     reviewer?: Reviewer,
   ): Promise<boolean> {
+    await this.initializeMissingSource(source);
     return this.withSource(source, async () => {
       if (this.dirtyDocument(source) !== undefined) {
         throw new Error("Save the file before changing review state.");

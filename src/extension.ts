@@ -346,6 +346,7 @@ async function openDocumentInReviewView(
   service: ReviewService,
   document: vscode.TextDocument,
 ): Promise<void> {
+  await service.initializeOpenedDocument(document);
   await service.ensureDocument(document);
   const folder = vscode.workspace.getWorkspaceFolder(document.uri);
   const openInReviewView = vscode.workspace
@@ -512,7 +513,9 @@ function selectionRanges(editor: vscode.TextEditor): readonly {
     const start = selection.isEmpty
       ? selection.active.line
       : selection.start.line;
-    const end = selection.isEmpty ? start : selection.end.line;
+    const end = selection.isEmpty
+      ? start
+      : selection.end.line + (selection.end.character > 0 ? 1 : 0);
     unique.set(`${start}:${end}`, { start, end });
   }  // RevExt: 241
   return [...unique.values()].sort(
