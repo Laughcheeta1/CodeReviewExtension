@@ -515,6 +515,36 @@ export class ReviewService implements vscode.Disposable {
       );
     });
   }
+  async markFolderReviewed(
+    uri: vscode.Uri,
+    reviewer?: Reviewer,
+  ): Promise<number> {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    const store = this.storeFor(uri);
+    if (
+      folder === undefined ||
+      store === undefined ||
+      store.initializationState !== "initialized"
+    ) {
+      return 0;
+    }
+    const folderPath = vscode.workspace
+      .asRelativePath(uri, false)
+      .replaceAll("\\", "/");
+    const prefix = folderPath.length === 0 ? "" : `${folderPath}/`;
+    const eligible = this.eligiblePaths.get(folder.uri.toString());
+    const paths = store.paths.filter(
+      (path) => eligible?.has(path) === true && path.startsWith(prefix),
+    );
+    let marked = 0;
+    for (const path of paths) {
+      const source = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+      if (await this.markFile(source, "reviewed", reviewer)) {
+        marked += 1;
+      }
+    }
+    return marked;
+  }
   private async initializePendingFile(source: vscode.Uri): Promise<boolean> {
     const path = this.relativePath(source);
     const store = this.storeFor(source);

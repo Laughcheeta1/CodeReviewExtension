@@ -14,3 +14,4 @@
 - File-level status actions must support the same meaningful state transitions as their workspace-level counterparts without resetting unrelated tracked files.
 - Do not add prominent editor controls such as CodeLens actions unless the user explicitly requests them; keep review actions in the requested menus and shortcuts.
 - When automatically preparing metadata for an enabled workspace, apply the same guarded initialization to file-open and explicit file-interaction paths so users do not encounter inconsistent uninitialized-file behavior.
+- When the user specifies an exact extension version, use that release version verbatim rather than continuing the prior incremental build sequence.

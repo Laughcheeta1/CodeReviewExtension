@@ -91,6 +91,7 @@ async function run() {
     "codeReviewTracker.markFilePending",
     "codeReviewTracker.markFileInReview",
     "codeReviewTracker.markFileReviewed",
+    "codeReviewTracker.markFolderReviewed",
     "codeReviewTracker.sendSelectionToTerminal",
     "codeReviewTracker.setup",
     "codeReviewTracker.initializePending",
@@ -181,6 +182,34 @@ async function run() {
     interaction,
   );
   assertPending(await waitForMetadata(folder, interactionPath));
+  const reviewedFolder = vscode.Uri.joinPath(folder.uri, "reviewed-folder");
+  const nestedReviewedFolder = vscode.Uri.joinPath(reviewedFolder, "nested");
+  await vscode.workspace.fs.createDirectory(nestedReviewedFolder);
+  const reviewedFirst = vscode.Uri.joinPath(reviewedFolder, "first.txt");
+  const reviewedSecond = vscode.Uri.joinPath(nestedReviewedFolder, "second.txt");
+  await vscode.workspace.fs.writeFile(
+    reviewedFirst,
+    new TextEncoder().encode("first\n"),
+  );
+  await vscode.workspace.fs.writeFile(
+    reviewedSecond,
+    new TextEncoder().encode("second\n"),
+  );
+  assertPending(await waitForMetadata(folder, "reviewed-folder/first.txt"));
+  assertPending(await waitForMetadata(folder, "reviewed-folder/nested/second.txt"));
+  await vscode.commands.executeCommand(
+    "codeReviewTracker.markFolderReviewed",
+    reviewedFolder,
+  );
+  assert.equal(
+    (await metadata(folder, "reviewed-folder/first.txt")).file.fileStatus,
+    "reviewed",
+  );
+  assert.equal(
+    (await metadata(folder, "reviewed-folder/nested/second.txt")).file.fileStatus,
+    "reviewed",
+  );
+  assertPending(await metadata(folder, interactionPath));
 }  // RevExt: 17
 module.exports = { run };
 // RevExt: 8

@@ -112,6 +112,10 @@ export async function activate(
       "codeReviewTracker.markFileReviewed",
       (uri?: vscode.Uri) => markFile(service, git, uri, "reviewed"),
     ),
+    vscode.commands.registerCommand(
+      "codeReviewTracker.markFolderReviewed",
+      (uri?: vscode.Uri) => markFolderReviewed(service, git, uri),
+    ),
     vscode.commands.registerCommand(  // RevExt: 316
       "codeReviewTracker.openReviewDiff",
       (uri?: vscode.Uri) => openReviewDiff(service, uri),
@@ -473,6 +477,29 @@ async function markFile(
     if (!(await service.markFile(uri, status, identity))) {
       void vscode.window.showInformationMessage(
         "The file contains no reviewable changes.",
+      );
+    }
+  } catch (error) {
+    void vscode.window.showWarningMessage(errorMessage(error));
+  }
+}
+async function markFolderReviewed(
+  service: ReviewService,
+  git: GitService,
+  uri: vscode.Uri | undefined,
+): Promise<void> {
+  if (uri === undefined || uri.scheme !== "file") {
+    return;
+  }
+  const identity = await reviewer(git, uri);
+  if (identity === undefined) {
+    return;
+  }
+  try {
+    const marked = await service.markFolderReviewed(uri, identity);
+    if (marked === 0) {
+      void vscode.window.showInformationMessage(
+        "The folder contains no reviewable tracked files.",
       );
     }
   } catch (error) {
