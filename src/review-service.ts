@@ -2,30 +2,47 @@ import * as vscode from "vscode";
 import {
   buildDiffRecords,
   digestBytes,
-  fileStatus,
-  physicalLines,
-  reviewableLines,
-  setReviewer,
   type FileRecord,
-  type RawGitHunk,
   type ReviewStatus,
   type Reviewer,
-  type SourceSnapshot,
 } from "./domain";
 import { GitService } from "./git";
 import { PersistentStore } from "./store";
-import { snapshotFileName, sourceMayHaveChanged } from "./storage-format";
+import { sourceMayHaveChanged } from "./storage-format";
 import { tracksPath, type TrackingTarget } from "./tracking";
-import { revExtEdits, revExtRemovals } from "./revext";
+import {
+  initialAdditionHunks,
+  isExcludedPath,
+  isFileNotFound,
+  now,
+  progressIncrement,
+} from "./review-service-utils";
+import { eligibleWorkspacePaths } from "./workspace-discovery";
+import {
+  createRecord,
+  diffWithProgress,
+  readStableSource,
+} from "./source-io";
+import {
+  annotatePendingDocument as annotatePendingSource,
+  recomputeSavedDocument as recomputeSavedSource,
+  type RevExtAnnotationContext,
+} from "./revext-annotation";
+import {
+  applyReview as applyReviewMutation,
+  initializePendingFile as initializePendingFileMutation,
+  requireFresh as requireFreshMutation,
+  type BaselineIdentity,
+  type ReviewMutationContext,
+} from "./review-mutations";
+import {
+  markEditor as markEditorAction,
+  markFile as markFileAction,
+  markFolder as markFolderAction,
+  type ReviewActionContext,
+} from "./review-actions";
 // RevExt: 436
 const BASELINE_SCHEME = "code-review-baseline";
-const now = (): string => new Date().toISOString();
-// RevExt: 1
-interface BaselineIdentity {
-  readonly source: vscode.Uri;
-  readonly baselineDigest: string;
-  readonly currentDigest: string;
-}  // RevExt: 5
 export class ReviewService implements vscode.Disposable {
   private readonly stores = new Map<string, PersistentStore>();
   private readonly eligiblePaths = new Map<string, Set<string>>();
@@ -122,7 +139,10 @@ export class ReviewService implements vscode.Disposable {
     return store.peek(path)?.fileStatus ?? store.summary(path)?.status;
   }  // RevExt: 81
   async ensureDocument(document: vscode.TextDocument): Promise<void> {
-    if (!this.isTrackable(document)) {
+    if (
+      !this.isTrackable(document) ||
+      !(await this.isEligibleSource(document.uri))
+    ) {
       return;  // RevExt: 162
     }  // RevExt: 16
     const path = this.relativePath(document.uri);  // RevExt: 175
@@ -148,8 +168,42 @@ export class ReviewService implements vscode.Disposable {
     }
     await this.initializeMissingSource(document.uri);
   }
+  async initializeSource(uri: vscode.Uri): Promise<void> {
+    await this.initializeMissingSource(uri);
+  }
+  async initializeDiscoveredSources(folder: vscode.WorkspaceFolder): Promise<void> {
+    const store = this.stores.get(folder.uri.toString());
+    if (store === undefined || store.initializationState !== "initialized") {
+      return;
+    }
+    const eligible = await this.refreshEligiblePaths(folder);
+    await store.includeTrackingTargets(
+      eligible.map((path) => ({ kind: "file" as const, path })),
+    );
+    this.setEligiblePaths(folder, eligible);
+    let initialized = 0;
+    for (const path of eligible) {
+      const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+      if (await this.withSource(uri, () => this.recompute(uri, true, true))) {
+        initialized += 1;
+      }
+    }
+    if (initialized > 0) {
+      this.log.info(
+        `Initialized review metadata for ${initialized} discovered files at startup.`,
+      );
+      this.changedEmitter.fire(undefined);
+    }
+  }
   private async initializeMissingSource(uri: vscode.Uri): Promise<boolean> {
-    if (this.dirtyDocument(uri) !== undefined || !this.isTrackableUri(uri)) {
+    if (
+      this.dirtyDocument(uri) !== undefined ||
+      !(await this.isEligibleSource(uri))
+    ) {
+      return false;
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (folder === undefined) {
       return false;
     }
     const path = this.relativePath(uri);
@@ -157,9 +211,17 @@ export class ReviewService implements vscode.Disposable {
     if (
       path === undefined ||
       store === undefined ||
-      store.initializationState !== "initialized" ||
-      !store.tracksPath(path)
+      store.initializationState !== "initialized"
     ) {
+      return false;
+    }
+    const eligible = await this.refreshEligiblePaths(folder);
+    if (!eligible.includes(path)) {
+      return false;
+    }
+    await store.includeTrackingTarget({ kind: "file", path });
+    this.setEligiblePaths(folder, eligible);
+    if (!this.isTrackableUri(uri)) {
       return false;
     }
     const initialized = await this.withSource(uri, () =>
@@ -258,6 +320,20 @@ export class ReviewService implements vscode.Disposable {
       this.changedEmitter.fire(undefined);
     }
   }
+  async cleanupIgnoredSources(folder: vscode.WorkspaceFolder): Promise<void> {
+    const store = this.stores.get(folder.uri.toString());
+    if (store === undefined || store.paths.length === 0) {
+      return;
+    }
+    const ignored = await this.git.ignoredPaths(folder.uri.fsPath, store.paths);
+    for (const path of ignored) {
+      await store.delete(path);
+    }
+    if (ignored.size > 0) {
+      this.log.info(`Removed metadata for ${ignored.size} Git-ignored files.`);
+      this.changedEmitter.fire(undefined);
+    }
+  }
   async reconcileCreatedSource(uri: vscode.Uri): Promise<void> {
     const path = this.relativePath(uri);  // RevExt: 151
     const store = this.storeFor(uri);  // RevExt: 155
@@ -266,8 +342,8 @@ export class ReviewService implements vscode.Disposable {
       path === undefined ||  // RevExt: 251
       store === undefined ||  // RevExt: 253
       folder === undefined ||
-      !this.isEligibleSourceUri(uri) ||
-      !store.tracksPath(path)  // RevExt: 457
+      store.initializationState !== "initialized" ||
+      !(await this.isEligibleSource(uri))
     ) {  // RevExt: 122
       return;  // RevExt: 165
     }  // RevExt: 23
@@ -275,10 +351,11 @@ export class ReviewService implements vscode.Disposable {
     if ((stat.type & vscode.FileType.File) === 0) {
       return;  // RevExt: 166
     }  // RevExt: 24
+    if (!(await this.initializeMissingSource(uri))) {
+      return;
+    }
     this.eligiblePaths.get(folder.uri.toString())?.add(path);
-    if (await this.withSource(uri, () => this.recompute(uri, true, true))) {
-      this.changedEmitter.fire(uri);
-    }  // RevExt: 25
+    this.changedEmitter.fire(uri);
   }  // RevExt: 84
   async reconcileSavedDocument(document: vscode.TextDocument): Promise<void> {
     if (document.uri.scheme !== "file") {
@@ -293,11 +370,16 @@ export class ReviewService implements vscode.Disposable {
     if (  // RevExt: 116
       store === undefined ||  // RevExt: 254
       path === undefined ||  // RevExt: 252
-      !this.isEligibleSourceUri(document.uri) ||
-      !store.tracksPath(path)  // RevExt: 458
+      !(await this.isEligibleSource(document.uri))
     ) {  // RevExt: 123
       return;  // RevExt: 169
     }  // RevExt: 28
+    if (!store.tracksPath(path)) {
+      await this.initializeMissingSource(document.uri);
+    }
+    if (!store.tracksPath(path)) {
+      return;
+    }
     this.eligiblePaths
       .get(vscode.workspace.getWorkspaceFolder(document.uri)!.uri.toString())
       ?.add(path);
@@ -358,26 +440,27 @@ export class ReviewService implements vscode.Disposable {
             const path = paths[index]!;
             const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
             try {
-              if (!this.isEligibleSourceUri(uri)) {
+              if (!(await this.isEligibleSource(uri))) {
                 continue;
               }  // RevExt: 259
-              let { bytes, source } = await this.readStableSource(
+              let { bytes, source } = await readStableSource(
                 uri,
                 maxSize,
               );  // RevExt: 261
               let nextRevExtId = 1;
               if (status === "pending") {
                 nextRevExtId = await this.annotatePendingDocument(uri);
-                ({ bytes, source } = await this.readStableSource(uri, maxSize));
+                ({ bytes, source } = await readStableSource(uri, maxSize));
               }  // RevExt: 260
               const baseline = status === "reviewed" ? bytes : new Uint8Array();
-              const file = await this.createRecord(
+              const file = await createRecord(
+                this.git,
                 path,
                 baseline,
                 bytes,
                 source,
                 status === "reviewed" ? now() : undefined,
-                status === "pending" ? initialAdditionHunks(bytes) : undefined,
+                status === "pending" ? initialAdditionHunks(bytes) : [],
               );  // RevExt: 262
               await store.commit(path, { ...file, nextRevExtId }, baseline);
             } catch (error) {
@@ -450,6 +533,9 @@ export class ReviewService implements vscode.Disposable {
       }  // RevExt: 216
     | undefined
   > {
+    if (!(await this.isEligibleSource(source))) {
+      return undefined;
+    }
     await this.initializeMissingSource(source);
     return this.withSource(source, async () => {  // RevExt: 280
       if (this.dirtyDocument(source) !== undefined) {  // RevExt: 282
@@ -466,124 +552,27 @@ export class ReviewService implements vscode.Disposable {
   }  // RevExt: 90
   async markEditor(
     editor: vscode.TextEditor,
-    status: ReviewStatus,  // RevExt: 287
-    reviewer?: Reviewer,  // RevExt: 290
-  ): Promise<boolean> {  // RevExt: 292
-    const identity = this.parseBaselineUri(editor.document.uri);
-    const source = identity?.source ?? editor.document.uri;
-    const selected = selectedLines(editor.selections);
-    await this.initializeMissingSource(source);
-    return this.withSource(source, async () => {  // RevExt: 281
-      if (this.dirtyDocument(source) !== undefined) {  // RevExt: 283
-        throw new Error("Save the file before changing review state.");  // RevExt: 296
-      }  // RevExt: 218
-      const file = await this.requireFresh(source, identity);
-      return this.applyReview(
-        source,  // RevExt: 298
-        file,  // RevExt: 302
-        status,  // RevExt: 304
-        reviewer,  // RevExt: 306
-        (line) =>  // RevExt: 308
-          identity === undefined &&
-          line.changeType !== "unchanged" &&
-          selected.has(line.line),
-        (line) => identity !== undefined && selected.has(line.baselineLine),
-      );  // RevExt: 246
-    });  // RevExt: 270
-  }  // RevExt: 91
+    status: ReviewStatus,
+    reviewer?: Reviewer,
+  ): Promise<boolean> {
+    return markEditorAction(this.actionContext(), editor, status, reviewer);
+  }
   async markFile(
     source: vscode.Uri,
     status: ReviewStatus,
     reviewer?: Reviewer,
   ): Promise<boolean> {
-    await this.initializeMissingSource(source);
-    return this.withSource(source, async () => {
-      if (this.dirtyDocument(source) !== undefined) {
-        throw new Error("Save the file before changing review state.");
-      }
-      const file = await this.requireFresh(source);
-      if (status === "pending" && reviewableLines(file).length === 0) {
-        return this.initializePendingFile(source);
-      }
-      return this.applyReview(
-        source,
-        file,
-        status,
-        reviewer,
-        (line) => line.changeType !== "unchanged",
-        () => true,
-      );
-    });
+    return markFileAction(this.actionContext(), source, status, reviewer);
   }
-  async markFolderReviewed(
+  async markFolder(
     uri: vscode.Uri,
+    status: ReviewStatus,
     reviewer?: Reviewer,
   ): Promise<number> {
-    const folder = vscode.workspace.getWorkspaceFolder(uri);
-    const store = this.storeFor(uri);
-    if (
-      folder === undefined ||
-      store === undefined ||
-      store.initializationState !== "initialized"
-    ) {
-      return 0;
-    }
-    const folderPath = vscode.workspace
-      .asRelativePath(uri, false)
-      .replaceAll("\\", "/");
-    const prefix = folderPath.length === 0 ? "" : `${folderPath}/`;
-    const eligible = this.eligiblePaths.get(folder.uri.toString());
-    const paths = store.paths.filter(
-      (path) => eligible?.has(path) === true && path.startsWith(prefix),
-    );
-    let marked = 0;
-    for (const path of paths) {
-      const source = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-      if (await this.markFile(source, "reviewed", reviewer)) {
-        marked += 1;
-      }
-    }
-    return marked;
+    return markFolderAction(this.actionContext(), uri, status, reviewer);
   }
   private async initializePendingFile(source: vscode.Uri): Promise<boolean> {
-    const path = this.relativePath(source);
-    const store = this.storeFor(source);
-    if (
-      path === undefined ||
-      store === undefined ||
-      store.initializationState !== "initialized" ||
-      !store.tracksPath(path) ||
-      !this.isTrackableUri(source)
-    ) {
-      throw new Error("This file has not been initialized for review.");
-    }
-    let { bytes, source: snapshot } = await this.readStableSource(
-      source,
-      this.maxSize(),
-    );
-    const nextRevExtId = await this.annotatePendingDocument(source);
-    ({ bytes, source: snapshot } = await this.readStableSource(
-      source,
-      this.maxSize(),
-    ));
-    const baseline = new Uint8Array();
-    await store.commit(
-      path,
-      {
-        ...(await this.createRecord(
-          path,
-          baseline,
-          bytes,
-          snapshot,
-          undefined,
-          initialAdditionHunks(bytes),
-        )),
-        nextRevExtId,
-      },
-      baseline,
-    );
-    this.changedEmitter.fire(source);
-    return true;
+    return initializePendingFileMutation(this.mutationContext(), source);
   }
   summary(folder?: vscode.WorkspaceFolder): readonly {
     uri: vscode.Uri;
@@ -664,14 +653,22 @@ export class ReviewService implements vscode.Disposable {
       if (!createMissing) {
         return false;  // RevExt: 332
       }  // RevExt: 225
-      const { bytes, source } = await this.readStableSource(
+      const { bytes, source } = await readStableSource(
         uri,
         this.maxSize(),  // RevExt: 334
       );  // RevExt: 248
       const baseline = new Uint8Array();
       await store.commit(
         path,
-        await this.createRecord(path, baseline, bytes, source),
+        await createRecord(
+          this.git,
+          path,
+          baseline,
+          bytes,
+          source,
+          undefined,
+          initialAdditionHunks(bytes),
+        ),
         baseline,
       );  // RevExt: 249
       return true;  // RevExt: 336
@@ -683,7 +680,7 @@ export class ReviewService implements vscode.Disposable {
     ) {  // RevExt: 124
       return false;  // RevExt: 321
     }  // RevExt: 42
-    const { bytes, source } = await this.readStableSource(uri, this.maxSize());
+    const { bytes, source } = await readStableSource(uri, this.maxSize());
     const digest = digestBytes(bytes);
     if (digest === existing.current.digest) {
       if (  // RevExt: 338
@@ -700,7 +697,12 @@ export class ReviewService implements vscode.Disposable {
       return true;  // RevExt: 337
     }  // RevExt: 43
     const baseline = await store.loadBaseline(existing, this.maxSize());  // RevExt: 347
-    const rawHunks = await this.diffWithProgress(uri, baseline, bytes);
+    const rawHunks = await diffWithProgress(
+      this.git,
+      baseline,
+      bytes,
+      this.relativePath(uri) ?? uri.fsPath,
+    );
     const diff = buildDiffRecords(baseline, bytes, rawHunks, existing);
     await store.commit(path, {
       ...existing,
@@ -717,310 +719,115 @@ export class ReviewService implements vscode.Disposable {
   }  // RevExt: 95
   private async recomputeSavedDocument(
     document: vscode.TextDocument,
-  ): Promise<boolean> {  // RevExt: 294
-    const path = this.relativePath(document.uri);  // RevExt: 177
-    const store = this.storeFor(document.uri);  // RevExt: 180
-    if (path === undefined || store === undefined) {  // RevExt: 159
-      return false;  // RevExt: 322
-    }  // RevExt: 44
-    const existing = await store.load(path);  // RevExt: 329
-    if (existing === undefined) {  // RevExt: 331
-      return this.recompute(document.uri, true, true);  // RevExt: 362
-    }  // RevExt: 45
-    const { bytes } = await this.readStableSource(document.uri, this.maxSize());
-    const baseline = await store.loadBaseline(existing, this.maxSize());  // RevExt: 348
-    const hunks = await this.diffWithProgress(document.uri, baseline, bytes);
-    const addedLines = new Set<number>();
-    for (const hunk of hunks) {
-      for (
-        let line = hunk.newStart;
-        line < hunk.newStart + hunk.newCount;
-        line += 1
-      ) {  // RevExt: 341
-        addedLines.add(line);
-      }  // RevExt: 227
-    }  // RevExt: 46
-    const annotation = revExtEdits(  // RevExt: 364
-      Array.from(  // RevExt: 366
-        { length: document.lineCount },  // RevExt: 369
-        (_, index) => document.lineAt(index).text,  // RevExt: 372
-      ),  // RevExt: 375
-      addedLines,
-      document.languageId,  // RevExt: 380
-      existing.nextRevExtId,
-    );  // RevExt: 383
-    if (annotation.edits.length === 0) {  // RevExt: 396
-      return this.recompute(document.uri, true, true);  // RevExt: 363
-    }  // RevExt: 47
-    const edit = new vscode.WorkspaceEdit();  // RevExt: 398
-    for (const change of annotation.edits) {  // RevExt: 400
-      const line = document.lineAt(change.line - 1);  // RevExt: 402
-      edit.insert(document.uri, line.range.end, change.suffix);
-    }  // RevExt: 48
-    if (!(await vscode.workspace.applyEdit(edit))) {  // RevExt: 404
-      throw new Error("Could not add RevExt identity comments.");
-    }  // RevExt: 49
-    this.internalSaves.add(document.uri.toString());
-    try {  // RevExt: 184
-      if (!(await document.save())) {  // RevExt: 406
-        throw new Error("Could not save RevExt identity comments.");
-      }  // RevExt: 228
-    } finally {  // RevExt: 264
-      this.internalSaves.delete(document.uri.toString());
-    }  // RevExt: 50
-    const changed = await this.recompute(document.uri, true, true);
-    const updated = await store.load(path);
-    if (updated !== undefined && updated.nextRevExtId !== annotation.nextId) {
-      await store.commit(path, {  // RevExt: 344
-        ...updated,
-        nextRevExtId: annotation.nextId,
-        updatedAt: now(),  // RevExt: 346
-      });  // RevExt: 195
-    }  // RevExt: 51
-    return changed;
-  }  // RevExt: 96
-  private async annotatePendingDocument(uri: vscode.Uri): Promise<number> {
-    const document = await vscode.workspace.openTextDocument(uri);
-    if (document.isDirty) {
-      throw new Error("Save the file before starting pending review.");
-    }  // RevExt: 52
-    const annotation = revExtEdits(  // RevExt: 365
-      Array.from(  // RevExt: 367
-        { length: document.lineCount },  // RevExt: 370
-        (_, index) => document.lineAt(index).text,  // RevExt: 373
-      ),  // RevExt: 376
-      new Set(  // RevExt: 408
-        Array.from({ length: document.lineCount }, (_, index) => index + 1),
-      ),  // RevExt: 377
-      document.languageId,  // RevExt: 381
-      1,
-    );  // RevExt: 384
-    if (annotation.edits.length === 0) {  // RevExt: 397
-      return annotation.nextId;
-    }  // RevExt: 53
-    const edit = new vscode.WorkspaceEdit();  // RevExt: 399
-    for (const change of annotation.edits) {  // RevExt: 401
-      const line = document.lineAt(change.line - 1);  // RevExt: 403
-      edit.insert(uri, line.range.end, change.suffix);
-    }  // RevExt: 54
-    if (!(await vscode.workspace.applyEdit(edit))) {  // RevExt: 405
-      throw new Error("Could not add initial RevExt identity comments.");
-    }  // RevExt: 55
-    this.internalSaves.add(uri.toString());
-    try {  // RevExt: 185
-      if (!(await document.save())) {  // RevExt: 407
-        throw new Error("Could not save initial RevExt identity comments.");
-      }  // RevExt: 229
-    } finally {  // RevExt: 265
-      this.internalSaves.delete(uri.toString());
-    }  // RevExt: 56
-    return annotation.nextId;
-  }  // RevExt: 97
-  private async diffWithProgress(
-    source: vscode.Uri,
-    baseline: Uint8Array,
-    current: Uint8Array,
-  ): Promise<readonly RawGitHunk[]> {
-    const path = this.relativePath(source) ?? source.fsPath;
-    return vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Window,
-        title: `Code Review: comparing ${path}`,
-      },
-      () => this.git.diff(baseline, current),
-    );
+  ): Promise<boolean> {
+    return recomputeSavedSource(this.annotationContext(), document);
   }
-  private async createRecord(
-    path: string,
-    baseline: Uint8Array,
-    current: Uint8Array,
-    source: SourceSnapshot,
-    lastReviewTime?: string,
-    rawHunks?: readonly RawGitHunk[],
-  ): Promise<FileRecord> {  // RevExt: 410
-    const baselineDigest = digestBytes(baseline);
-    const generatedAt = now();
-    const diff = buildDiffRecords(
-      baseline,
-      current,
-      rawHunks ?? (await this.git.diff(baseline, current)),
-    );  // RevExt: 385
-    return {  // RevExt: 275
-      baseline: {
-        file: snapshotFileName(path, baselineDigest),
-        digest: baselineDigest,
-        codec: "gzip",
-        size: baseline.byteLength,
-        createdAt: generatedAt,
-      },  // RevExt: 358
-      current: {  // RevExt: 352
-        digest: digestBytes(current),
-        ...source,  // RevExt: 354
-        gitAlgorithm: "myers",  // RevExt: 356
-        generatedAt,
-      },  // RevExt: 359
-      fileStatus: fileStatus(diff),
-      nextRevExtId: 1,
-      lastReviewTime,
-      ...diff,  // RevExt: 350
-      updatedAt: generatedAt,
-    };  // RevExt: 277
-  }  // RevExt: 98
+  private async annotatePendingDocument(uri: vscode.Uri): Promise<number> {
+    return annotatePendingSource(this.annotationContext(), uri);
+  }
+  private annotationContext(): RevExtAnnotationContext {
+    return {
+      git: this.git,
+      internalSaves: this.internalSaves,
+      maxSize: () => this.maxSize(),
+      relativePath: (uri) => this.relativePath(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      recompute: (uri, forceDigest, createMissing) =>
+        this.recompute(uri, forceDigest, createMissing),
+    };
+  }
   private async requireFresh(
-    source: vscode.Uri,  // RevExt: 311
+    source: vscode.Uri,
     identity?: BaselineIdentity,
-  ): Promise<FileRecord> {  // RevExt: 411
-    await this.recompute(source, true);
-    const path = this.relativePath(source);  // RevExt: 147
-    const file =
-      path === undefined ? undefined : await this.storeFor(source)?.load(path);
-    if (file === undefined) {
-      throw new Error("This file has not been initialized for review.");
-    }  // RevExt: 57
-    if (  // RevExt: 118
-      identity !== undefined &&
-      (identity.baselineDigest !== file.baseline.digest ||
-        identity.currentDigest !== file.current.digest)
-    ) {  // RevExt: 125
-      throw new Error(
-        "This review diff is stale. Reopen Code Review: Open Review Diff.",
-      );  // RevExt: 250
-    }  // RevExt: 58
-    return file;
-  }  // RevExt: 99
-  private async commitReview(
-    source: vscode.Uri,  // RevExt: 312
-    file: FileRecord,  // RevExt: 412
-  ): Promise<void> {  // RevExt: 199
-    const path = this.relativePath(source);  // RevExt: 148
-    const store = this.storeFor(source);  // RevExt: 414
-    if (path === undefined || store === undefined) {  // RevExt: 160
-      return;  // RevExt: 171
-    }  // RevExt: 59
-    await store.commit(path, file);
-    const changes = reviewableLines(file);
-    if (  // RevExt: 119
-      file.baseline.digest !== file.current.digest &&
-      changes.length > 0 &&
-      changes.every((line) => line.reviewStatus === "reviewed")
-    ) {  // RevExt: 126
-      await this.promote(source, file);
-      return;  // RevExt: 172
-    }  // RevExt: 60
-    this.changedEmitter.fire(source);  // RevExt: 416
-  }  // RevExt: 100
+  ): Promise<FileRecord> {
+    return requireFreshMutation(this.mutationContext(), source, identity);
+  }
   private async applyReview(
-    source: vscode.Uri,  // RevExt: 313
-    file: FileRecord,  // RevExt: 413
-    status: ReviewStatus,  // RevExt: 289
+    source: vscode.Uri,
+    file: FileRecord,
+    status: ReviewStatus,
     reviewer: Reviewer | undefined,
     matchesCurrent: (line: FileRecord["currentLines"][number]) => boolean,
     matchesDeleted: (line: FileRecord["deletedLines"][number]) => boolean,
-  ): Promise<boolean> {  // RevExt: 295
-    const at = now();
-    const lastReviewer = setReviewer(status, reviewer, at);
-    const currentLines = file.currentLines.map((line) =>
-      matchesCurrent(line)
-        ? { ...line, reviewStatus: status, lastReviewer }  // RevExt: 418
-        : line,  // RevExt: 420
-    );  // RevExt: 386
-    const deletedLines = file.deletedLines.map((line) =>
-      matchesDeleted(line)
-        ? { ...line, reviewStatus: status, lastReviewer }  // RevExt: 419
-        : line,  // RevExt: 421
-    );  // RevExt: 387
-    const changed =
-      currentLines.some((line, index) => line !== file.currentLines[index]) ||
-      deletedLines.some((line, index) => line !== file.deletedLines[index]);
-    if (!changed) {
-      return false;  // RevExt: 323
-    }  // RevExt: 61
-    await this.commitReview(source, {
-      ...file,
-      currentLines,
-      deletedLines,
-      lastReviewTime: at,
-      updatedAt: at,
-    });  // RevExt: 273
-    return true;  // RevExt: 361
-  }  // RevExt: 101
-  private async promote(
-    source: vscode.Uri,  // RevExt: 314
-    expected: FileRecord,
-  ): Promise<void> {  // RevExt: 200
-    const path = this.relativePath(source);  // RevExt: 149
-    const store = this.storeFor(source);  // RevExt: 415
-    if (path === undefined || store === undefined) {  // RevExt: 161
-      return;  // RevExt: 173
-    }  // RevExt: 62
-    let { bytes, source: stat } = await this.readStableSource(
+  ): Promise<boolean> {
+    return applyReviewMutation(
+      this.mutationContext(),
       source,
-      this.maxSize(),
-    );  // RevExt: 388
-    if (digestBytes(bytes) !== expected.current.digest) {
-      await this.recompute(source, true);  // RevExt: 286
-      return;  // RevExt: 174
-    }  // RevExt: 63
-    const document = await vscode.workspace.openTextDocument(source);
-    const removals = revExtRemovals(
-      Array.from(  // RevExt: 368
-        { length: document.lineCount },  // RevExt: 371
-        (_, index) => document.lineAt(index).text,  // RevExt: 374
-      ),  // RevExt: 378
-      new Set(  // RevExt: 409
-        expected.currentLines
-          .filter((line) => line.changeType === "added")
-          .map((line) => line.line),
-      ),  // RevExt: 379
-      document.languageId,  // RevExt: 382
-    );  // RevExt: 389
-    if (removals.length > 0) {
-      const edit = new vscode.WorkspaceEdit();
-      for (const removal of removals) {
-        const line = document.lineAt(removal.line - 1);
-        edit.delete(
+      file,
+      status,
+      reviewer,
+      matchesCurrent,
+      matchesDeleted,
+    );
+  }
+  private actionContext(): ReviewActionContext {
+    return {
+      parseBaselineUri: (uri) => this.parseBaselineUri(uri),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
+      initializeMissingSource: (uri) => this.initializeMissingSource(uri),
+      withSource: (uri, operation) => this.withSource(uri, operation),
+      dirtyDocument: (uri) => this.dirtyDocument(uri),
+      requireFresh: (uri, identity) => this.requireFresh(uri, identity),
+      applyReview: (
+        source,
+        file,
+        status,
+        reviewer,
+        matchesCurrent,
+        matchesDeleted,
+      ) =>
+        this.applyReview(
           source,
-          new vscode.Range(
-            line.lineNumber,  // RevExt: 422
-            removal.start,
-            line.lineNumber,  // RevExt: 423
-            line.range.end.character,
-          ),
-        );
-      }  // RevExt: 230
-      if (!(await vscode.workspace.applyEdit(edit))) {
-        throw new Error("Could not remove RevExt identity comments.");
-      }  // RevExt: 231
-      this.internalSaves.add(source.toString());
-      try {  // RevExt: 238
-        if (!(await document.save())) {
-          throw new Error("Could not save removed RevExt identity comments.");
-        }  // RevExt: 191
-      } finally {
-        this.internalSaves.delete(source.toString());
-      }  // RevExt: 232
-      ({ bytes, source: stat } = await this.readStableSource(
-        source,  // RevExt: 301
-        this.maxSize(),  // RevExt: 335
-      ));
-    }  // RevExt: 64
-    const promoted = await this.createRecord(
-      path,
-      bytes,  // RevExt: 424
-      bytes,  // RevExt: 425
-      stat,
-      expected.lastReviewTime,
-    );  // RevExt: 390
-    await store.commit(path, promoted, bytes);
-    this.changedEmitter.fire(source);  // RevExt: 417
-    this.promotedEmitter.fire(source);
-  }  // RevExt: 102
+          file,
+          status,
+          reviewer,
+          matchesCurrent,
+          matchesDeleted,
+        ),
+      initializePendingFile: (uri) => this.initializePendingFile(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      refreshEligiblePaths: (folder) => this.refreshEligiblePaths(folder),
+    };
+  }
+  private mutationContext(): ReviewMutationContext {
+    return {
+      git: this.git,
+      internalSaves: this.internalSaves,
+      changedEmitter: this.changedEmitter,
+      promotedEmitter: this.promotedEmitter,
+      relativePath: (uri) => this.relativePath(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      maxSize: () => this.maxSize(),
+      isTrackableUri: (uri) => this.isTrackableUri(uri),
+      recompute: (uri, forceDigest, createMissing) =>
+        this.recompute(uri, forceDigest, createMissing),
+      annotatePendingDocument: (uri) => this.annotatePendingDocument(uri),
+    };
+  }
   private storeFor(uri: vscode.Uri): PersistentStore | undefined {
     const folder = vscode.workspace.getWorkspaceFolder(uri);  // RevExt: 134
     return folder === undefined  // RevExt: 139
       ? undefined  // RevExt: 141
       : this.stores.get(folder.uri.toString());
   }  // RevExt: 103
+  private async refreshEligiblePaths(
+    folder: vscode.WorkspaceFolder,
+  ): Promise<readonly string[]> {
+    const eligible = await eligibleWorkspacePaths(folder, this.git);
+    this.setEligiblePaths(folder, eligible);
+    return eligible;
+  }
+  private async isEligibleSource(uri: vscode.Uri): Promise<boolean> {
+    if (!this.isEligibleSourceUri(uri)) {
+      return false;
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    const path = this.relativePath(uri);
+    if (folder === undefined || path === undefined) {
+      return false;
+    }
+    return !(await this.git.ignoredPaths(folder.uri.fsPath, [path])).has(path);
+  }
   private isTrackableUri(uri: vscode.Uri): boolean {
     if (!this.isEligibleSourceUri(uri)) {
       return false;  // RevExt: 324
@@ -1060,40 +867,6 @@ export class ReviewService implements vscode.Disposable {
       .getConfiguration("codeReviewTracker")
       .get<number>("maxFileSizeBytes", 1048576);
   }  // RevExt: 107
-  private async readStableSource(
-    uri: vscode.Uri,  // RevExt: 318
-    maxSize: number,
-  ): Promise<{
-    bytes: Uint8Array;
-    source: SourceSnapshot;
-  }> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const before = await vscode.workspace.fs.stat(uri);
-      if (before.size > maxSize) {
-        throw new Error("File exceeds the configured size limit");
-      }  // RevExt: 233
-      const bytes = await vscode.workspace.fs.readFile(uri);
-      const after = await vscode.workspace.fs.stat(uri);
-      if (  // RevExt: 339
-        before.mtime !== after.mtime ||
-        before.size !== after.size ||
-        bytes.byteLength !== after.size
-      ) {  // RevExt: 342
-        continue;  // RevExt: 212
-      }  // RevExt: 234
-      if (bytes.includes(0)) {
-        throw new Error("Binary files are unsupported");
-      }  // RevExt: 235
-      physicalLines(bytes);
-      return {
-        bytes,
-        source: { modifiedAt: after.mtime, size: after.size },
-      };
-    }  // RevExt: 69
-    throw new Error(
-      `Source changed while it was being read: ${uri.toString()}`,
-    );  // RevExt: 394
-  }  // RevExt: 108
   private async withSource<T>(
     uri: vscode.Uri,  // RevExt: 319
     operation: () => Promise<T>,
@@ -1122,45 +895,6 @@ export class ReviewService implements vscode.Disposable {
     }  // RevExt: 71
   }  // RevExt: 109
 }  // RevExt: 6
-function initialAdditionHunks(bytes: Uint8Array): readonly RawGitHunk[] {
-  const count = physicalLines(bytes).length;
-  return count === 0
-    ? []
-    : [{ oldStart: 0, oldCount: 0, newStart: 1, newCount: count }];
-}  // RevExt: 7
-function progressIncrement(total: number): number {
-  return total === 0 ? 0 : 100 / total;
-}  // RevExt: 438
-function selectedLines(
-  selections: readonly vscode.Selection[],
-): ReadonlySet<number> {
-  const result = new Set<number>();
-  for (const selection of selections) {
-    const start = selection.start.line;
-    const end =
-      selection.end.line -
-      (!selection.isEmpty && selection.end.character === 0 ? 1 : 0);
-    for (let line = start; line <= Math.max(start, end); line += 1) {
-      result.add(line + 1);
-    }  // RevExt: 72
-  }  // RevExt: 110
-  return result;
-}  // RevExt: 8
-function isExcludedPath(path: string): boolean {
-  return (  // RevExt: 432
-    path === ".git" ||
-    path.startsWith(".git/") ||
-    path === "node_modules" ||
-    path.startsWith("node_modules/") ||
-    path === ".vscode/code-review-tracker" ||
-    path.startsWith(".vscode/code-review-tracker/")
-  );  // RevExt: 434
-}  // RevExt: 10
-function isFileNotFound(error: unknown): boolean {
-  return (  // RevExt: 433
-    error instanceof vscode.FileSystemError && error.code === "FileNotFound"
-  );  // RevExt: 435
-}  // RevExt: 11
 // RevExt: 4
 // RevExt: 437
 // RevExt: 459

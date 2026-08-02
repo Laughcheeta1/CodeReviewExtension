@@ -60,6 +60,14 @@
         "title": "Code Review: Mark Folder Reviewed"
       },
       {
+        "command": "codeReviewTracker.markFolderPending",
+        "title": "Code Review: Mark Folder Pending"
+      },
+      {
+        "command": "codeReviewTracker.markFolderInReview",
+        "title": "Code Review: Mark Folder In Review"
+      },
+      {
         "command": "codeReviewTracker.openReviewDiff",
         "title": "Go to Review View",
         "icon": "$(preview)"
@@ -135,6 +143,16 @@
           "command": "codeReviewTracker.markFileReviewed",
           "when": "resourceScheme == file && explorerResourceIsFolder == false",
           "group": "codeReview@3"
+        },
+        {
+          "command": "codeReviewTracker.markFolderPending",
+          "when": "resourceScheme == file && explorerResourceIsFolder == true",
+          "group": "codeReview@1"
+        },
+        {
+          "command": "codeReviewTracker.markFolderInReview",
+          "when": "resourceScheme == file && explorerResourceIsFolder == true",
+          "group": "codeReview@2"
         },
         {
           "command": "codeReviewTracker.markFolderReviewed",
@@ -226,7 +244,7 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "lint": "eslint src test --max-warnings=0 && pnpm run check:integration",
-    "check:integration": "node --check test/integration/run.mjs && node --check test/integration/suite/index.js",
+    "check:integration": "node --check test/integration/run.mjs && node --check test/integration/suite/contract.js && node --check test/integration/suite/restart.js && node --check test/integration/suite/disabled.js && node --check test/integration/suite/inventory.js",
     "test:unit": "node --import tsx --test test/**/*.test.ts",
     "test:integration": "pnpm run build && node test/integration/run.mjs",
     "test": "pnpm run check-types && pnpm run lint && pnpm run test:unit && pnpm run test:integration",

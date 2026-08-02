@@ -112,21 +112,6 @@ export class GitService {
     }  // RevExt: 19
     return ignored;
   }  // RevExt: 25
-  public async trackedPaths(
-    directory: string,  // RevExt: 58
-  ): Promise<readonly string[] | undefined> {
-    try {  // RevExt: 52
-      const { stdout } = await execute("git", [
-        "-C",
-        directory,
-        "ls-files",
-        "-z",
-      ]);  // RevExt: 56
-      return stdout.split("\0").filter((path) => path.length > 0);
-    } catch {  // RevExt: 54
-      return undefined;  // RevExt: 59
-    }  // RevExt: 50
-  }  // RevExt: 51
 // RevExt: 6
   public async reviewer(
     folder: vscode.WorkspaceFolder | undefined,

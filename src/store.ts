@@ -1,21 +1,19 @@
-import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
-import { digestBytes, fileStatus, type FileRecord } from "./domain";
+import { fileStatus, type FileRecord } from "./domain";
 import {  // RevExt: 197
   parseStoredFile,
   storageFileName,
-  storedFile,
   summarize,
   type FileSummary,
 } from "./storage-format";
-import { decodeSnapshot, encodeSnapshot } from "./snapshot";
+import { decodeSnapshot } from "./snapshot";
 import {  // RevExt: 198
   parseInitializationConfiguration,
   tracksPath,
   type InitializationConfiguration,
   type TrackingTarget,
 } from "./tracking";
-const encoder = new TextEncoder();
+import { StoreFileSystem } from "./store-io";
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const CACHE_LIMIT = 8;
 const INITIALIZATION_FILE = "initialization.json";
@@ -27,6 +25,7 @@ export class PersistentStore {
   private readonly directoryUri: vscode.Uri;
   private readonly snapshotsUri: vscode.Uri;
   private readonly initializationUri: vscode.Uri;
+  private readonly fileSystem: StoreFileSystem;
   private readonly legacyUri: vscode.Uri;
   private readonly legacyBackupUri: vscode.Uri;
   private initializationConfiguration: InitializationConfiguration | undefined;
@@ -44,6 +43,12 @@ export class PersistentStore {
       this.directoryUri,  // RevExt: 202
       INITIALIZATION_FILE,
     );  // RevExt: 200
+    this.fileSystem = new StoreFileSystem(
+      this.directoryUri,
+      this.snapshotsUri,
+      this.initializationUri,
+      this.log,
+    );
     this.legacyUri = vscode.Uri.joinPath(
       folder.uri,  // RevExt: 2
       ".vscode",  // RevExt: 5
@@ -82,15 +87,41 @@ export class PersistentStore {
     return tracksPath(path, this.initializationConfiguration);
   }  // RevExt: 206
   async disableTracking(): Promise<void> {
-    await this.writeInitialization({ schemaVersion: 1, state: "disabled" });
+    const configuration = { schemaVersion: 1, state: "disabled" } as const;
+    await this.fileSystem.writeInitialization(configuration);
+    this.initializationConfiguration = configuration;
   }  // RevExt: 207
   async enableTracking(targets: readonly TrackingTarget[]): Promise<void> {
-    await this.writeInitialization({
+    const configuration = {
       schemaVersion: 1,
       state: "initialized",
       targets,
-    });  // RevExt: 216
+    } as const;
+    await this.fileSystem.writeInitialization(configuration);
+    this.initializationConfiguration = configuration;
   }  // RevExt: 208
+  async includeTrackingTarget(target: TrackingTarget): Promise<boolean> {
+    return this.includeTrackingTargets([target]);
+  }
+  async includeTrackingTargets(
+    candidates: readonly TrackingTarget[],
+  ): Promise<boolean> {
+    const targets = this.initializationConfiguration?.targets;
+    if (
+      this.initializationState !== "initialized" ||
+      targets === undefined
+    ) {
+      return false;
+    }
+    const additions = candidates.filter(
+      (candidate) => !this.tracksPath(candidate.path),
+    );
+    if (additions.length === 0) {
+      return false;
+    }
+    await this.enableTracking([...targets, ...additions]);
+    return true;
+  }
   trackingTargets(): readonly TrackingTarget[] | undefined {
     return this.initializationConfiguration?.targets;
   }  // RevExt: 209
@@ -121,7 +152,7 @@ export class PersistentStore {
       return this.peek(path);
     }  // RevExt: 40
     try {  // RevExt: 59
-      const bytes = await vscode.workspace.fs.readFile(this.fileUri(path));  // RevExt: 70
+      const bytes = await vscode.workspace.fs.readFile(this.fileSystem.fileUri(path));  // RevExt: 70
       const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));  // RevExt: 72
       if (parsed === undefined || parsed.path !== path) {  // RevExt: 74
         throw new Error("Invalid v4 per-file review metadata");  // RevExt: 76
@@ -159,16 +190,16 @@ export class PersistentStore {
     await this.enqueue(path, async () => {  // RevExt: 129
       const previous = await this.loadDirect(path);
       if (baselineBytes !== undefined) {
-        await this.writeSnapshot(normalized, baselineBytes);
+        await this.fileSystem.writeSnapshot(normalized, baselineBytes);
       }  // RevExt: 80
-      await this.writeJson(path, normalized);
+      await this.fileSystem.writeJson(path, normalized);
       this.summaries.set(path, summarize(normalized));
       this.touch(path, normalized);
       if (  // RevExt: 131
         previous !== undefined &&
         previous.baseline.file !== normalized.baseline.file
       ) {  // RevExt: 133
-        await this.deleteSnapshot(previous.baseline.file);  // RevExt: 135
+        await this.fileSystem.deleteSnapshot(previous.baseline.file);  // RevExt: 135
       }  // RevExt: 81
     });  // RevExt: 137
   }  // RevExt: 25
@@ -183,7 +214,7 @@ export class PersistentStore {
         );  // RevExt: 149
       }  // RevExt: 82
       try {  // RevExt: 140
-        await vscode.workspace.fs.delete(this.fileUri(path), {
+      await vscode.workspace.fs.delete(this.fileSystem.fileUri(path), {
           useTrash: false,
         });
       } catch (error) {  // RevExt: 144
@@ -192,7 +223,7 @@ export class PersistentStore {
         }  // RevExt: 156
       }  // RevExt: 83
       if (previous !== undefined) {
-        await this.deleteSnapshot(previous.baseline.file);  // RevExt: 136
+        await this.fileSystem.deleteSnapshot(previous.baseline.file);  // RevExt: 136
       }  // RevExt: 84
       this.summaries.delete(path);
       this.cache.delete(path);
@@ -224,7 +255,8 @@ export class PersistentStore {
     this.cache.clear();
     this.writeTails.clear();
     if (initializationConfiguration !== undefined) {
-      await this.writeInitialization(initializationConfiguration);
+      await this.fileSystem.writeInitialization(initializationConfiguration);
+      this.initializationConfiguration = initializationConfiguration;
     }  // RevExt: 213
   }  // RevExt: 27
   private async loadInitialization(): Promise<void> {
@@ -262,7 +294,7 @@ export class PersistentStore {
         continue;  // RevExt: 231
       }  // RevExt: 221
       if ((type & vscode.FileType.File) !== 0 && name.includes(".tmp-")) {
-        await this.deleteTemporary(
+        await this.fileSystem.deleteTemporary(
           vscode.Uri.joinPath(this.directoryUri, name),
         );  // RevExt: 150
         continue;  // RevExt: 173
@@ -306,94 +338,13 @@ export class PersistentStore {
         name.includes(".tmp-") ||
         (name.endsWith(".gz") && !referenced.has(name))
       ) {  // RevExt: 134
-        await this.deleteSnapshot(name);
+        await this.fileSystem.deleteSnapshot(name);
       }  // RevExt: 93
     }  // RevExt: 47
   }  // RevExt: 29
-  private async writeSnapshot(
-    file: FileRecord,  // RevExt: 125
-    bytes: Uint8Array,
-  ): Promise<void> {  // RevExt: 127
-    if (
-      bytes.byteLength !== file.baseline.size ||
-      digestBytes(bytes) !== file.baseline.digest
-    ) {
-      throw new Error("Snapshot bytes do not match the baseline descriptor");
-    }  // RevExt: 48
-    await vscode.workspace.fs.createDirectory(this.snapshotsUri);
-    const target = vscode.Uri.joinPath(this.snapshotsUri, file.baseline.file);
-    try {  // RevExt: 63
-      const existing = await vscode.workspace.fs.readFile(target);
-      decodeSnapshot(  // RevExt: 178
-        existing,
-        file.baseline.digest,  // RevExt: 180
-        file.baseline.size,  // RevExt: 182
-        file.baseline.size + 1,  // RevExt: 184
-      );  // RevExt: 117
-      return;  // RevExt: 177
-    } catch (error) {  // RevExt: 107
-      if (!isFileNotFound(error)) {  // RevExt: 164
-        throw error;  // RevExt: 168
-      }  // RevExt: 94
-    }  // RevExt: 49
-    const temporary = vscode.Uri.joinPath(  // RevExt: 186
-      this.snapshotsUri,
-      `${file.baseline.file}.tmp-${randomUUID()}`,
-    );  // RevExt: 13
-    try {  // RevExt: 64
-      await vscode.workspace.fs.writeFile(temporary, encodeSnapshot(bytes));
-      const snapshot = await vscode.workspace.fs.readFile(temporary);
-      decodeSnapshot(  // RevExt: 179
-        snapshot,
-        file.baseline.digest,  // RevExt: 181
-        file.baseline.size,  // RevExt: 183
-        file.baseline.size + 1,  // RevExt: 185
-      );  // RevExt: 118
-      await vscode.workspace.fs.rename(temporary, target, {
-        overwrite: false,
-      });  // RevExt: 160
-    } finally {  // RevExt: 188
-      await this.deleteTemporary(temporary);  // RevExt: 191
-    }  // RevExt: 50
-  }  // RevExt: 30
-  private async writeJson(path: string, file: FileRecord): Promise<void> {
-    await vscode.workspace.fs.createDirectory(this.directoryUri);  // RevExt: 235
-    const temporary = vscode.Uri.joinPath(  // RevExt: 187
-      this.directoryUri,  // RevExt: 203
-      `.${storageFileName(path)}.tmp-${randomUUID()}`,
-    );  // RevExt: 14
-    try {  // RevExt: 65
-      const contents = `${JSON.stringify(storedFile(path, file), null, 2)}\n`;
-      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));  // RevExt: 237
-      await vscode.workspace.fs.rename(temporary, this.fileUri(path), {
-        overwrite: true,  // RevExt: 239
-      });  // RevExt: 161
-    } finally {  // RevExt: 189
-      await this.deleteTemporary(temporary);  // RevExt: 192
-    }  // RevExt: 51
-  }  // RevExt: 31
-  private async writeInitialization(
-    configuration: InitializationConfiguration,
-  ): Promise<void> {  // RevExt: 224
-    await vscode.workspace.fs.createDirectory(this.directoryUri);  // RevExt: 236
-    const temporary = vscode.Uri.joinPath(  // RevExt: 232
-      this.directoryUri,  // RevExt: 204
-      `.${INITIALIZATION_FILE}.tmp-${randomUUID()}`,
-    );  // RevExt: 201
-    try {  // RevExt: 218
-      const contents = `${JSON.stringify(configuration, null, 2)}\n`;
-      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));  // RevExt: 238
-      await vscode.workspace.fs.rename(temporary, this.initializationUri, {
-        overwrite: true,  // RevExt: 240
-      });  // RevExt: 227
-      this.initializationConfiguration = configuration;  // RevExt: 230
-    } finally {  // RevExt: 233
-      await this.deleteTemporary(temporary);  // RevExt: 234
-    }  // RevExt: 215
-  }  // RevExt: 211
   private async loadDirect(path: string): Promise<FileRecord | undefined> {
     try {  // RevExt: 66
-      const bytes = await vscode.workspace.fs.readFile(this.fileUri(path));  // RevExt: 71
+      const bytes = await vscode.workspace.fs.readFile(this.fileSystem.fileUri(path));  // RevExt: 71
       const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));  // RevExt: 73
       if (parsed === undefined || parsed.path !== path) {  // RevExt: 75
         throw new Error("Invalid v4 per-file review metadata");  // RevExt: 77
@@ -406,21 +357,6 @@ export class PersistentStore {
       throw error;  // RevExt: 121
     }  // RevExt: 52
   }  // RevExt: 32
-  private async deleteSnapshot(name: string): Promise<void> {
-    try {  // RevExt: 67
-      await vscode.workspace.fs.delete(
-        vscode.Uri.joinPath(this.snapshotsUri, name),
-        { useTrash: false },
-      );  // RevExt: 119
-    } catch (error) {  // RevExt: 109
-      if (!isFileNotFound(error)) {  // RevExt: 165
-        this.log.warn(`Unable to remove snapshot ${name}: ${String(error)}`);
-      }  // RevExt: 97
-    }  // RevExt: 53
-  }  // RevExt: 33
-  private fileUri(path: string): vscode.Uri {
-    return vscode.Uri.joinPath(this.directoryUri, storageFileName(path));
-  }  // RevExt: 34
   private touch(path: string, file: FileRecord | undefined): void {
     this.cache.delete(path);
     this.cache.set(path, file);
@@ -447,17 +383,6 @@ export class PersistentStore {
       }  // RevExt: 99
     }  // RevExt: 55
   }  // RevExt: 36
-  private async deleteTemporary(uri: vscode.Uri): Promise<void> {
-    try {  // RevExt: 69
-      await vscode.workspace.fs.delete(uri, { useTrash: false });
-    } catch (error) {  // RevExt: 110
-      if (!isFileNotFound(error)) {  // RevExt: 166
-        this.log.warn(  // RevExt: 148
-          `Unable to remove temporary file ${uri.path}: ${String(error)}`,
-        );  // RevExt: 151
-      }  // RevExt: 100
-    }  // RevExt: 56
-  }  // RevExt: 37
 }  // RevExt: 193
 function isFileNotFound(error: unknown): boolean {
   return (

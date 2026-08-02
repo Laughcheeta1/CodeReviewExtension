@@ -137,6 +137,66 @@
     {
       "kind": "file",
       "path": "tsconfig.json"
+    },
+    {
+      "kind": "file",
+      "path": "test/integration/suite/startup-cleanup.js"
+    },
+    {
+      "kind": "file",
+      "path": "test/integration/suite/inventory.js"
+    },
+    {
+      "kind": "file",
+      "path": "test/integration/suite/contract.js"
+    },
+    {
+      "kind": "file",
+      "path": "test/integration/suite/restart.js"
+    },
+    {
+      "kind": "file",
+      "path": "test/integration/suite/disabled.js"
+    },
+    {
+      "kind": "file",
+      "path": "test/workspace-boundary.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/workspace-discovery.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/review-service-utils.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/extension-utils.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/review-commands.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/source-io.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/revext-annotation.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/review-mutations.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/review-actions.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/store-io.ts"
     }
   ]
 }
