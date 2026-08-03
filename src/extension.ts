@@ -13,6 +13,7 @@ import {
   sendSelection,
 } from "./review-commands";
 import { ReviewService } from "./review-service";
+import { ReviewerCache, ReviewerResolver } from "./reviewer";
 import {
   BaselineContentProvider,
   ReviewDecorations,
@@ -22,7 +23,7 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.4";
+const EXTENSION_VERSION = "0.5.6";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
@@ -39,6 +40,10 @@ export async function activate(
   }
 
   const git = new GitService();
+  const reviewerResolver = new ReviewerResolver(
+    git,
+    new ReviewerCache(context.globalState),
+  );
   const ignoreRules = new GitIgnoreService();
 
   const service = new ReviewService(log, git, ignoreRules);
@@ -111,37 +116,43 @@ export async function activate(
     ),
     vscode.window.onDidChangeVisibleTextEditors(() => decorations.refresh()),
     vscode.commands.registerCommand("codeReviewTracker.markPending", () =>
-      markActive(service, "pending"),
+      markActive(service, reviewerResolver, "pending"),
     ),
     vscode.commands.registerCommand("codeReviewTracker.markInReview", () =>
-      markActive(service, "inReview"),
+      markActive(service, reviewerResolver, "inReview"),
     ),
     vscode.commands.registerCommand("codeReviewTracker.markReviewed", () =>
-      markActive(service, "reviewed"),
+      markActive(service, reviewerResolver, "reviewed"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFilePending",
-      (uri?: vscode.Uri) => markFile(service, uri, "pending"),
+      (uri?: vscode.Uri) =>
+        markFile(service, reviewerResolver, uri, "pending"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFileInReview",
-      (uri?: vscode.Uri) => markFile(service, uri, "inReview"),
+      (uri?: vscode.Uri) =>
+        markFile(service, reviewerResolver, uri, "inReview"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFileReviewed",
-      (uri?: vscode.Uri) => markFile(service, uri, "reviewed"),
+      (uri?: vscode.Uri) =>
+        markFile(service, reviewerResolver, uri, "reviewed"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFolderPending",
-      (uri?: vscode.Uri) => markFolder(service, uri, "pending"),
+      (uri?: vscode.Uri) =>
+        markFolder(service, reviewerResolver, uri, "pending"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFolderInReview",
-      (uri?: vscode.Uri) => markFolder(service, uri, "inReview"),
+      (uri?: vscode.Uri) =>
+        markFolder(service, reviewerResolver, uri, "inReview"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFolderReviewed",
-      (uri?: vscode.Uri) => markFolder(service, uri, "reviewed"),
+      (uri?: vscode.Uri) =>
+        markFolder(service, reviewerResolver, uri, "reviewed"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.openReviewDiff",

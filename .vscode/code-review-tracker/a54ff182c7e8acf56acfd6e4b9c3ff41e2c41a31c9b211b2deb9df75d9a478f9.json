@@ -10,13 +10,13 @@
       "createdAt": "2026-08-03T00:54:53.291Z"
     },
     "current": {
-      "digest": "92596712524b4d2944789fd22e4b231040ff24bba619c828348b61661975dcda",
-      "modifiedAt": 1785716742111,
-      "size": 5899,
+      "digest": "77622866db3e137d0223819f9a6de3df8634a2a9906ac5afd2e38d7efb31eef7",
+      "modifiedAt": 1785735739734,
+      "size": 6544,
       "gitAlgorithm": "myers",
-      "generatedAt": "2026-08-03T00:54:53.291Z"
+      "generatedAt": "2026-08-03T23:28:55.578Z"
     },
-    "fileStatus": "reviewed",
+    "fileStatus": "pending",
     "nextRevExtId": 1,
     "lastReviewTime": "2026-08-03T00:54:53.291Z",
     "currentLines": [
@@ -155,9 +155,9 @@
       },
       {
         "line": 20,
-        "digest": "f2d89ecf60b118e7a31b7c19b445c6cbf2820164600ff19426fe9c83a9d6671f",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "ab3bec3ef56323568a548ba4a7fda14e7e8f38eb420e660e9ad76b9486e532f3",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -243,10 +243,52 @@
         "changeType": "unchanged",
         "reviewStatus": "reviewed",
         "occurrence": 1
+      },
+      {
+        "line": 33,
+        "digest": "cb868ed8b8299d92a787524fc2b2c4875a6a6154a1cd290e45fb0b1331e75488",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 34,
+        "digest": "3415cee001e73863a8f0cefb6491844aa49565e6da98e496ad709769794241d3",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 35,
+        "digest": "158e6c00587ecdc25ecdfa0dddc08e93dd4ebe311c870522ece7b0d106ff133a",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
       }
     ],
-    "deletedLines": [],
-    "hunks": [],
-    "updatedAt": "2026-08-03T00:54:53.291Z"
+    "deletedLines": [
+      {
+        "baselineLine": 20,
+        "digest": "f2d89ecf60b118e7a31b7c19b445c6cbf2820164600ff19426fe9c83a9d6671f",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      }
+    ],
+    "hunks": [
+      {
+        "oldStart": 20,
+        "oldCount": 1,
+        "newStart": 20,
+        "newCount": 1
+      },
+      {
+        "oldStart": 32,
+        "oldCount": 0,
+        "newStart": 33,
+        "newCount": 3
+      }
+    ],
+    "updatedAt": "2026-08-03T23:28:55.578Z"
   }
 }

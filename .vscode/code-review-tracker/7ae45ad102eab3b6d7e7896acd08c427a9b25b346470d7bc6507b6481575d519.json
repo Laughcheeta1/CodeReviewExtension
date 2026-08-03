@@ -10,13 +10,13 @@
       "createdAt": "2026-08-03T00:54:55.708Z"
     },
     "current": {
-      "digest": "e20d89100c3f41119521de7caf2fa90fbfd1bc2617426cbcc8c02aac2cd8f5c3",
-      "modifiedAt": 1785716741549,
-      "size": 8558,
+      "digest": "aa1d322a5739a322f673cb34b328ccb5eb6bb22b387a2f2504b787548cf56300",
+      "modifiedAt": 1785735739184,
+      "size": 8610,
       "gitAlgorithm": "myers",
-      "generatedAt": "2026-08-03T00:54:55.708Z"
+      "generatedAt": "2026-08-03T23:28:56.113Z"
     },
-    "fileStatus": "reviewed",
+    "fileStatus": "pending",
     "nextRevExtId": 1,
     "lastReviewTime": "2026-08-03T00:54:55.708Z",
     "currentLines": [
@@ -50,9 +50,9 @@
       },
       {
         "line": 5,
-        "digest": "1bf9c09e4b9e0599c3a99f0a33ce736b5660a7b12060b397299f0426098a99c1",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "5a4a30203809bc5614c0cb5abc611f2cd4abf5f39b28c31f9ef108b65afc4def",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -1415,9 +1415,9 @@
       },
       {
         "line": 200,
-        "digest": "98d7a45d97d65f06003200437a3f2b180558b01d538d60fc0750cf6a328306de",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "037f04a79cfc3052b94b47aa70fd0fef9af389fa7bc76f940ad177f00dbb332d",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -1457,9 +1457,9 @@
       },
       {
         "line": 206,
-        "digest": "12ba11b031d8da2c7952d12f4e03b10216152e4fb4c61d82f200825bf34911ed",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "d0da2c8fd05278c27570f1dc9dcd56c16ec5a57f17d82833d6e49d7174dd9b25",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -1870,21 +1870,89 @@
       },
       {
         "line": 265,
+        "digest": "4d5cd2fb4f3df884515255b39523f2f8b5472beea9f566ffca204db802561041",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 266,
+        "digest": "ba3b469d9e09757224666734c9ef7b254d88534f5d5bb7098960805c553dc307",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 267,
+        "digest": "bb77994440b98fe651798c3d4229d59e59271bdc98c4769f6a37152a4bb1bba1",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 268,
         "digest": "de588c5e38b7a67d749fcecb236a2e5950b2ad537d745f564af4e3ee6e06f92e",
         "changeType": "unchanged",
         "reviewStatus": "reviewed",
         "occurrence": 1
       },
       {
-        "line": 266,
+        "line": 269,
         "digest": "94866672faffcf164821075e9efb8921ad52ad0c401bc0ad829bb5ed830ebc4a",
         "changeType": "unchanged",
         "reviewStatus": "reviewed",
         "occurrence": 1
       }
     ],
-    "deletedLines": [],
-    "hunks": [],
-    "updatedAt": "2026-08-03T00:54:55.708Z"
+    "deletedLines": [
+      {
+        "baselineLine": 5,
+        "digest": "1bf9c09e4b9e0599c3a99f0a33ce736b5660a7b12060b397299f0426098a99c1",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      },
+      {
+        "baselineLine": 200,
+        "digest": "98d7a45d97d65f06003200437a3f2b180558b01d538d60fc0750cf6a328306de",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      },
+      {
+        "baselineLine": 206,
+        "digest": "12ba11b031d8da2c7952d12f4e03b10216152e4fb4c61d82f200825bf34911ed",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      }
+    ],
+    "hunks": [
+      {
+        "oldStart": 5,
+        "oldCount": 1,
+        "newStart": 5,
+        "newCount": 1
+      },
+      {
+        "oldStart": 200,
+        "oldCount": 1,
+        "newStart": 200,
+        "newCount": 1
+      },
+      {
+        "oldStart": 206,
+        "oldCount": 1,
+        "newStart": 206,
+        "newCount": 1
+      },
+      {
+        "oldStart": 264,
+        "oldCount": 0,
+        "newStart": 265,
+        "newCount": 3
+      }
+    ],
+    "updatedAt": "2026-08-03T23:28:56.113Z"
   }
 }

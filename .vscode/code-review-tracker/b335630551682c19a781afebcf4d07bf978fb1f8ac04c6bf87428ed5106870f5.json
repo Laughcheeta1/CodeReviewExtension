@@ -10,13 +10,13 @@
       "createdAt": "2026-08-03T00:54:54.254Z"
     },
     "current": {
-      "digest": "51108ffb4dbff6c1e4ccf6ab5c76bb1ede543762f9d4b8390c6db22126431ebb",
-      "modifiedAt": 1785362277276,
-      "size": 4518,
+      "digest": "42598d14004f5db4d758dd2f053d1fb62f9daa55ceb9eaad514ec6ab1c7e0a4d",
+      "modifiedAt": 1785735739359,
+      "size": 4833,
       "gitAlgorithm": "myers",
-      "generatedAt": "2026-08-03T00:54:54.254Z"
+      "generatedAt": "2026-08-03T23:28:55.695Z"
     },
-    "fileStatus": "reviewed",
+    "fileStatus": "pending",
     "nextRevExtId": 1,
     "lastReviewTime": "2026-08-03T00:54:54.254Z",
     "currentLines": [
@@ -64,9 +64,9 @@
       },
       {
         "line": 7,
-        "digest": "c022366f731e1ded139e001f4d5d9c35c05236976750d146a77c969804e11a06",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "409b2524ae816474e01b3a72364b1d5d9c29ce676795ec739e5065a7acddf15a",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -113,9 +113,9 @@
       },
       {
         "line": 14,
-        "digest": "948379b3025756352284b8875cd201976679761a5c79daa5868fbd142ba5842c",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "ae12fed89c79f62cf7e9e088c4886d5346b0d83db308bf22b9f73566a8cfd9f1",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -441,8 +441,36 @@
         "occurrence": 1
       }
     ],
-    "deletedLines": [],
-    "hunks": [],
-    "updatedAt": "2026-08-03T00:54:54.254Z"
+    "deletedLines": [
+      {
+        "baselineLine": 7,
+        "digest": "c022366f731e1ded139e001f4d5d9c35c05236976750d146a77c969804e11a06",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      },
+      {
+        "baselineLine": 14,
+        "digest": "948379b3025756352284b8875cd201976679761a5c79daa5868fbd142ba5842c",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      }
+    ],
+    "hunks": [
+      {
+        "oldStart": 7,
+        "oldCount": 1,
+        "newStart": 7,
+        "newCount": 1
+      },
+      {
+        "oldStart": 14,
+        "oldCount": 1,
+        "newStart": 14,
+        "newCount": 1
+      }
+    ],
+    "updatedAt": "2026-08-03T23:28:55.695Z"
   }
 }

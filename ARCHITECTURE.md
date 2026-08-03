@@ -7,14 +7,15 @@ Code Review Tracker 0.4.0 is a single-reviewer, saved-content system:
 1. The gzip baseline snapshot is authoritative for reviewed old content.
 2. The saved source file is authoritative for current content.
 3. Local `git diff --no-index` output is authoritative for unchanged, added, and deleted classification.
-4. Per-file JSON is authoritative for review state only for its exact baseline and current digests.
+4. Local Git `user.name` and `user.email` configuration supplies reviewer identity when available; the first resolved identity is cached per workspace for later decisions.
+5. Per-file JSON is authoritative for review state only for its exact baseline and current digests.
 
-Git is not used for pulls, HEAD synchronization, commit-author inference, or imported review decisions. A replacement is deliberately stored as deleted old lines plus added new lines. There is no synthetic `modified` classification.
+Git is not used for pulls, HEAD synchronization, commits, or imported review decisions. A replacement is deliberately stored as deleted old lines plus added new lines. There is no synthetic `modified` classification.
 
 ## Modules
 
 - `domain.ts` defines v4 records, exact physical-line hashing, diff record construction, review transfer, status, and counts.
-- `git.ts` runs the required deterministic local Git diff and parses zero-context hunk headers.
+- `git.ts` reads local Git reviewer configuration and runs the required deterministic local Git diff, parsing zero-context hunk headers.
 - `snapshot.ts` encodes and validates gzip snapshots.
 - `storage-format.ts` validates schema 4 and derives lightweight summaries.
 - `store.ts` owns per-path transactions, the eight-entry detail cache, snapshot verification, and orphan cleanup.

@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { terminalPayload, type ReviewStatus, type Reviewer } from "./domain";
 import { GitIgnoreService } from "./git-ignore";
 import { ReviewService } from "./review-service";
+import { ReviewerResolver } from "./reviewer";
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage } from "./extension-utils";
 
@@ -105,8 +106,23 @@ export async function closePromotedDiffTabs(source: vscode.Uri): Promise<void> {
   }
 }
 
-async function reviewer(): Promise<Reviewer | undefined> {
-  const config = vscode.workspace.getConfiguration("codeReviewTracker");
+async function reviewer(
+  resolver: ReviewerResolver,
+  uri: vscode.Uri | undefined,
+): Promise<Reviewer | undefined> {
+  const folder =
+    uri === undefined ? undefined : vscode.workspace.getWorkspaceFolder(uri);
+  const workspaceKey = folder?.uri.toString() ?? "global";
+  const directory = folder?.uri.fsPath;
+  return resolver.resolve(workspaceKey, directory, async () => {
+    return configuredReviewer(uri);
+  });
+}
+
+async function configuredReviewer(
+  uri: vscode.Uri | undefined,
+): Promise<Reviewer | undefined> {
+  const config = vscode.workspace.getConfiguration("codeReviewTracker", uri);
   const configuredName = config.get<string>("reviewerName", "").trim();
   const configuredEmail = config.get<string>("reviewerEmail", "").trim();
   let name = configuredName;
@@ -145,6 +161,7 @@ async function reviewer(): Promise<Reviewer | undefined> {
 
 export async function markActive(
   service: ReviewService,
+  reviewerResolver: ReviewerResolver,
   status: ReviewStatus,
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -155,7 +172,10 @@ export async function markActive(
     service.parseBaselineUri(editor.document.uri)?.source ??
     editor.document.uri;
   await service.initializeSource(source);
-  const identity = status === "pending" ? undefined : await reviewer();
+  const identity =
+    status === "pending"
+      ? undefined
+      : await reviewer(reviewerResolver, source);
   if (status !== "pending" && identity === undefined) {
     return;
   }
@@ -172,6 +192,7 @@ export async function markActive(
 
 export async function markFile(
   service: ReviewService,
+  reviewerResolver: ReviewerResolver,
   uri: vscode.Uri | undefined,
   status: ReviewStatus,
 ): Promise<void> {
@@ -179,7 +200,8 @@ export async function markFile(
     return;
   }
   await service.initializeSource(uri);
-  const identity = status === "pending" ? undefined : await reviewer();
+  const identity =
+    status === "pending" ? undefined : await reviewer(reviewerResolver, uri);
   if (status !== "pending" && identity === undefined) {
     return;
   }
@@ -196,6 +218,7 @@ export async function markFile(
 
 export async function markFolder(
   service: ReviewService,
+  reviewerResolver: ReviewerResolver,
   uri: vscode.Uri | undefined,
   status: ReviewStatus,
 ): Promise<void> {
@@ -206,7 +229,8 @@ export async function markFolder(
   if (folder !== undefined) {
     await service.initializeDiscoveredSources(folder);
   }
-  const identity = status === "pending" ? undefined : await reviewer();
+  const identity =
+    status === "pending" ? undefined : await reviewer(reviewerResolver, uri);
   if (status !== "pending" && identity === undefined) {
     return;
   }

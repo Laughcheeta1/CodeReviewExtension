@@ -173,6 +173,26 @@
     {
       "kind": "file",
       "path": "testing_auto_initialize.txt"
+    },
+    {
+      "kind": "file",
+      "path": "test/reviewer.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/git.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/ignore-matcher.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/git-ignore.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/reviewer.ts"
     }
   ]
 }

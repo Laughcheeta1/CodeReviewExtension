@@ -1,6 +1,8 @@
 const assert = require("node:assert/strict");
+const { execFile } = require("node:child_process");
 const { mkdir, writeFile: writePhysicalFile } = require("node:fs/promises");
 const { dirname, join } = require("node:path");
+const { promisify } = require("node:util");
 const vscode = require("vscode");
 const {
   assertAbsentDuring,
@@ -18,6 +20,7 @@ const {
 } = require("./inventory");
 
 const encoder = new TextEncoder();
+const execute = promisify(execFile);
 
 /*
  * This suite intentionally contains one long, ordered scenario. The order is
@@ -131,6 +134,11 @@ async function markActive(folder, relativePath, command) {
   await vscode.commands.executeCommand(command);
 }
 
+async function setGitIdentity(folder, name, email) {
+  await execute("git", ["-C", folder.uri.fsPath, "config", "user.name", name]);
+  await execute("git", ["-C", folder.uri.fsPath, "config", "user.email", email]);
+}
+
 async function assertStatus(folder, relativePath, status) {
   const value = await assertMetadataPresent(folder, relativePath, { status });
   assert.equal(value.file.fileStatus, status);
@@ -183,12 +191,12 @@ async function run() {
   );
   await reviewerConfiguration.update(
     "reviewerName",
-    "Contract Test Reviewer",
+    "Fallback Reviewer",
     vscode.ConfigurationTarget.Global,
   );
   await reviewerConfiguration.update(
     "reviewerEmail",
-    "contract@example.test",
+    "fallback@example.test",
     vscode.ConfigurationTarget.Global,
   );
   assert.equal(extension.isActive, true);
@@ -443,7 +451,17 @@ async function run() {
     await assertStatus(folder, fileCommandEligible, "pending");
     expectedPaths.add(fileCommandEligible);
     await markFile(folder, fileCommandEligible, "codeReviewTracker.markFileInReview");
-    await assertStatus(folder, fileCommandEligible, "inReview");
+    const firstReviewerMetadata = await assertStatus(
+      folder,
+      fileCommandEligible,
+      "inReview",
+    );
+    assert.equal(
+      firstReviewerMetadata.file.currentLines[0].lastReviewer?.name,
+      "Contract Test Reviewer",
+      "the first review must use the local Git reviewer before the configured fallback",
+    );
+    await setGitIdentity(folder, "Changed Git Reviewer", "changed@example.test");
     await markFile(folder, fileCommandEligible, "codeReviewTracker.markFileReviewed");
     await assertStatus(folder, fileCommandEligible, "reviewed");
     for (const command of [
@@ -478,14 +496,27 @@ async function run() {
     );
     await assertStatus(folder, files.fileCommandFallback, "pending");
     expectedPaths.add(files.fileCommandFallback);
-    for (const [command, expected] of [
-      ["codeReviewTracker.markFileInReview", "inReview"],
-      ["codeReviewTracker.markFileReviewed", "reviewed"],
-    ]) {
-      await markFile(folder, files.fileCommandFallback, command);
-      await assertStatus(folder, files.fileCommandFallback, expected);
-    }
-
+    await markFile(
+      folder,
+      files.fileCommandFallback,
+      "codeReviewTracker.markFileInReview",
+    );
+    const cachedReviewerMetadata = await assertStatus(
+      folder,
+      files.fileCommandFallback,
+      "inReview",
+    );
+    assert.equal(
+      cachedReviewerMetadata.file.currentLines[0].lastReviewer?.name,
+      "Contract Test Reviewer",
+      "later reviews must reuse the cached reviewer after Git changes",
+    );
+    await markFile(
+      folder,
+      files.fileCommandFallback,
+      "codeReviewTracker.markFileReviewed",
+    );
+    await assertStatus(folder, files.fileCommandFallback, "reviewed");
     /*
      * The active-editor commands use a different extension entry point from
      * the Explorer file commands. They must initialize and mutate eligible

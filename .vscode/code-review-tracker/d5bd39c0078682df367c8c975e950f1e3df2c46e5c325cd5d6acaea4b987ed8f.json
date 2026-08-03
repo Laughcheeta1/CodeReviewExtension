@@ -10,13 +10,13 @@
       "createdAt": "2026-08-03T00:55:03.501Z"
     },
     "current": {
-      "digest": "3e69d22f382a99ebc808b2db317e59b58c0f5a786b0a120ffdb86983b65cb55c",
-      "modifiedAt": 1785705573571,
-      "size": 22704,
+      "digest": "21aecc4e3d72805ce906a160b7d323c68d65994442ac60e84dce131893605b11",
+      "modifiedAt": 1785727828720,
+      "size": 22705,
       "gitAlgorithm": "myers",
-      "generatedAt": "2026-08-03T00:55:03.501Z"
+      "generatedAt": "2026-08-03T23:28:57.947Z"
     },
-    "fileStatus": "reviewed",
+    "fileStatus": "pending",
     "nextRevExtId": 1,
     "lastReviewTime": "2026-08-03T00:55:03.501Z",
     "currentLines": [
@@ -3095,9 +3095,9 @@
       },
       {
         "line": 440,
-        "digest": "61b7dabdff3a0582cb807618533d573252e231f64b6df8e66a2e7aa0dc180bcf",
-        "changeType": "unchanged",
-        "reviewStatus": "reviewed",
+        "digest": "1450c2b6e05c9f146e7923f3c40561858c1c81fdf4e3da645c0d92a18e2e5612",
+        "changeType": "added",
+        "reviewStatus": "pending",
         "occurrence": 1
       },
       {
@@ -4753,8 +4753,23 @@
         "occurrence": 1
       }
     ],
-    "deletedLines": [],
-    "hunks": [],
-    "updatedAt": "2026-08-03T00:55:03.501Z"
+    "deletedLines": [
+      {
+        "baselineLine": 440,
+        "digest": "61b7dabdff3a0582cb807618533d573252e231f64b6df8e66a2e7aa0dc180bcf",
+        "occurrence": 1,
+        "changeType": "deleted",
+        "reviewStatus": "pending"
+      }
+    ],
+    "hunks": [
+      {
+        "oldStart": 440,
+        "oldCount": 1,
+        "newStart": 440,
+        "newCount": 1
+      }
+    ],
+    "updatedAt": "2026-08-03T23:28:57.947Z"
   }
 }

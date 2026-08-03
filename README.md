@@ -4,7 +4,7 @@ Code Review Tracker adds saved-file, line-level review state to VS Code. It comp
 
 ## Use
 
-Git must be installed. The extension uses `git diff --no-index` as its local diff engine; it does not synchronize branches, pulls, commits, authors, or other collaborators.
+Git must be installed. The extension uses local Git both as its `git diff --no-index` diff engine and to read the reviewer's configured `user.name` and `user.email` when available. After the first review decision, that identity is cached for the workspace and reused for later decisions. It does not synchronize branches, pull, commit, or collaborator data.
 
 On first activation, choose whether to initialize Code Review Tracker for that repository. Choosing **Never Initialize** records the opt-out in the repository and prevents future automatic initialization prompts. If you choose **Initialize**, a multi-select checklist opens with every candidate file selected. Use the Select All or Deselect All buttons, then check only the files you want to track before choosing:
 

@@ -3,13 +3,44 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { RawGitHunk } from "./domain";
+import type { RawGitHunk, Reviewer } from "./domain";
 // RevExt: 1
 const execute = promisify(execFile);
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 // RevExt: 2
 export class GitService {
   constructor(private readonly executable = "git") {}
+
+  public async reviewer(
+    directory: string | undefined,
+  ): Promise<Reviewer | undefined> {
+    if (directory === undefined) {
+      return undefined;
+    }
+    const [name, email] = await Promise.all([
+      this.configValue(directory, "user.name"),
+      this.configValue(directory, "user.email"),
+    ]);
+    if (name.length === 0) {
+      return undefined;
+    }
+    return email.length === 0 ? { name } : { name, email };
+  }
+
+  private async configValue(directory: string, key: string): Promise<string> {
+    try {
+      const result = await execute(this.executable, [
+        "-C",
+        directory,
+        "config",
+        "--get",
+        key,
+      ]);
+      return result.stdout.trim();
+    } catch {
+      return "";
+    }
+  }
 
   private parseGitHunks(output: string): readonly RawGitHunk[] {
     const result: RawGitHunk[] = [];
