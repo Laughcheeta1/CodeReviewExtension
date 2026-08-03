@@ -354,6 +354,41 @@ async function run() {
     assert.equal(await ignoredDocument.save(), true);
     await settleForbidden(folder, [openedIgnored], watcher, "save ignored");
 
+    /*
+     * A force-added path is still ignored by Git.  This source is present in
+     * the index specifically to catch implementations that use index
+     * membership as an override.  Opening, saving, and invoking a file action
+     * must all leave the same absence invariant intact.
+     */
+    const forceAddedDocument = await openSource(folder, files.forceAddedSecret);
+    const forceAddedEdit = new vscode.WorkspaceEdit();
+    forceAddedEdit.insert(
+      sourceUri(folder, files.forceAddedSecret),
+      forceAddedDocument.lineAt(0).range.end,
+      " updated",
+    );
+    assert.equal(await vscode.workspace.applyEdit(forceAddedEdit), true);
+    assert.equal(await forceAddedDocument.save(), true);
+    await settleForbidden(
+      folder,
+      [files.forceAddedSecret],
+      watcher,
+      "force-added ignored save",
+    );
+    for (const command of [
+      "codeReviewTracker.markFilePending",
+      "codeReviewTracker.markFileInReview",
+      "codeReviewTracker.markFileReviewed",
+    ]) {
+      await markFile(folder, files.forceAddedSecret, command);
+      await settleForbidden(
+        folder,
+        [files.forceAddedSecret],
+        watcher,
+        `force-added ignored ${command}`,
+      );
+    }
+
     // Isolate the open-document fallback from the creation callback. The file
     // starts excluded by .git/info/exclude, so its create event must not write
     // metadata. Removing that exclusion does not trigger the extension's
@@ -577,6 +612,11 @@ async function run() {
       await settleForbidden(folder, [mixedIgnored], watcher, `mixed ${command}`);
       await vscode.commands.executeCommand(command, ignoredOnlyUri);
       await settleForbidden(folder, [ignoredOnly], watcher, `ignored-only ${command}`);
+      await assertNoExplicitTarget(
+        folder,
+        ignoredOnlyFolder,
+        `ignored-only ${command}`,
+      );
     }
     expectedPaths.add(mixedEligible);
     expectedPaths.add(mixedNestedEligible);

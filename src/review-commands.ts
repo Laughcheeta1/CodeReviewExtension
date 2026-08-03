@@ -210,6 +210,11 @@ export async function initializeAll(
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     try {
       const paths = await eligibleWorkspacePaths(folder, git);
+      if (paths === undefined) {
+        throw new Error(
+          "Git ignore rules could not be evaluated. Tracking was not initialized.",
+        );
+      }
       await service.initializeFolder(
         folder,
         status,

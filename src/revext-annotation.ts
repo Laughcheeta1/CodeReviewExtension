@@ -9,6 +9,7 @@ export interface RevExtAnnotationContext {
   readonly git: GitService;
   readonly internalSaves: Set<string>;
   readonly maxSize: () => number;
+  readonly isEligibleSource: (uri: vscode.Uri) => Promise<boolean>;
   readonly relativePath: (uri: vscode.Uri) => string | undefined;
   readonly storeFor: (uri: vscode.Uri) => PersistentStore | undefined;
   readonly recompute: (
@@ -23,6 +24,9 @@ export async function recomputeSavedDocument(
   context: RevExtAnnotationContext,
   document: vscode.TextDocument,
 ): Promise<boolean> {
+  if (!(await context.isEligibleSource(document.uri))) {
+    return false;
+  }
   const path = context.relativePath(document.uri);
   const store = context.storeFor(document.uri);
   if (path === undefined || store === undefined) {
@@ -83,7 +87,11 @@ export async function recomputeSavedDocument(
   }
   const changed = await context.recompute(document.uri, true, true);
   const updated = await store.load(path);
-  if (updated !== undefined && updated.nextRevExtId !== annotation.nextId) {
+  if (
+    updated !== undefined &&
+    updated.nextRevExtId !== annotation.nextId &&
+    (await context.isEligibleSource(document.uri))
+  ) {
     await store.commit(path, {
       ...updated,
       nextRevExtId: annotation.nextId,

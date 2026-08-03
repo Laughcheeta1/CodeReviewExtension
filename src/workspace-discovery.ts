@@ -12,7 +12,7 @@ import { GitService } from "./git";
 export async function eligibleWorkspacePaths(
   folder: vscode.WorkspaceFolder,
   git: GitService,
-): Promise<readonly string[]> {
+): Promise<readonly string[] | undefined> {
   const excluded = new vscode.RelativePattern(
     folder,
     "**/{.git,node_modules,.vscode/code-review-tracker}/**",
@@ -24,6 +24,13 @@ export async function eligibleWorkspacePaths(
   const paths = uris.map((uri) =>
     vscode.workspace.asRelativePath(uri, false).replaceAll("\\", "/"),
   );
-  const ignored = await git.ignoredPaths(folder.uri.fsPath, paths);
-  return paths.filter((path) => !ignored.has(path));
+  try {
+    const ignored = await git.ignoredPaths(folder.uri.fsPath, paths);
+    return paths.filter((path) => !ignored.has(path));
+  } catch {
+    // Ignore evaluation is a hard tracking boundary. Returning undefined
+    // keeps callers from replacing a known-good eligibility cache with a
+    // fail-open list while Git is temporarily unavailable.
+    return undefined;
+  }
 }

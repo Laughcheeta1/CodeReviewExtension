@@ -27,6 +27,7 @@ export interface ReviewMutationContext {
   readonly relativePath: (uri: vscode.Uri) => string | undefined;
   readonly storeFor: (uri: vscode.Uri) => PersistentStore | undefined;
   readonly maxSize: () => number;
+  readonly isEligibleSource: (uri: vscode.Uri) => Promise<boolean>;
   readonly isTrackableUri: (uri: vscode.Uri) => boolean;
   readonly recompute: (
     uri: vscode.Uri,
@@ -51,6 +52,9 @@ export async function initializePendingFile(
   ) {
     throw new Error("This file has not been initialized for review.");
   }
+  if (!(await context.isEligibleSource(source))) {
+    throw new Error("Git-ignored files cannot be tracked for review.");
+  }
   let { bytes, source: snapshot } = await readStableSource(
     source,
     context.maxSize(),
@@ -61,6 +65,9 @@ export async function initializePendingFile(
     context.maxSize(),
   ));
   const baseline = new Uint8Array();
+  if (!(await context.isEligibleSource(source))) {
+    throw new Error("Git-ignored files cannot be tracked for review.");
+  }
   await store.commit(
     path,
     {
@@ -114,6 +121,9 @@ export async function commitReview(
   const store = context.storeFor(source);
   if (path === undefined || store === undefined) {
     return;
+  }
+  if (!(await context.isEligibleSource(source))) {
+    throw new Error("Git-ignored files cannot be tracked for review.");
   }
   await store.commit(path, file);
   const changes = reviewableLines(file);
@@ -170,6 +180,9 @@ export async function promote(
   source: vscode.Uri,
   expected: FileRecord,
 ): Promise<void> {
+  if (!(await context.isEligibleSource(source))) {
+    throw new Error("Git-ignored files cannot be tracked for review.");
+  }
   const path = context.relativePath(source);
   const store = context.storeFor(source);
   if (path === undefined || store === undefined) {
@@ -234,6 +247,9 @@ export async function promote(
     stat,
     expected.lastReviewTime,
   );
+  if (!(await context.isEligibleSource(source))) {
+    throw new Error("Git-ignored files cannot be tracked for review.");
+  }
   await store.commit(path, promoted, bytes);
   context.changedEmitter.fire(source);
   context.promotedEmitter.fire(source);

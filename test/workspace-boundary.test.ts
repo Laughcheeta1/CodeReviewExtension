@@ -118,3 +118,32 @@ test("Git ignore evaluation is index-independent and honors nested rules", async
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+/*
+ * A failed ignore lookup is not equivalent to “no ignored files.”  That
+ * distinction is the safety boundary for every automatic metadata writer:
+ * returning an empty set here would make a Git workspace track an ignored
+ * source whenever the Git executable is missing, temporarily broken, or
+ * unavailable in the VS Code extension host's PATH.  The production service
+ * therefore rejects the lookup for a real worktree, while retaining the
+ * documented empty result for a directory that is genuinely outside Git.
+ */
+test("Git ignore lookup fails closed when a worktree cannot run Git", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code-review-tracker-ignore-failure-"));
+  try {
+    await execute("git", ["init", "--quiet", directory]);
+    await writeFile(join(directory, ".gitignore"), "secret.txt\n");
+    await writeFile(join(directory, "secret.txt"), "secret\n");
+
+    await assert.rejects(
+      new GitService("code-review-tracker-git-that-does-not-exist").ignoredPaths(
+        directory,
+        ["secret.txt", "ordinary.txt"],
+      ),
+      /Unable to evaluate \.gitignore rules/,
+      "a Git worktree must not treat an unavailable ignore check as an empty set",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

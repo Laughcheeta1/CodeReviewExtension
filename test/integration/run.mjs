@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { watch } from "node:fs";
 import {
+  appendFile,
   mkdir,
   mkdtemp,
   rm,
@@ -267,6 +268,14 @@ async function main() {
     await writeFile(
       path.join(enabled.workspace, enabled.files.ignoredBeforeRestart),
       "ignored before restart\n",
+    );
+    // This pair already had valid metadata at the end of the first session.
+    // Making it ignored while VS Code is closed proves that activation cleanup
+    // removes both the stale record and its baseline before any new lifecycle
+    // event can reintroduce it.
+    await appendFile(
+      path.join(enabled.workspace, ".gitignore"),
+      "becomes-ignored.txt\nbecomes-ignored-folder/\n",
     );
     await writeFile(
       path.join(enabled.workspace, "discovered-before-restart.txt"),

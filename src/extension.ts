@@ -38,7 +38,7 @@ export async function activate(
   const git = new GitService();
   if (!(await git.gitAvailable())) {
     log.warn(
-      "Git is unavailable. Files will still initialize, but diff and .gitignore support are unavailable.",
+      "Git is unavailable. Tracking is paused in Git workspaces until .gitignore rules can be evaluated.",
     );
   }
 
@@ -49,7 +49,10 @@ export async function activate(
     folder: vscode.WorkspaceFolder,
     force = false,
   ): Promise<void> => {
-    service.setEligiblePaths(folder, await eligibleWorkspacePaths(folder, git));
+    const eligible = await eligibleWorkspacePaths(folder, git);
+    if (eligible !== undefined) {
+      service.setEligiblePaths(folder, eligible);
+    }
     await service.cleanupIgnoredSources(folder);
     await service.reconcileExternalChanges(folder, force);
   };
@@ -60,7 +63,11 @@ export async function activate(
     const path = vscode.workspace
       .asRelativePath(uri, false)
       .replaceAll("\\", "/");
-    if ((await git.ignoredPaths(folder.uri.fsPath, [path])).has(path)) {
+    try {
+      if ((await git.ignoredPaths(folder.uri.fsPath, [path])).has(path)) {
+        return;
+      }
+    } catch {
       return;
     }
     await service.reconcileCreatedSource(uri);
@@ -207,5 +214,5 @@ export async function activate(
   }
   runLogged(log, "Initialization prompt", promptForInitialization(service, git));
   decorations.refresh();
-  log.info("Code Review Tracker 0.5.0 activated.");
+  log.info("Code Review Tracker 0.5.1 activated.");
 }

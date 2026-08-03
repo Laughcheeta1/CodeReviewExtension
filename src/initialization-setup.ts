@@ -38,6 +38,12 @@ export async function promptForInitialization(
       continue;
     }
     const paths = await eligibleWorkspacePaths(folder, git);
+    if (paths === undefined) {
+      void vscode.window.showWarningMessage(
+        "Git ignore rules could not be evaluated. Tracking was not initialized.",
+      );
+      continue;
+    }
     const targets = await chooseTrackingTargets(folder, paths);
     if (targets === undefined) {
       continue;

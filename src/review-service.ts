@@ -177,6 +177,9 @@ export class ReviewService implements vscode.Disposable {
       return;
     }
     const eligible = await this.refreshEligiblePaths(folder);
+    if (eligible === undefined) {
+      return;
+    }
     await store.includeTrackingTargets(
       eligible.map((path) => ({ kind: "file" as const, path })),
     );
@@ -216,6 +219,9 @@ export class ReviewService implements vscode.Disposable {
       return false;
     }
     const eligible = await this.refreshEligiblePaths(folder);
+    if (eligible === undefined) {
+      return false;
+    }
     if (!eligible.includes(path)) {
       return false;
     }
@@ -325,7 +331,15 @@ export class ReviewService implements vscode.Disposable {
     if (store === undefined || store.paths.length === 0) {
       return;
     }
-    const ignored = await this.git.ignoredPaths(folder.uri.fsPath, store.paths);
+    let ignored: ReadonlySet<string>;
+    try {
+      ignored = await this.git.ignoredPaths(folder.uri.fsPath, store.paths);
+    } catch (error) {
+      this.log.warn(
+        `Could not evaluate Git-ignored sources; existing metadata was preserved: ${String(error)}`,
+      );
+      return;
+    }
     for (const path of ignored) {
       await store.delete(path);
     }
@@ -449,6 +463,9 @@ export class ReviewService implements vscode.Disposable {
               );  // RevExt: 261
               let nextRevExtId = 1;
               if (status === "pending") {
+                if (!(await this.isEligibleSource(uri))) {
+                  continue;
+                }
                 nextRevExtId = await this.annotatePendingDocument(uri);
                 ({ bytes, source } = await readStableSource(uri, maxSize));
               }  // RevExt: 260
@@ -462,6 +479,9 @@ export class ReviewService implements vscode.Disposable {
                 status === "reviewed" ? now() : undefined,
                 status === "pending" ? initialAdditionHunks(bytes) : [],
               );  // RevExt: 262
+              if (!(await this.isEligibleSource(uri))) {
+                continue;
+              }
               await store.commit(path, { ...file, nextRevExtId }, baseline);
             } catch (error) {
               this.log.warn(`Skipping ${path}: ${String(error)}`);
@@ -643,6 +663,12 @@ export class ReviewService implements vscode.Disposable {
     forceDigest: boolean,
     createMissing = false,
   ): Promise<boolean> {  // RevExt: 293
+    // Re-check the live ignore rules at the final recomputation boundary. All
+    // callers also perform an eligibility check, but this guard prevents a
+    // stale cache or a race with a .gitignore edit from creating metadata.
+    if (!(await this.isEligibleSource(uri))) {
+      return false;
+    }
     const path = this.relativePath(uri);  // RevExt: 152
     const store = this.storeFor(uri);  // RevExt: 156
     if (path === undefined || store === undefined) {  // RevExt: 158
@@ -658,6 +684,9 @@ export class ReviewService implements vscode.Disposable {
         this.maxSize(),  // RevExt: 334
       );  // RevExt: 248
       const baseline = new Uint8Array();
+      if (!(await this.isEligibleSource(uri))) {
+        return false;
+      }
       await store.commit(
         path,
         await createRecord(
@@ -689,6 +718,9 @@ export class ReviewService implements vscode.Disposable {
       ) {  // RevExt: 340
         return false;  // RevExt: 333
       }  // RevExt: 226
+      if (!(await this.isEligibleSource(uri))) {
+        return false;
+      }
       await store.commit(path, {  // RevExt: 343
         ...existing,
         current: { ...existing.current, ...source },
@@ -704,6 +736,9 @@ export class ReviewService implements vscode.Disposable {
       this.relativePath(uri) ?? uri.fsPath,
     );
     const diff = buildDiffRecords(baseline, bytes, rawHunks, existing);
+    if (!(await this.isEligibleSource(uri))) {
+      return false;
+    }
     await store.commit(path, {
       ...existing,
       ...diff,  // RevExt: 349
@@ -730,6 +765,7 @@ export class ReviewService implements vscode.Disposable {
       git: this.git,
       internalSaves: this.internalSaves,
       maxSize: () => this.maxSize(),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
       relativePath: (uri) => this.relativePath(uri),
       storeFor: (uri) => this.storeFor(uri),
       recompute: (uri, forceDigest, createMissing) =>
@@ -798,6 +834,7 @@ export class ReviewService implements vscode.Disposable {
       relativePath: (uri) => this.relativePath(uri),
       storeFor: (uri) => this.storeFor(uri),
       maxSize: () => this.maxSize(),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
       isTrackableUri: (uri) => this.isTrackableUri(uri),
       recompute: (uri, forceDigest, createMissing) =>
         this.recompute(uri, forceDigest, createMissing),
@@ -812,9 +849,11 @@ export class ReviewService implements vscode.Disposable {
   }  // RevExt: 103
   private async refreshEligiblePaths(
     folder: vscode.WorkspaceFolder,
-  ): Promise<readonly string[]> {
+  ): Promise<readonly string[] | undefined> {
     const eligible = await eligibleWorkspacePaths(folder, this.git);
-    this.setEligiblePaths(folder, eligible);
+    if (eligible !== undefined) {
+      this.setEligiblePaths(folder, eligible);
+    }
     return eligible;
   }
   private async isEligibleSource(uri: vscode.Uri): Promise<boolean> {
@@ -826,7 +865,11 @@ export class ReviewService implements vscode.Disposable {
     if (folder === undefined || path === undefined) {
       return false;
     }
-    return !(await this.git.ignoredPaths(folder.uri.fsPath, [path])).has(path);
+    try {
+      return !(await this.git.ignoredPaths(folder.uri.fsPath, [path])).has(path);
+    } catch {
+      return false;
+    }
   }
   private isTrackableUri(uri: vscode.Uri): boolean {
     if (!this.isEligibleSourceUri(uri)) {

@@ -36,7 +36,7 @@ export interface ReviewActionContext {
   readonly storeFor: (uri: vscode.Uri) => PersistentStore | undefined;
   readonly refreshEligiblePaths: (
     folder: vscode.WorkspaceFolder,
-  ) => Promise<readonly string[]>;
+  ) => Promise<readonly string[] | undefined>;
 }
 
 export async function markEditor(
@@ -119,11 +119,16 @@ export async function markFolder(
     .asRelativePath(uri, false)
     .replaceAll("\\", "/");
   const prefix = folderPath.length === 0 ? "" : `${folderPath}/`;
-  await store.includeTrackingTarget({ kind: "folder", path: folderPath });
   const eligible = await context.refreshEligiblePaths(folder);
-  const paths = eligible
-    .filter((path) => store.tracksPath(path) && path.startsWith(prefix))
-    .sort();
+  if (eligible === undefined) {
+    return 0;
+  }
+  const candidates = eligible.filter((path) => path.startsWith(prefix));
+  if (candidates.length === 0) {
+    return 0;
+  }
+  await store.includeTrackingTarget({ kind: "folder", path: folderPath });
+  const paths = candidates.filter((path) => store.tracksPath(path)).sort();
   let marked = 0;
   for (const path of paths) {
     const source = vscode.Uri.joinPath(folder.uri, ...path.split("/"));

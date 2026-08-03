@@ -19,6 +19,7 @@
 - When lifecycle behavior is required for newly Git-tracked sources, refresh Git-derived eligibility at the event boundary and reconcile all existing tracked sources at extension activation rather than relying on a stale in-memory path set.
 - Use Git only for diff calculation and `.gitignore` evaluation unless the user explicitly requests Git-index-based behavior; file discovery and automatic metadata initialization must be driven by VS Code workspace events and enumeration.
 - Route every metadata-creating lifecycle event through one Git-ignore eligibility guard; testing startup enumeration alone is insufficient because save and refresh paths can bypass it.
+- Treat Git-ignore evaluation failures as a security-boundary failure: never convert an unavailable ignore check into an empty ignore set, and test both startup cleanup of already-tracked files that become ignored and interactions with force-added ignored files.
 - When startup initialization is reported as broken, trace the persisted enabled-state, workspace enumeration, and metadata commit path together; do not treat activation or discovery logs as proof that initialization completed.
 - After changing startup or fallback initialization, re-audit every metadata write against the shared ignore guard and add event-level coverage for ignored files; lifecycle fixes can otherwise reintroduce ignored-file tracking.
 - A passing integration assertion is not proof of behavior unless the fixture exercises the real runtime path and checks both positive persistence and negative absence across every relevant event; ignored-file guarantees require metadata, snapshot, and persisted-target absence checks.
@@ -28,3 +29,4 @@
 - When a strict integration test exposes a lifecycle bypass, fix the shared service boundary first and keep every event path behind the same eligibility/state guard; do not patch only the failing command callback.
 - During source refactors, preserve behavior with narrow modules and explicit dependency boundaries; run the full lifecycle contract after each extraction so modularity does not reintroduce ignored-file or disabled-state regressions.
 - Keep release/version constraints out of a workspace-behavior test contract when the user explicitly excludes release work from the task.
+- Before building a VSIX after a code change, manually increment the extension version in the manifest and keep any runtime version identifier in sync; verify the artifact filename and packaged manifest.

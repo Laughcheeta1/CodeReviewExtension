@@ -38,6 +38,8 @@ async function run() {
     "dynamic-ignored.txt",
     "dynamic-folder/source.txt",
     "ignored-after-activation.txt",
+    "becomes-ignored.txt",
+    "becomes-ignored-folder/child.txt",
   ];
   const watcher = watchForbiddenPaths(folder, forbidden);
   try {
@@ -79,6 +81,30 @@ async function run() {
       false,
       "startup cleanup must remove the deleted source snapshot",
     );
+    assert.equal(
+      inventory.recordsByPath.has("becomes-ignored.txt"),
+      false,
+      "startup cleanup must remove metadata for an existing source that became ignored while closed",
+    );
+    assert.equal(
+      [...inventory.snapshotNames].some((name) =>
+        name.startsWith(`${pathHash("becomes-ignored.txt")}.`),
+      ),
+      false,
+      "startup cleanup must remove the snapshot for an existing source that became ignored while closed",
+    );
+    assert.equal(
+      inventory.recordsByPath.has("becomes-ignored-folder/child.txt"),
+      false,
+      "startup cleanup must remove metadata for an existing nested source that became ignored while closed",
+    );
+    assert.equal(
+      [...inventory.snapshotNames].some((name) =>
+        name.startsWith(`${pathHash("becomes-ignored-folder/child.txt")}.`),
+      ),
+      false,
+      "startup cleanup must remove the nested source snapshot after it becomes ignored while closed",
+    );
     await assertMetadataPresent(folder, "discovered-before-restart.txt");
     await assertMetadataPaths(folder, [
       ".gitignore",
@@ -101,8 +127,6 @@ async function run() {
       "mixed-folder/nested/deep-allowed.txt",
       "outside-folder-command.txt",
       "fallback-folder/source.txt",
-      "becomes-ignored.txt",
-      "becomes-ignored-folder/child.txt",
       "discovered-before-restart.txt",
     ], "restart");
     await assertNoUnknownTrackerEntries(folder);

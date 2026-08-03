@@ -1,7 +1,7 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
 import type { RawGitHunk, Reviewer } from "./domain";
@@ -10,6 +10,8 @@ const execute = promisify(execFile);
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 // RevExt: 2
 export class GitService {
+  constructor(private readonly executable = "git") {}
+
   private parseGitHunks(output: string): readonly RawGitHunk[] {
     const result: RawGitHunk[] = [];
     for (const line of output.split("\n")) {
@@ -29,7 +31,7 @@ export class GitService {
 // RevExt: 3
   public async gitAvailable(): Promise<boolean> {
     try {  // RevExt: 30
-      await execute("git", ["--version"]);
+      await execute(this.executable, ["--version"]);
       return true;
     } catch {  // RevExt: 53
       return false;
@@ -64,7 +66,7 @@ export class GitService {
         after,
       ];
       try {  // RevExt: 32
-        const result = await execute("git", args, {
+        const result = await execute(this.executable, args, {
           maxBuffer: 32 * 1024 * 1024,
         });
         if (contentChanged) {
@@ -104,10 +106,16 @@ export class GitService {
       try {  // RevExt: 33
         addIgnoredPaths(
           ignored,
-          await checkIgnoredPaths(directory, pathsBatch),
+          await checkIgnoredPaths(this.executable, directory, pathsBatch),
         );
-      } catch {
-        // A folder outside a Git worktree has no .gitignore rules to apply.
+      } catch (error) {
+        if (!(await hasGitWorktree(directory))) {
+          // A folder outside a Git worktree has no .gitignore rules to apply.
+          continue;
+        }
+        throw new Error(
+          `Unable to evaluate .gitignore rules for ${directory}: ${String(error)}`,
+        );
       }  // RevExt: 14
     }  // RevExt: 19
     return ignored;
@@ -120,8 +128,8 @@ export class GitService {
       return undefined;  // RevExt: 60
     }  // RevExt: 20
     const [name, email] = await Promise.all([
-      gitConfig(folder, "user.name"),
-      gitConfig(folder, "user.email"),
+      gitConfig(this.executable, folder, "user.name"),
+      gitConfig(this.executable, folder, "user.email"),
     ]);  // RevExt: 38
     return name.length === 0
       ? undefined
@@ -146,11 +154,12 @@ function addIgnoredPaths(ignored: Set<string>, output: string): void {
 }  // RevExt: 42
 // RevExt: 9
 function checkIgnoredPaths(
+  executable: string,
   directory: string,
   paths: readonly string[],
 ): Promise<string> {  // RevExt: 46
   return new Promise((resolve, reject) => {
-    const process = spawn("git", [
+    const process = spawn(executable, [
       "-C",
       directory,
       "check-ignore",
@@ -173,17 +182,54 @@ function checkIgnoredPaths(
 }  // RevExt: 43
 // RevExt: 10
 async function gitConfig(
+  executable: string,
   folder: vscode.WorkspaceFolder,
   key: string,
 ): Promise<string> {  // RevExt: 47
   try {
     return (
-      await execute("git", ["-C", folder.uri.fsPath, "config", "--get", key])
+      await execute(executable, ["-C", folder.uri.fsPath, "config", "--get", key])
     ).stdout.trim();
   } catch {
     return "";
   }  // RevExt: 29
 }  // RevExt: 44
+
+/**
+ * Check for a repository marker without invoking Git again. A real worktree
+ * must fail closed when Git cannot evaluate its ignore rules; a plain folder
+ * keeps the documented empty ignore set.
+ */
+async function hasGitWorktree(directory: string): Promise<boolean> {
+  let current = resolve(directory);
+  for (;;) {
+    try {
+      const marker = join(current, ".git");
+      const markerStat = await stat(marker);
+      if (markerStat.isDirectory()) {
+        await Promise.all([
+          stat(join(marker, "HEAD")),
+          stat(join(marker, "config")),
+        ]);
+        return true;
+      }
+      if (markerStat.isFile()) {
+        const contents = await readFile(marker, "utf8");
+        if (contents.trimStart().startsWith("gitdir:")) {
+          return true;
+        }
+      }
+    } catch {
+      // Continue looking for a valid worktree marker in an ancestor.
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return false;
+    }
+    current = parent;
+  }
+}
+
 // RevExt: 11
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   return (
