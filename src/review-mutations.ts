@@ -53,7 +53,7 @@ export async function initializePendingFile(
     throw new Error("This file has not been initialized for review.");
   }
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   let { bytes, source: snapshot } = await readStableSource(
     source,
@@ -66,7 +66,7 @@ export async function initializePendingFile(
   ));
   const baseline = new Uint8Array();
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   await store.commit(
     path,
@@ -123,7 +123,7 @@ export async function commitReview(
     return;
   }
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   await store.commit(path, file);
   const changes = reviewableLines(file);
@@ -181,7 +181,7 @@ export async function promote(
   expected: FileRecord,
 ): Promise<void> {
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   const path = context.relativePath(source);
   const store = context.storeFor(source);
@@ -248,7 +248,7 @@ export async function promote(
     expected.lastReviewTime,
   );
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   await store.commit(path, promoted, bytes);
   context.changedEmitter.fire(source);

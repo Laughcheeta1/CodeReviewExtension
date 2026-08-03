@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
-import { GitService } from "./git";
+import { GitIgnoreService } from "./git-ignore";
 
 /**
  * Enumerate files in a workspace that are eligible for review tracking.
  *
- * The tracker deliberately leaves the filesystem discovery to VS Code and
- * delegates only Git-specific filtering to GitService.  Keeping this in one
- * helper prevents activation-time discovery and later refreshes from drifting
- * in their excluded-path or .gitignore behavior.
+ * The tracker deliberately leaves filesystem discovery and ignore evaluation
+ * to the extension. Keeping this in one helper prevents activation-time
+ * discovery and later refreshes from drifting in their excluded-path or
+ * .gitignore behavior.
  */
 export async function eligibleWorkspacePaths(
   folder: vscode.WorkspaceFolder,
-  git: GitService,
-): Promise<readonly string[] | undefined> {
+  ignoreRules: GitIgnoreService,
+): Promise<readonly string[]> {
   const excluded = new vscode.RelativePattern(
     folder,
     "**/{.git,node_modules,.vscode/code-review-tracker}/**",
@@ -24,13 +24,7 @@ export async function eligibleWorkspacePaths(
   const paths = uris.map((uri) =>
     vscode.workspace.asRelativePath(uri, false).replaceAll("\\", "/"),
   );
-  try {
-    const ignored = await git.ignoredPaths(folder.uri.fsPath, paths);
-    return paths.filter((path) => !ignored.has(path));
-  } catch {
-    // Ignore evaluation is a hard tracking boundary. Returning undefined
-    // keeps callers from replacing a known-good eligibility cache with a
-    // fail-open list while Git is temporarily unavailable.
-    return undefined;
-  }
+  await ignoreRules.refresh(folder);
+  const ignored = await ignoreRules.ignoredPaths(folder, paths);
+  return paths.filter((path) => !ignored.has(path));
 }

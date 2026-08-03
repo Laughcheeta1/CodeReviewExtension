@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 4,
+  "path": ".vscodeignore",
+  "file": {
+    "baseline": {
+      "file": "0a721cd4753ff50bbbe1237397c3c7692080254fa766268fcc8b05ef633c50bf.8598536d32f4bed9497b946394db765fc205a7828fcac149824c89b90023c6a5.gz",
+      "digest": "8598536d32f4bed9497b946394db765fc205a7828fcac149824c89b90023c6a5",
+      "codec": "gzip",
+      "size": 131,
+      "createdAt": "2026-08-03T00:54:53.058Z"
+    },
+    "current": {
+      "digest": "8598536d32f4bed9497b946394db765fc205a7828fcac149824c89b90023c6a5",
+      "modifiedAt": 1785208173427,
+      "size": 131,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-08-03T00:54:53.058Z"
+    },
+    "fileStatus": "reviewed",
+    "nextRevExtId": 1,
+    "lastReviewTime": "2026-08-03T00:54:53.058Z",
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "deaeab086e295c1ab6998fdad057fd40396327518317069356faf1dc14fe8f22",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "e58d60e6d3bd52ff8a390906c7b66c76a92d5d7f0230cc27444f627dcd86d9b8",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "86b57baa2661765179fe3c7cc7dc1137674e6789a0e9c8d2adf9e62c36145a0f",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "bf866e7055ace74a242821a72a0cb9e7c5194b34ece23b9f79d0cfd0c285c2de",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 5,
+        "digest": "dcbc44c61c01692efc25a05be516e4879def1675c69b21425e54af35da631d29",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 6,
+        "digest": "ed378cc258967ae922227c3b838b89afda7566b3b6afd0ad90f5e320a6c96242",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 7,
+        "digest": "64512951cac3b62cb8044c6b19edd3fc97a8c6659a1d3117d9dd21cf63094b32",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 8,
+        "digest": "c6983b0cb5b67f37e81430ed985eb263524a67e39bfdca9af7aa7288f85ee343",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 9,
+        "digest": "03d504d0dbbf94a7ffde6e7c6c74c79211b1d7325d6e986e17b4c8741e247431",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 10,
+        "digest": "a9b1d5ea80c10715f11ed27d895af7c40f369042b6986619215bc9ad5a8228a1",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 11,
+        "digest": "60b9997e84dd39b3ec8b45ae31ddaff73e50b8607725a638b42e8303cf620f34",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 12,
+        "digest": "a87ede4a48d4a76bad157341579c550e35fb4cf4380f7a4086843cb10529a243",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [],
+    "updatedAt": "2026-08-03T00:54:53.058Z"
+  }
+}

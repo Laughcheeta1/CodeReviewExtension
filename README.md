@@ -11,7 +11,7 @@ On first activation, choose whether to initialize Code Review Tracker for that r
 - **Start Reviewed** to snapshot the selected eligible saved files as their reviewed baseline.
 - **Start Pending** to use an empty baseline, making every selected saved line an addition awaiting review.
 
-When a `.gitignore` exists, the checklist contains Git-tracked files; otherwise it contains all workspace files. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
+When `.gitignore` files exist, the checklist contains workspace files that do not match the root or nested ignore rules; otherwise it contains all eligible workspace files. Git's global configuration and `.git/info/exclude` are not consulted. When an ignore file changes, the review list refreshes and removes any newly ignored review state.
 
 Dismissing a setup step leaves the workspace untouched and shows the initialization prompt again on the next activation.
 To resume setup without restarting VS Code, run **Code Review: Set Up Tracking** from the Command Palette.

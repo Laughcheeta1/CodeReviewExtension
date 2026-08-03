@@ -437,7 +437,7 @@ async function assertSnapshotMissing(folder, name, context = "") {
 /**
  * Assert that initialization did not add an exact explicit target for a path.
  * A root folder target (`{ kind: 'folder', path: '' }`) is intentionally not
- * rejected: it describes the configured scope, while Git-ignore eligibility
+ * rejected: it describes the configured scope, while ignore-rule eligibility
  * still has to prevent a per-file metadata write.  The helper catches the
  * accidental file-target expansion that previously made ignored files appear
  * tracked after discovery.

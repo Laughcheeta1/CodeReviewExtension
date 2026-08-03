@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 4,
+  "path": ".vscode/settings.json",
+  "file": {
+    "baseline": {
+      "file": "a5de3e5871ffcc383a2294845bd3df25d3eeff6c29ad46e3a396577c413bf357.2313b1728e626471a693de8287b6b57bea192bd276b0f00e4f50daef406d938e.gz",
+      "digest": "2313b1728e626471a693de8287b6b57bea192bd276b0f00e4f50daef406d938e",
+      "codec": "gzip",
+      "size": 138,
+      "createdAt": "2026-08-03T00:54:52.819Z"
+    },
+    "current": {
+      "digest": "2313b1728e626471a693de8287b6b57bea192bd276b0f00e4f50daef406d938e",
+      "modifiedAt": 1785285164368,
+      "size": 138,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-08-03T00:54:52.819Z"
+    },
+    "fileStatus": "reviewed",
+    "nextRevExtId": 1,
+    "lastReviewTime": "2026-08-03T00:54:52.819Z",
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "87121193feb527fc5297e1a50d25727c094de32a31f8fe9f79b9fa26ddfc3af5",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "5566fb63299206b2c7420352ec6038a777edf4418084249d0b38061801241b8a",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "f7bf643569598db3bdc111cdfb9723c2af5f90bfaa7bccc25e3fc3a25cc55b7d",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "711eed1a1a62e59b12775d311cfeaa814124d4a4d7997b433293f103bba8c177",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 5,
+        "digest": "75c1de993ddfb0b1ce675ebcf0c29804d7fb722d661d53e5e508df429226176b",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [],
+    "updatedAt": "2026-08-03T00:54:52.819Z"
+  }
+}

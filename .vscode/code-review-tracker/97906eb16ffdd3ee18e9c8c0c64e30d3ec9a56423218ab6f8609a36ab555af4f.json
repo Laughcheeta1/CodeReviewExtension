@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 4,
+  "path": "testing_auto_initialize.txt",
+  "file": {
+    "baseline": {
+      "file": "97906eb16ffdd3ee18e9c8c0c64e30d3ec9a56423218ab6f8609a36ab555af4f.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.gz",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "codec": "gzip",
+      "size": 0,
+      "createdAt": "2026-08-03T00:55:29.017Z"
+    },
+    "current": {
+      "digest": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+      "modifiedAt": 1785718536718,
+      "size": 6,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-08-03T00:55:36.985Z"
+    },
+    "fileStatus": "pending",
+    "nextRevExtId": 1,
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [
+      {
+        "oldStart": 0,
+        "oldCount": 0,
+        "newStart": 1,
+        "newCount": 1
+      }
+    ],
+    "updatedAt": "2026-08-03T00:55:36.985Z"
+  }
+}

@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      ignore:
+        specifier: ^7.0.6
+        version: 7.0.6
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

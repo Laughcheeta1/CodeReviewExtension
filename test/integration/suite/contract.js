@@ -44,8 +44,8 @@ async function writeExternalSource(folder, relativePath, content) {
   await writePhysicalFile(absolute, content);
 }
 
-async function rewriteInfoExclude(folder, removePaths) {
-  const uri = sourceUri(folder, ".git/info/exclude");
+async function rewriteIgnoreFile(folder, removePaths) {
+  const uri = sourceUri(folder, ".gitignore");
   const current = new TextDecoder().decode(
     await vscode.workspace.fs.readFile(uri),
   );
@@ -178,6 +178,19 @@ async function run() {
   const extension = vscode.extensions.getExtension("local.code-review-tracker");
   assert.ok(extension, "the development extension must be available");
   await extension.activate();
+  const reviewerConfiguration = vscode.workspace.getConfiguration(
+    "codeReviewTracker",
+  );
+  await reviewerConfiguration.update(
+    "reviewerName",
+    "Contract Test Reviewer",
+    vscode.ConfigurationTarget.Global,
+  );
+  await reviewerConfiguration.update(
+    "reviewerEmail",
+    "contract@example.test",
+    vscode.ConfigurationTarget.Global,
+  );
   assert.equal(extension.isActive, true);
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, "the integration workspace must be available");
@@ -186,6 +199,9 @@ async function run() {
     tracked: "tracked.txt",
     untracked: "untracked.txt",
     nested: "nested/eligible.txt",
+    nestedIgnore: "nested/.gitignore",
+    nestedIgnored: "nested/nested-ignored.txt",
+    nestedAllowed: "nested/nested-allowed.txt",
     ignoredRoot: "ignored-root.txt",
     ignoredAfterActivation: "ignored-after-activation.txt",
     ignoredNested: "ignored-folder/hidden.txt",
@@ -214,9 +230,9 @@ async function run() {
     files.ignoredAfterActivation,
     files.ignoredBeforeRestart,
     files.ignoredNested,
+    files.nestedIgnored,
     files.secret,
     files.forceAddedSecret,
-    files.infoExcluded,
     files.externalIgnored,
     files.dynamicIgnored,
     files.dynamicFolderFile,
@@ -235,6 +251,9 @@ async function run() {
     files.tracked,
     files.untracked,
     files.nested,
+    files.nestedIgnore,
+    files.nestedAllowed,
+    files.infoExcluded,
     files.ignoredAllowed,
     files.allowedSecret,
     files.nestedRootOnly,
@@ -247,7 +266,9 @@ async function run() {
      * .gitignore. Every other nonignored source below is deliberately absent
      * from the index; metadata must still exist for all of them. Conversely,
      * ignored files include an ignored directory child, a glob match, an
-     * anchored rule, an info/exclude rule, and a force-added index entry.
+     * anchored rule, a nested .gitignore rule, and a force-added index entry.
+     * The .git/info/exclude entry is intentionally eligible because it is
+     * outside the extension's ignore-rule inputs.
      */
     for (const relativePath of [
       files.tracked,
@@ -390,10 +411,9 @@ async function run() {
     }
 
     // Isolate the open-document fallback from the creation callback. The file
-    // starts excluded by .git/info/exclude, so its create event must not write
-    // metadata. Removing that exclusion does not trigger the extension's
-    // .gitignore watcher; opening the file is therefore the only initialization
-    // route available for this assertion.
+    // starts excluded by the root .gitignore, so its create event must not
+    // write metadata. Removing that exclusion triggers the .gitignore watcher;
+    // opening the file still verifies the interaction path independently.
     await writeSource(folder, files.openFallback, "open fallback\n");
     await settleForbidden(
       folder,
@@ -401,7 +421,7 @@ async function run() {
       fallbackWatcher,
       "open fallback before eligibility",
     );
-    await rewriteInfoExclude(folder, [files.openFallback]);
+    await rewriteIgnoreFile(folder, [files.openFallback]);
     fallbackWatcher.removePath(files.openFallback);
     await openSource(folder, files.openFallback);
     await waitForMetadata(folder, files.openFallback);
@@ -436,9 +456,8 @@ async function run() {
     }
 
     // The file-command fallback is initially invisible to tracking because it
-    // is excluded through .git/info/exclude. Its first interaction must still
-    // initialize it after the exclusion is removed, without a refresh or a
-    // creation event being able to do the work first.
+    // is excluded through the root .gitignore. Its first interaction must
+    // still initialize it after the exclusion is removed.
     await writeSource(
       folder,
       files.fileCommandFallback,
@@ -450,7 +469,7 @@ async function run() {
       fallbackWatcher,
       "file command fallback before eligibility",
     );
-    await rewriteInfoExclude(folder, [files.fileCommandFallback]);
+    await rewriteIgnoreFile(folder, [files.fileCommandFallback]);
     fallbackWatcher.removePath(files.fileCommandFallback);
     await markFile(
       folder,
@@ -508,7 +527,7 @@ async function run() {
       fallbackWatcher,
       "line command fallback before eligibility",
     );
-    await rewriteInfoExclude(folder, [files.lineCommandFallback]);
+    await rewriteIgnoreFile(folder, [files.lineCommandFallback]);
     fallbackWatcher.removePath(files.lineCommandFallback);
     for (const [command, expected] of [
       ["codeReviewTracker.markPending", "pending"],
@@ -552,7 +571,7 @@ async function run() {
       fallbackWatcher,
       "diff fallback before eligibility",
     );
-    await rewriteInfoExclude(folder, [files.diffFallback]);
+    await rewriteIgnoreFile(folder, [files.diffFallback]);
     fallbackWatcher.removePath(files.diffFallback);
     await vscode.commands.executeCommand(
       "codeReviewTracker.openReviewDiff",
@@ -622,8 +641,9 @@ async function run() {
     expectedPaths.add(mixedNestedEligible);
 
     // Folder interaction has its own fallback path. The child is invisible to
-    // the creation watcher while info/exclude contains the rule; after that
-    // rule is removed, the first folder command must discover and initialize it.
+    // the creation watcher while the root .gitignore contains the rule; after
+    // that rule is removed, the first folder command must discover and
+    // initialize it.
     await writeSource(folder, files.fallbackFolderFile, "fallback folder\n");
     await settleForbidden(
       folder,
@@ -631,7 +651,7 @@ async function run() {
       fallbackWatcher,
       "folder fallback before eligibility",
     );
-    await rewriteInfoExclude(folder, ["fallback-folder/*"]);
+    await rewriteIgnoreFile(folder, ["fallback-folder/*"]);
     fallbackWatcher.removePath(files.fallbackFolderFile);
     const fallbackFolderUri = sourceUri(folder, files.fallbackFolder);
     for (const [command, expected] of [

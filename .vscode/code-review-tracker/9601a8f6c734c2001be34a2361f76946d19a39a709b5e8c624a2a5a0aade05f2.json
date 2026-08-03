@@ -1,0 +1,364 @@
+{
+  "schemaVersion": 4,
+  "path": "eslint.config.mjs",
+  "file": {
+    "baseline": {
+      "file": "9601a8f6c734c2001be34a2361f76946d19a39a709b5e8c624a2a5a0aade05f2.390114eec371febd327cc096d1bdb3ac21688bf41bce9b0c8af46307acbf7ee5.gz",
+      "digest": "390114eec371febd327cc096d1bdb3ac21688bf41bce9b0c8af46307acbf7ee5",
+      "codec": "gzip",
+      "size": 1690,
+      "createdAt": "2026-08-03T00:54:55.429Z"
+    },
+    "current": {
+      "digest": "390114eec371febd327cc096d1bdb3ac21688bf41bce9b0c8af46307acbf7ee5",
+      "modifiedAt": 1785289053524,
+      "size": 1690,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-08-03T00:54:55.429Z"
+    },
+    "fileStatus": "reviewed",
+    "nextRevExtId": 1,
+    "lastReviewTime": "2026-08-03T00:54:55.429Z",
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "d9ef88b737056f52c91ce054a342a68b2f653c4c1de8e293ac44153994781060",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "3f65ef373467a79a67b280adc4c58359ee439d68d9eb4451019e2a3d9361b17b",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "4793e0bc8ef1c93d8f99250978a90dddc570e7d48a32e0f5aa7d9212ec06aab4",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "bf40152d266f60153ee0d12a0734d5470179cdaad734caa8d07268091702b8f9",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 5,
+        "digest": "c4371183d7eec15bea0100470d7af08d5a6437f75062069b29c67cdbe0187891",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 6,
+        "digest": "715a45a32691a85efc899a050f3534aa8de9dca31005cec6f440accb7b7c9cc0",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 7,
+        "digest": "d4961a19aca726019e6f689ff93fc4a0ad4212922d221b40a0d95c88c9a33411",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 8,
+        "digest": "d2d72125cdf4d13bc6063db5b329ca861e3e046983aa349def9f4f3353ec4025",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 9,
+        "digest": "2ffe1c48ac9b834babaa4bd924bf33cdc5144b719e84d871286feea82f9e220f",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 10,
+        "digest": "d1f092cc1fc0945fac95f4e94cca3ce935c0aadeb9b998bfc08fc801989d8449",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 11,
+        "digest": "340b9b87608d457c8c3c91d42af6964a291c1d4a634f30f744dba481b56c9556",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 12,
+        "digest": "4c47c3a374a7eede9b84dafb2823efdb4b2b6f75644853c8eca75ab3baa26a9e",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 13,
+        "digest": "42a8f0bd9cb9f30a958b0497dd465e99a7b1fe8883d316ceb534840363717a64",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 14,
+        "digest": "bef82bad01a446ec8459be32536a9a943b9e73db397281fb0a1c07a32af2ca3d",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 15,
+        "digest": "7738ac4bf512e3597b145aa2bbeb54340a1a39483d9edd4f9a7d285c63f31ef4",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 16,
+        "digest": "b269bb02dc1f49808d3a76dbed6f7575b6f1ae4a72009a28300e96581ba15ab0",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 17,
+        "digest": "7d382129198c73ebb9945e57aba7d7ba0f8a4c3f0bc44e64587736f41dd5f1ef",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 18,
+        "digest": "3eba72334c4488154a0f28aadf291a4dfa5c20ca36aaab703fbf21f5bcc46670",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 19,
+        "digest": "4d894127590600343b76f1ebddb61bfe7e96d6790644779023738d6f83b2c42c",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 20,
+        "digest": "469fde31644f56098a67e2efe587e92768ba89627d344d4f40a796d9a2806f7c",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 21,
+        "digest": "14561d12da9b57bfee0dae655bc97818b90ba667aa34b589ac850d772c381bac",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 22,
+        "digest": "3de1e85c6e4c574719e172e44b6a1b73f211162ff59958c8692c5d6d9e6f5487",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 23,
+        "digest": "35ba6957ac3e104d9e1f29b4c087225c0b7bc9051018f32071519442665513d3",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 24,
+        "digest": "a82ef3ad74444d30974b2a7bfcf998ceab9b3f381ad9938379b5575bfb1665b3",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 25,
+        "digest": "9a0972f1f768d336e84f594e7cb98aa595a0c5b686595e3086d91bad13767d70",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 26,
+        "digest": "44e76761609cf685b35a6c07439c79634e5604cd479b05b1f1bccb890aed221f",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 27,
+        "digest": "38d8d1db4a52ee72edbb101b875c6c82e037db473faf8831808fb2394b59cdee",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 28,
+        "digest": "81b3adee514ec1f4815e47679897ed47ef24f7e1179a8ca09a8568101a374e09",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 29,
+        "digest": "5ed8502930b0db83806173379e17e33d72fa462b6d0e546378cec6571110d84c",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 30,
+        "digest": "6ffdaa21ba598741c8f247acfa874fbed531c50ba9b5516508130a97e10c419d",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 31,
+        "digest": "01cfd933afe16d0eb88c566e00637c6a2086e03dc607f069d7eeac0c85d9d1c9",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 32,
+        "digest": "c6244c6fa959a8fe7789a33310bcfef22f707f2c7e11be152b390980a632cded",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 33,
+        "digest": "14c775d06acccb8aea940261f542a2998008a020fd2f6b8a231482fb5f8c797e",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 34,
+        "digest": "c86f6c56241a3b2a004b2f8dfae3121628232fb993f7480580aa751534c41839",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 35,
+        "digest": "4ad9eca8a3e5c1240101d8e88ed8771b2a8cbc3ab40c278c63dec6d8a1c83d98",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 36,
+        "digest": "50d807b94cd2d892080c4587a61b89636e6b9f616663435f87d286270557aa89",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 37,
+        "digest": "29e2f5f2ed6244559460eaab34c7d87f9f99a8b853d265d836217dc8f71f7964",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 38,
+        "digest": "065e87bb4b74208ab174924e87c8c6b793070dd5ffc70d6d7f19ba1925e9ea43",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 39,
+        "digest": "589fcf6a80f788f2c0850e8f801450c21dc42da858c4745249d016a38c9f46ac",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 40,
+        "digest": "26ccb5e885b00c2a3ce57f0457bc483b67a98471fe0973d52643a78de05b9286",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 41,
+        "digest": "e75a3ba1d499db612f7fd7cb7a3bae725c12a3041651cfb2cce7332a24d6a2f9",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 42,
+        "digest": "8fcb9d943add19615f30707e5039c58822a41972c87ae8f3661de0293dd64ad9",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 43,
+        "digest": "a5e6333da287eed56fd35d4787d88a1148aebec8b10aca2fa972ed3316107a0f",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 44,
+        "digest": "e1c64cb99f61a930efef5627e7e9ef3742a012f55edc11fa9367cfa2f47061db",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 45,
+        "digest": "21cb1bd26b3ae28e8a30cdae1f44d3297b09e93c55272324fbc4cf785d65ef4c",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 46,
+        "digest": "8f5d3ee0a331181922343fe1ed9dcfeb791965036370ea90d070ef2941f63c6d",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 47,
+        "digest": "691f8560bce4f33294565e2bf502fa65ddf0fba0ba2529f409b862cf16f32457",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 48,
+        "digest": "08a9c69338f940afea2562000cc099fc7b53f12a2de3f4bbf479448a5cbab1fb",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [],
+    "updatedAt": "2026-08-03T00:54:55.429Z"
+  }
+}

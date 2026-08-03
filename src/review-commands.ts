@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { terminalPayload, type ReviewStatus, type Reviewer } from "./domain";
-import { GitService } from "./git";
+import { GitIgnoreService } from "./git-ignore";
 import { ReviewService } from "./review-service";
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage } from "./extension-utils";
@@ -73,16 +73,7 @@ export async function closePromotedDiffTabs(source: vscode.Uri): Promise<void> {
   }
 }
 
-async function reviewer(
-  git: GitService,
-  uri?: vscode.Uri,
-): Promise<Reviewer | undefined> {
-  const fromGit = await git.reviewer(
-    uri === undefined ? undefined : vscode.workspace.getWorkspaceFolder(uri),
-  );
-  if (fromGit !== undefined) {
-    return fromGit;
-  }
+async function reviewer(): Promise<Reviewer | undefined> {
   const config = vscode.workspace.getConfiguration("codeReviewTracker");
   const configuredName = config.get<string>("reviewerName", "").trim();
   const configuredEmail = config.get<string>("reviewerEmail", "").trim();
@@ -122,7 +113,6 @@ async function reviewer(
 
 export async function markActive(
   service: ReviewService,
-  git: GitService,
   status: ReviewStatus,
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -133,7 +123,7 @@ export async function markActive(
     service.parseBaselineUri(editor.document.uri)?.source ??
     editor.document.uri;
   await service.initializeSource(source);
-  const identity = status === "pending" ? undefined : await reviewer(git, source);
+  const identity = status === "pending" ? undefined : await reviewer();
   if (status !== "pending" && identity === undefined) {
     return;
   }
@@ -150,7 +140,6 @@ export async function markActive(
 
 export async function markFile(
   service: ReviewService,
-  git: GitService,
   uri: vscode.Uri | undefined,
   status: ReviewStatus,
 ): Promise<void> {
@@ -158,7 +147,7 @@ export async function markFile(
     return;
   }
   await service.initializeSource(uri);
-  const identity = status === "pending" ? undefined : await reviewer(git, uri);
+  const identity = status === "pending" ? undefined : await reviewer();
   if (status !== "pending" && identity === undefined) {
     return;
   }
@@ -175,7 +164,6 @@ export async function markFile(
 
 export async function markFolder(
   service: ReviewService,
-  git: GitService,
   uri: vscode.Uri | undefined,
   status: ReviewStatus,
 ): Promise<void> {
@@ -186,7 +174,7 @@ export async function markFolder(
   if (folder !== undefined) {
     await service.initializeDiscoveredSources(folder);
   }
-  const identity = status === "pending" ? undefined : await reviewer(git, uri);
+  const identity = status === "pending" ? undefined : await reviewer();
   if (status !== "pending" && identity === undefined) {
     return;
   }
@@ -204,17 +192,20 @@ export async function markFolder(
 
 export async function initializeAll(
   service: ReviewService,
-  git: GitService,
+  ignoreRules: GitIgnoreService,
   status: "pending" | "reviewed",
 ): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    let paths: readonly string[];
     try {
-      const paths = await eligibleWorkspacePaths(folder, git);
-      if (paths === undefined) {
-        throw new Error(
-          "Git ignore rules could not be evaluated. Tracking was not initialized.",
-        );
-      }
+      paths = await eligibleWorkspacePaths(folder, ignoreRules);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Ignore rules could not be evaluated for ${folder.name}. Tracking was not initialized. ${errorMessage(error)}`,
+      );
+      continue;
+    }
+    try {
       await service.initializeFolder(
         folder,
         status,

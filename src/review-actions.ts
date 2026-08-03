@@ -49,7 +49,7 @@ export async function markEditor(
   const source = identity?.source ?? editor.document.uri;
   const selected = selectedLines(editor.selections);
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   await context.initializeMissingSource(source);
   return context.withSource(source, async () => {
@@ -78,7 +78,7 @@ export async function markFile(
   reviewer?: Reviewer,
 ): Promise<boolean> {
   if (!(await context.isEligibleSource(source))) {
-    throw new Error("Git-ignored files cannot be tracked for review.");
+    throw new Error("Ignored files cannot be tracked for review.");
   }
   await context.initializeMissingSource(source);
   return context.withSource(source, async () => {

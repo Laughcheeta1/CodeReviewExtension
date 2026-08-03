@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.5.1",
+  "version": "0.5.3",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -197,13 +197,13 @@
           "type": "string",
           "default": "",
           "scope": "window",
-          "description": "Fallback reviewer name when Git user.name is unavailable."
+          "description": "Fallback reviewer name when no reviewer name is configured."
         },
         "codeReviewTracker.reviewerEmail": {
           "type": "string",
           "default": "",
           "scope": "window",
-          "description": "Fallback reviewer email when Git user.email is unavailable."
+          "description": "Fallback reviewer email when no reviewer email is configured."
         },
         "codeReviewTracker.maxFileSizeBytes": {
           "type": "number",
@@ -262,5 +262,8 @@
     "tsx": "^4.0.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.0.0"
+  },
+  "dependencies": {
+    "ignore": "^7.0.6"
   }
 }

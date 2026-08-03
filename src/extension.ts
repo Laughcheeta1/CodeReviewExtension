@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { GitService } from "./git";
+import { GitIgnoreService } from "./git-ignore";
 import { promptForInitialization } from "./initialization-setup";
 import {
   closePromotedDiffTabs,
@@ -19,7 +20,7 @@ import {
   ReviewTree,
 } from "./ui";
 import { eligibleWorkspacePaths } from "./workspace-discovery";
-import { runLogged } from "./extension-utils";
+import { errorMessage, runLogged } from "./extension-utils";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
@@ -36,40 +37,28 @@ export async function activate(
   }
 
   const git = new GitService();
-  if (!(await git.gitAvailable())) {
-    log.warn(
-      "Git is unavailable. Tracking is paused in Git workspaces until .gitignore rules can be evaluated.",
-    );
-  }
+  const ignoreRules = new GitIgnoreService();
 
-  const service = new ReviewService(log, git);
+  const service = new ReviewService(log, git, ignoreRules);
   await service.initialize();
 
   const refreshFolder = async (
     folder: vscode.WorkspaceFolder,
     force = false,
   ): Promise<void> => {
-    const eligible = await eligibleWorkspacePaths(folder, git);
-    if (eligible !== undefined) {
+    try {
+      const eligible = await eligibleWorkspacePaths(folder, ignoreRules);
       service.setEligiblePaths(folder, eligible);
+    } catch (error) {
+      log.warn(
+        `Could not refresh ignore-rule eligibility for ${folder.uri.fsPath}: ${errorMessage(error)}`,
+      );
+      return;
     }
     await service.cleanupIgnoredSources(folder);
     await service.reconcileExternalChanges(folder, force);
   };
-  const reconcileCreatedSource = async (
-    folder: vscode.WorkspaceFolder,
-    uri: vscode.Uri,
-  ): Promise<void> => {
-    const path = vscode.workspace
-      .asRelativePath(uri, false)
-      .replaceAll("\\", "/");
-    try {
-      if ((await git.ignoredPaths(folder.uri.fsPath, [path])).has(path)) {
-        return;
-      }
-    } catch {
-      return;
-    }
+  const reconcileCreatedSource = async (uri: vscode.Uri): Promise<void> => {
     await service.reconcileCreatedSource(uri);
   };
 
@@ -115,51 +104,51 @@ export async function activate(
     ),
     vscode.window.onDidChangeVisibleTextEditors(() => decorations.refresh()),
     vscode.commands.registerCommand("codeReviewTracker.markPending", () =>
-      markActive(service, git, "pending"),
+      markActive(service, "pending"),
     ),
     vscode.commands.registerCommand("codeReviewTracker.markInReview", () =>
-      markActive(service, git, "inReview"),
+      markActive(service, "inReview"),
     ),
     vscode.commands.registerCommand("codeReviewTracker.markReviewed", () =>
-      markActive(service, git, "reviewed"),
+      markActive(service, "reviewed"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFilePending",
-      (uri?: vscode.Uri) => markFile(service, git, uri, "pending"),
+      (uri?: vscode.Uri) => markFile(service, uri, "pending"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFileInReview",
-      (uri?: vscode.Uri) => markFile(service, git, uri, "inReview"),
+      (uri?: vscode.Uri) => markFile(service, uri, "inReview"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFileReviewed",
-      (uri?: vscode.Uri) => markFile(service, git, uri, "reviewed"),
+      (uri?: vscode.Uri) => markFile(service, uri, "reviewed"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFolderPending",
-      (uri?: vscode.Uri) => markFolder(service, git, uri, "pending"),
+      (uri?: vscode.Uri) => markFolder(service, uri, "pending"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFolderInReview",
-      (uri?: vscode.Uri) => markFolder(service, git, uri, "inReview"),
+      (uri?: vscode.Uri) => markFolder(service, uri, "inReview"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.markFolderReviewed",
-      (uri?: vscode.Uri) => markFolder(service, git, uri, "reviewed"),
+      (uri?: vscode.Uri) => markFolder(service, uri, "reviewed"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.openReviewDiff",
       (uri?: vscode.Uri) => openReviewDiff(service, uri),
     ),
     vscode.commands.registerCommand("codeReviewTracker.setup", () =>
-      promptForInitialization(service, git, true),
+      promptForInitialization(service, ignoreRules, true),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.initializeReviewed",
-      () => initializeAll(service, git, "reviewed"),
+      () => initializeAll(service, ignoreRules, "reviewed"),
     ),
     vscode.commands.registerCommand("codeReviewTracker.initializePending", () =>
-      initializeAll(service, git, "pending"),
+      initializeAll(service, ignoreRules, "pending"),
     ),
     vscode.commands.registerCommand(
       "codeReviewTracker.sendSelectionToTerminal",
@@ -187,7 +176,7 @@ export async function activate(
       runLogged(
         log,
         "Source creation",
-        reconcileCreatedSource(folder, uri),
+        reconcileCreatedSource(uri),
       ),
     );
     const deletion = watcher.onDidDelete((uri) =>
@@ -197,7 +186,7 @@ export async function activate(
       new vscode.RelativePattern(folder, "**/.gitignore"),
     );
     const refreshIgnoredPaths = () =>
-      runLogged(log, "Git ignore refresh", refreshFolder(folder));
+      runLogged(log, "Ignore-rule refresh", refreshFolder(folder));
     context.subscriptions.push(
       watcher,
       creation,
@@ -212,7 +201,11 @@ export async function activate(
   for (const editor of vscode.window.visibleTextEditors) {
     await openDocumentInReviewView(service, editor.document);
   }
-  runLogged(log, "Initialization prompt", promptForInitialization(service, git));
+  runLogged(
+    log,
+    "Initialization prompt",
+    promptForInitialization(service, ignoreRules),
+  );
   decorations.refresh();
-  log.info("Code Review Tracker 0.5.1 activated.");
+  log.info("Code Review Tracker 0.5.3 activated.");
 }

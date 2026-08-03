@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 4,
+  "path": ".gitignore",
+  "file": {
+    "baseline": {
+      "file": "bc37d034bad564583790a46f19d807abfe519c5671395fd494d8cce506c42947.9dc25bd17a1862400f722af4fe60a756decd14092fe604606c1efa5a61c56550.gz",
+      "digest": "9dc25bd17a1862400f722af4fe60a756decd14092fe604606c1efa5a61c56550",
+      "codec": "gzip",
+      "size": 41,
+      "createdAt": "2026-08-03T00:54:52.392Z"
+    },
+    "current": {
+      "digest": "9dc25bd17a1862400f722af4fe60a756decd14092fe604606c1efa5a61c56550",
+      "modifiedAt": 1785096153429,
+      "size": 41,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-08-03T00:54:52.392Z"
+    },
+    "fileStatus": "reviewed",
+    "nextRevExtId": 1,
+    "lastReviewTime": "2026-08-03T00:54:52.392Z",
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "c5240a0ee6b64cedfce9d3487c4e2346f35c4825f75fd75374decc59d143867c",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "e6ea543dd61be09acaa27d5a0d59786c3c7d8cf9097bb6d1bdd7884cec088522",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "552c7fb597ea0dbca4132fb68e2433f9362fe013894b5320a10506ba5a9706a7",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "9ab353d34b9c6d3129f43ff30e07b4620de4e07e29fed83459430f4bc096861d",
+        "changeType": "unchanged",
+        "reviewStatus": "reviewed",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [],
+    "updatedAt": "2026-08-03T00:54:52.392Z"
+  }
+}

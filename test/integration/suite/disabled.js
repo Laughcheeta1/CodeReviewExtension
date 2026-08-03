@@ -40,6 +40,19 @@ async function run() {
   const extension = vscode.extensions.getExtension("local.code-review-tracker");
   assert.ok(extension, "the development extension must be available");
   await extension.activate();
+  const reviewerConfiguration = vscode.workspace.getConfiguration(
+    "codeReviewTracker",
+  );
+  await reviewerConfiguration.update(
+    "reviewerName",
+    "Contract Test Reviewer",
+    vscode.ConfigurationTarget.Global,
+  );
+  await reviewerConfiguration.update(
+    "reviewerEmail",
+    "contract@example.test",
+    vscode.ConfigurationTarget.Global,
+  );
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, "the disabled workspace must be available");
 

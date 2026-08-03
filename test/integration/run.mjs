@@ -137,6 +137,11 @@ async function createWorkspace({ initialized }) {
       "*.secret",
       "!allowed.secret",
       "/root-only.txt",
+      "open-fallback.txt",
+      "file-command-fallback.txt",
+      "line-command-fallback.txt",
+      "diff-fallback.txt",
+      "fallback-folder/*",
       "dynamic-ignored.txt",
       "dynamic-folder/",
       "external-ignored.txt",
@@ -145,6 +150,10 @@ async function createWorkspace({ initialized }) {
   );
   await mkdir(path.join(workspace, "ignored-folder"), { recursive: true });
   await mkdir(path.join(workspace, "nested"), { recursive: true });
+  await writeFile(
+    path.join(workspace, "nested", ".gitignore"),
+    ["nested-ignored.txt", "!nested-allowed.txt", ""].join("\n"),
+  );
   await mkdir(path.join(workspace, "dynamic-folder"), { recursive: true });
   await mkdir(path.join(workspace, "node_modules"), { recursive: true });
   await mkdir(path.join(workspace, ".git", "info"), { recursive: true });
@@ -165,6 +174,9 @@ async function createWorkspace({ initialized }) {
     tracked: "tracked.txt",
     untracked: "untracked.txt",
     nested: "nested/eligible.txt",
+    nestedIgnore: "nested/.gitignore",
+    nestedIgnored: "nested/nested-ignored.txt",
+    nestedAllowed: "nested/nested-allowed.txt",
     ignoredRoot: "ignored-root.txt",
     ignoredAfterActivation: "ignored-after-activation.txt",
     ignoredBeforeRestart: "ignored-before-restart.txt",
@@ -186,6 +198,8 @@ async function createWorkspace({ initialized }) {
     [files.tracked, "tracked\n"],
     [files.untracked, "untracked\n"],
     [files.nested, "nested eligible\n"],
+    [files.nestedIgnored, "nested ignored\n"],
+    [files.nestedAllowed, "nested allowed\n"],
     [files.ignoredRoot, "ignored root\n"],
     [files.ignoredNested, "ignored nested\n"],
     [files.ignoredAllowed, "explicitly allowed\n"],
@@ -237,9 +251,9 @@ async function createWorkspace({ initialized }) {
       files.ignoredAfterActivation,
       files.ignoredBeforeRestart,
       files.ignoredNested,
+      files.nestedIgnored,
       files.secret,
       files.forceAddedSecret,
-      files.infoExcluded,
       files.externalIgnored,
       files.dynamicIgnored,
       files.dynamicFolderFile,

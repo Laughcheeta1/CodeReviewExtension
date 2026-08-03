@@ -17,7 +17,7 @@
 - Treat user-observed initialization failures as an eligibility-path issue to trace end-to-end; untracked but non-ignored sources must remain eligible when the configured tracking scope includes them.
 - Git ignore rules are absolute exclusions for tracking: preserve them across setup, file-open, and every command-triggered automatic initialization path.
 - When lifecycle behavior is required for newly Git-tracked sources, refresh Git-derived eligibility at the event boundary and reconcile all existing tracked sources at extension activation rather than relying on a stale in-memory path set.
-- Use Git only for diff calculation and `.gitignore` evaluation unless the user explicitly requests Git-index-based behavior; file discovery and automatic metadata initialization must be driven by VS Code workspace events and enumeration.
+- Use Git only for diff calculation; `.gitignore` evaluation must be implemented by the extension itself, while file discovery and automatic metadata initialization remain driven by VS Code workspace events and enumeration.
 - Route every metadata-creating lifecycle event through one Git-ignore eligibility guard; testing startup enumeration alone is insufficient because save and refresh paths can bypass it.
 - Treat Git-ignore evaluation failures as a security-boundary failure: never convert an unavailable ignore check into an empty ignore set, and test both startup cleanup of already-tracked files that become ignored and interactions with force-added ignored files.
 - When startup initialization is reported as broken, trace the persisted enabled-state, workspace enumeration, and metadata commit path together; do not treat activation or discovery logs as proof that initialization completed.
@@ -30,3 +30,4 @@
 - During source refactors, preserve behavior with narrow modules and explicit dependency boundaries; run the full lifecycle contract after each extraction so modularity does not reintroduce ignored-file or disabled-state regressions.
 - Keep release/version constraints out of a workspace-behavior test contract when the user explicitly excludes release work from the task.
 - Before building a VSIX after a code change, manually increment the extension version in the manifest and keep any runtime version identifier in sync; verify the artifact filename and packaged manifest.
+- After completing any task, automatically update the extension version in the manifest and keep every runtime version identifier synchronized; package and verify a new VSIX when the task changes the extension.

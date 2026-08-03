@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { GitService } from "./git";
+import { GitIgnoreService } from "./git-ignore";
 import { ReviewService } from "./review-service";
 import type { TrackingTarget } from "./tracking";
 import { eligibleWorkspacePaths } from "./workspace-discovery";
@@ -14,7 +14,7 @@ import { errorMessage } from "./extension-utils";
  */
 export async function promptForInitialization(
   service: ReviewService,
-  git: GitService,
+  ignoreRules: GitIgnoreService,
   reconfigure = false,
 ): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
@@ -37,10 +37,12 @@ export async function promptForInitialization(
     if (choice !== (reconfigure ? "Set Up Tracking" : "Initialize")) {
       continue;
     }
-    const paths = await eligibleWorkspacePaths(folder, git);
-    if (paths === undefined) {
+    let paths: readonly string[];
+    try {
+      paths = await eligibleWorkspacePaths(folder, ignoreRules);
+    } catch (error) {
       void vscode.window.showWarningMessage(
-        "Git ignore rules could not be evaluated. Tracking was not initialized.",
+        `Ignore rules could not be evaluated for ${folder.name}. Tracking was not initialized. ${errorMessage(error)}`,
       );
       continue;
     }
