@@ -32,10 +32,13 @@ export class GitService {
     baseline: Uint8Array,
     current: Uint8Array,
   ): Promise<readonly RawGitHunk[]> {
+    const contentChanged = !sameBytes(baseline, current);
+    if (!contentChanged) {
+      return [];
+    }
     const directory = await mkdtemp(join(tmpdir(), "code-review-tracker-"));
     const before = join(directory, "baseline");
     const after = join(directory, "current");
-    const contentChanged = !sameBytes(baseline, current);
     try {  // RevExt: 31
       await Promise.all([
         writeFile(before, baseline),

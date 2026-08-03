@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import {
-  ignoredPathsFromFiles,
+  createWorkspaceIgnoreMatcher,
+  ignoredPathsFromMatcher,
+  type WorkspaceIgnoreMatcher,
   type IgnoreFile,
 } from "./ignore-matcher";
 
@@ -13,9 +15,9 @@ import {
  * paths that pass through symbolic links.
  */
 export class GitIgnoreService {
-  private readonly filesByWorkspace = new Map<
+  private readonly matchersByWorkspace = new Map<
     string,
-    readonly IgnoreFile[]
+    WorkspaceIgnoreMatcher
   >();
   private readonly unavailableWorkspaces = new Set<string>();
   private readonly failuresByWorkspace = new Map<string, unknown>();
@@ -27,7 +29,8 @@ export class GitIgnoreService {
     const previous = this.refreshes.get(key) ?? Promise.resolve();
     const current = previous.catch(() => undefined).then(async () => {
       try {
-        this.filesByWorkspace.set(key, await this.readIgnoreFiles(folder));
+        const files = await this.readIgnoreFiles(folder);
+        this.matchersByWorkspace.set(key, createWorkspaceIgnoreMatcher(files));
         this.unavailableWorkspaces.delete(key);
         this.failuresByWorkspace.delete(key);
       } catch (error) {
@@ -56,11 +59,12 @@ export class GitIgnoreService {
       await activeRefresh;
     }
     this.throwIfUnavailable(key);
-    let files = this.filesByWorkspace.get(key);
-    if (files === undefined) {
+    let matcher = this.matchersByWorkspace.get(key);
+    if (matcher === undefined) {
       try {
-        files = await this.readIgnoreFiles(folder);
-        this.filesByWorkspace.set(key, files);
+        const files = await this.readIgnoreFiles(folder);
+        matcher = createWorkspaceIgnoreMatcher(files);
+        this.matchersByWorkspace.set(key, matcher);
       } catch (error) {
         this.unavailableWorkspaces.add(key);
         this.failuresByWorkspace.set(key, error);
@@ -68,7 +72,7 @@ export class GitIgnoreService {
       }
     }
     try {
-      return ignoredPathsFromFiles(paths, files);
+      return ignoredPathsFromMatcher(paths, matcher);
     } catch (error) {
       const failure = new Error(
         `Unable to evaluate workspace .gitignore rules for ${folder.uri.fsPath}: ${describeError(error)}`,
@@ -95,7 +99,7 @@ export class GitIgnoreService {
   ): Promise<readonly IgnoreFile[]> {
     const excluded = new vscode.RelativePattern(
       folder,
-      "**/{.git,node_modules,.vscode/code-review-tracker}/**",
+      "**/{.git,node_modules,.vscode-test,.vscode/code-review-tracker}/**",
     );
     const uris = await vscode.workspace.findFiles(
       new vscode.RelativePattern(folder, "**/.gitignore"),

@@ -2,7 +2,11 @@ import * as vscode from "vscode";
 import { GitService } from "./git";
 import { PersistentStore } from "./store";
 import { revExtEdits } from "./revext";
-import { diffWithProgress, readStableSource } from "./source-io";
+import {
+  diffWithProgress,
+  readStableSource,
+  type PreparedSource,
+} from "./source-io";
 import { now } from "./review-service-utils";
 
 export interface RevExtAnnotationContext {
@@ -16,6 +20,7 @@ export interface RevExtAnnotationContext {
     uri: vscode.Uri,
     forceDigest: boolean,
     createMissing?: boolean,
+    prepared?: PreparedSource,
   ) => Promise<boolean>;
 }
 
@@ -36,10 +41,11 @@ export async function recomputeSavedDocument(
   if (existing === undefined) {
     return context.recompute(document.uri, true, true);
   }
-  const { bytes } = await readStableSource(
+  const prepared = await readStableSource(
     document.uri,
     context.maxSize(),
   );
+  const { bytes } = prepared;
   const baseline = await store.loadBaseline(existing, context.maxSize());
   const hunks = await diffWithProgress(
     context.git,
@@ -67,7 +73,10 @@ export async function recomputeSavedDocument(
     existing.nextRevExtId,
   );
   if (annotation.edits.length === 0) {
-    return context.recompute(document.uri, true, true);
+    return context.recompute(document.uri, true, true, {
+      ...prepared,
+      rawHunks: hunks,
+    });
   }
   const edit = new vscode.WorkspaceEdit();
   for (const change of annotation.edits) {

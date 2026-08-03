@@ -22,6 +22,8 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
+const EXTENSION_VERSION = "0.5.4";
+
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
   context: vscode.ExtensionContext,
@@ -45,6 +47,7 @@ export async function activate(
   const refreshFolder = async (
     folder: vscode.WorkspaceFolder,
     force = false,
+    reconcile = true,
   ): Promise<void> => {
     try {
       const eligible = await eligibleWorkspacePaths(folder, ignoreRules);
@@ -56,18 +59,22 @@ export async function activate(
       return;
     }
     await service.cleanupIgnoredSources(folder);
-    await service.reconcileExternalChanges(folder, force);
+    if (reconcile) {
+      await service.reconcileExternalChanges(folder, force);
+    }
   };
   const reconcileCreatedSource = async (uri: vscode.Uri): Promise<void> => {
     await service.reconcileCreatedSource(uri);
   };
 
   context.subscriptions.push(service);
-  for (const folder of vscode.workspace.workspaceFolders) {
-    await service.cleanupMissingSources(folder);
-    await refreshFolder(folder);
-    await service.initializeDiscoveredSources(folder);
-  }
+  await Promise.all(
+    vscode.workspace.workspaceFolders.map(async (folder) => {
+      await service.cleanupMissingSources(folder);
+      await refreshFolder(folder);
+      await service.initializeDiscoveredSources(folder);
+    }),
+  );
 
   const decorations = new ReviewDecorations(service);
   const tree = new ReviewTree(service);
@@ -185,8 +192,18 @@ export async function activate(
     const gitIgnoreWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(folder, "**/.gitignore"),
     );
-    const refreshIgnoredPaths = () =>
-      runLogged(log, "Ignore-rule refresh", refreshFolder(folder));
+    let ignoreRefresh: Promise<void> | undefined;
+    const refreshIgnoredPaths = () => {
+      if (ignoreRefresh === undefined) {
+        ignoreRefresh = (async () => {
+          await refreshFolder(folder, false, false);
+          await service.initializeDiscoveredSources(folder);
+        })().finally(() => {
+          ignoreRefresh = undefined;
+        });
+      }
+      runLogged(log, "Ignore-rule refresh", ignoreRefresh);
+    };
     context.subscriptions.push(
       watcher,
       creation,
@@ -207,5 +224,7 @@ export async function activate(
     promptForInitialization(service, ignoreRules),
   );
   decorations.refresh();
-  log.info("Code Review Tracker 0.5.3 activated.");
+  log.info(
+    `Code Review Tracker ${EXTENSION_VERSION} activated.`,
+  );
 }

@@ -21,6 +21,7 @@ const INITIALIZATION_FILE = "initialization.json";
 export class PersistentStore {
   private readonly summaries = new Map<string, FileSummary>();
   private readonly cache = new Map<string, FileRecord | undefined>();
+  private readonly loadTails = new Map<string, Promise<FileRecord | undefined>>();
   private readonly writeTails = new Map<string, Promise<void>>();
   private readonly directoryUri: vscode.Uri;
   private readonly snapshotsUri: vscode.Uri;
@@ -151,6 +152,21 @@ export class PersistentStore {
     if (this.cache.has(path)) {  // RevExt: 58
       return this.peek(path);
     }  // RevExt: 40
+    const previous = this.loadTails.get(path);
+    if (previous !== undefined) {
+      return previous;
+    }
+    const current = this.loadUncached(path);
+    this.loadTails.set(path, current);
+    try {
+      return await current;
+    } finally {
+      if (this.loadTails.get(path) === current) {
+        this.loadTails.delete(path);
+      }
+    }
+  }
+  private async loadUncached(path: string): Promise<FileRecord | undefined> {
     try {  // RevExt: 59
       const bytes = await vscode.workspace.fs.readFile(this.fileSystem.fileUri(path));  // RevExt: 70
       const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));  // RevExt: 72
@@ -188,7 +204,9 @@ export class PersistentStore {
   ): Promise<void> {  // RevExt: 126
     const normalized = { ...file, fileStatus: fileStatus(file) };
     await this.enqueue(path, async () => {  // RevExt: 129
-      const previous = await this.loadDirect(path);
+      const previous = this.cache.has(path)
+        ? this.cache.get(path)
+        : await this.loadDirect(path);
       if (baselineBytes !== undefined) {
         await this.fileSystem.writeSnapshot(normalized, baselineBytes);
       }  // RevExt: 80
@@ -253,6 +271,7 @@ export class PersistentStore {
     }  // RevExt: 43
     this.summaries.clear();
     this.cache.clear();
+    this.loadTails.clear();
     this.writeTails.clear();
     if (initializationConfiguration !== undefined) {
       await this.fileSystem.writeInitialization(initializationConfiguration);
@@ -289,18 +308,18 @@ export class PersistentStore {
       return false;
     }  // RevExt: 44
     let valid = true;
-    for (const [name, type] of entries) {  // RevExt: 171
+    await Promise.all(entries.map(async ([name, type]) => {  // RevExt: 171
       if (name === INITIALIZATION_FILE) {
-        continue;  // RevExt: 231
+        return;  // RevExt: 231
       }  // RevExt: 221
       if ((type & vscode.FileType.File) !== 0 && name.includes(".tmp-")) {
         await this.fileSystem.deleteTemporary(
           vscode.Uri.joinPath(this.directoryUri, name),
         );  // RevExt: 150
-        continue;  // RevExt: 173
+        return;  // RevExt: 173
       }  // RevExt: 88
       if ((type & vscode.FileType.File) === 0 || !name.endsWith(".json")) {
-        continue;  // RevExt: 174
+        return;  // RevExt: 174
       }  // RevExt: 89
       try {  // RevExt: 142
         const metadata = vscode.Uri.joinPath(this.directoryUri, name);
@@ -314,7 +333,7 @@ export class PersistentStore {
         valid = false;
         this.log.warn(`Ignoring metadata file ${name}: ${String(error)}`);
       }  // RevExt: 90
-    }  // RevExt: 45
+    }));  // RevExt: 45
     return valid;
   }  // RevExt: 28
   private async cleanupSnapshots(): Promise<void> {

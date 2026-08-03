@@ -15,7 +15,7 @@ export async function eligibleWorkspacePaths(
 ): Promise<readonly string[]> {
   const excluded = new vscode.RelativePattern(
     folder,
-    "**/{.git,node_modules,.vscode/code-review-tracker}/**",
+    "**/{.git,node_modules,.vscode-test,.vscode/code-review-tracker}/**",
   );
   const uris = await vscode.workspace.findFiles(
     new vscode.RelativePattern(folder, "**/*"),

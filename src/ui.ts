@@ -26,6 +26,9 @@ export class ReviewDecorations implements vscode.Disposable {
   });
   private readonly changeSubscription: vscode.Disposable;
   private readonly documentSubscription: vscode.Disposable;
+  private refreshScheduled = false;
+  private refreshEverything = false;
+  private readonly pendingDocuments = new Set<string>();
   constructor(private readonly service: ReviewService) {  // RevExt: 33
     this.types = {
       pending: vscode.window.createTextEditorDecorationType({
@@ -42,18 +45,40 @@ export class ReviewDecorations implements vscode.Disposable {
       }),  // RevExt: 42
     };  // RevExt: 43
     this.changeSubscription = service.onDidChange(() => this.refresh());
-    this.documentSubscription = vscode.workspace.onDidChangeTextDocument(() =>
-      this.refresh(),
+    this.documentSubscription = vscode.workspace.onDidChangeTextDocument(
+      ({ document }) => this.refreshDocument(document),
     );  // RevExt: 46
   }  // RevExt: 15
   refresh(): void {
-    void this.refreshVisible();
+    this.refreshEverything = true;
+    this.scheduleRefresh();
   }  // RevExt: 16
-  private refreshVisible(): void {
+  private refreshDocument(document: vscode.TextDocument): void {
+    this.pendingDocuments.add(document.uri.toString());
+    this.scheduleRefresh();
+  }
+  private scheduleRefresh(): void {
+    if (this.refreshScheduled) {
+      return;
+    }
+    this.refreshScheduled = true;
+    queueMicrotask(() => {
+      this.refreshScheduled = false;
+      const refreshEverything = this.refreshEverything;
+      this.refreshEverything = false;
+      const documents = new Set(this.pendingDocuments);
+      this.pendingDocuments.clear();
+      this.refreshVisible(refreshEverything ? undefined : documents);
+    });
+  }
+  private refreshVisible(documentKeys?: ReadonlySet<string>): void {
     for (const editor of vscode.window.visibleTextEditors) {
-      for (const type of Object.values(this.types)) {
-        editor.setDecorations(type, []);
-      }  // RevExt: 49
+      if (
+        documentKeys !== undefined &&
+        !documentKeys.has(editor.document.uri.toString())
+      ) {
+        continue;
+      }
       editor.setDecorations(this.revExtType, revExtDecorations(editor.document));
       const identity = this.service.parseBaselineUri(editor.document.uri);
       const source = identity?.source ?? editor.document.uri;
@@ -61,15 +86,12 @@ export class ReviewDecorations implements vscode.Disposable {
         void this.service.ensureDocument(editor.document);
       }  // RevExt: 50
       const file = this.service.file(source);
-      if (file === undefined) {
-        continue;
-      }  // RevExt: 51
       const options: Record<ReviewStatus, vscode.DecorationOptions[]> = {
         pending: [],
         inReview: [],
         reviewed: [],
       };  // RevExt: 57
-      if (identity === undefined) {
+      if (file !== undefined && identity === undefined) {
         for (const line of file.currentLines.filter(
           (line) => line.changeType !== "unchanged",
         )) {
@@ -86,6 +108,8 @@ export class ReviewDecorations implements vscode.Disposable {
           );  // RevExt: 71
         }  // RevExt: 73
       } else if (
+        file !== undefined &&
+        identity !== undefined &&
         identity.baselineDigest === file.baseline.digest &&
         identity.currentDigest === file.current.digest
       ) {
@@ -120,12 +144,13 @@ function revExtDecorations(
 ): readonly vscode.DecorationOptions[] {
   const result: vscode.DecorationOptions[] = [];
   for (let line = 0; line < document.lineCount; line += 1) {
-    const start = revExtMarkerStart(document.lineAt(line).text, document.languageId);
+    const text = document.lineAt(line).text;
+    const start = revExtMarkerStart(text, document.languageId);
     if (start === undefined) {
       continue;
     }  // RevExt: 77
     result.push({
-      range: new vscode.Range(line, start, line, document.lineAt(line).text.length),
+      range: new vscode.Range(line, start, line, text.length),
     });  // RevExt: 93
   }  // RevExt: 19
   return result;

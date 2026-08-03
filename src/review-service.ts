@@ -23,6 +23,7 @@ import {
   createRecord,
   diffWithProgress,
   readStableSource,
+  type PreparedSource,
 } from "./source-io";
 import {
   annotatePendingDocument as annotatePendingSource,
@@ -48,7 +49,13 @@ const BASELINE_SCHEME = "code-review-baseline";
 export class ReviewService implements vscode.Disposable {
   private readonly stores = new Map<string, PersistentStore>();
   private readonly eligiblePaths = new Map<string, Set<string>>();
+  private readonly discoveredPaths = new Map<string, readonly string[]>();
+  private readonly eligibilityRefreshes = new Map<
+    string,
+    Promise<readonly string[] | undefined>
+  >();
   private readonly sourceTails = new Map<string, Promise<void>>();
+  private readonly ensureTails = new Map<string, Promise<void>>();
   private readonly initializingFolders = new Set<string>();
   private readonly internalSaves = new Set<string>();
   private readonly changedEmitter = new vscode.EventEmitter<
@@ -64,11 +71,11 @@ export class ReviewService implements vscode.Disposable {
   ) {}
 // RevExt: 2
   async initialize(): Promise<void> {
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    await Promise.all((vscode.workspace.workspaceFolders ?? []).map(async (folder) => {
       const store = new PersistentStore(folder, this.log);
       await store.initialize();
       this.stores.set(folder.uri.toString(), store);
-    }  // RevExt: 12
+    }));  // RevExt: 12
   }  // RevExt: 73
   hasMetadata(folder: vscode.WorkspaceFolder): boolean {
     return this.stores.get(folder.uri.toString())?.hasMetadata ?? false;
@@ -100,7 +107,11 @@ export class ReviewService implements vscode.Disposable {
   ): void {
     const key = folder.uri.toString();
     const store = this.stores.get(key);
-    const next = new Set(paths.filter((path) => store?.tracksPath(path)));
+    const discovered = [...paths];
+    this.discoveredPaths.set(key, discovered);
+    const next = new Set(
+      discovered.filter((path) => store?.tracksPath(path)),
+    );
     const previous = this.eligiblePaths.get(key);
     this.eligiblePaths.set(key, next);
     if (  // RevExt: 114
@@ -142,10 +153,7 @@ export class ReviewService implements vscode.Disposable {
     return store.peek(path)?.fileStatus ?? store.summary(path)?.status;
   }  // RevExt: 81
   async ensureDocument(document: vscode.TextDocument): Promise<void> {
-    if (
-      !this.isTrackable(document) ||
-      !(await this.isEligibleSource(document.uri))
-    ) {
+    if (!this.isTrackable(document)) {
       return;  // RevExt: 162
     }  // RevExt: 16
     const path = this.relativePath(document.uri);  // RevExt: 175
@@ -153,21 +161,43 @@ export class ReviewService implements vscode.Disposable {
     if (path === undefined || store === undefined || store.hasLoaded(path)) {
       return;  // RevExt: 163
     }  // RevExt: 17
-    try {  // RevExt: 181
-      await this.withSource(document.uri, async () => {
-        if (store.hasLoaded(path)) {
-          return;
-        }  // RevExt: 187
-        await store.load(path);
-        this.changedEmitter.fire(document.uri);
-      });  // RevExt: 192
-    } catch {
-      /* The store logged read failures; initialization intentionally blocks this load. */
-    }  // RevExt: 18
+    const key = document.uri.toString();
+    const previous = this.ensureTails.get(key);
+    if (previous !== undefined) {
+      await previous;
+      return;
+    }
+    const current = (async (): Promise<void> => {
+      if (!(await this.isEligibleSource(document.uri))) {
+        return;
+      }
+      try {  // RevExt: 181
+        await this.withSource(document.uri, async () => {
+          if (store.hasLoaded(path)) {
+            return;
+          }  // RevExt: 187
+          await store.load(path);
+          this.changedEmitter.fire(document.uri);
+        });  // RevExt: 192
+      } catch {
+        /* The store logged read failures; initialization intentionally blocks this load. */
+      }
+    })();
+    this.ensureTails.set(key, current);
+    try {
+      await current;
+    } finally {
+      if (this.ensureTails.get(key) === current) {
+        this.ensureTails.delete(key);
+      }
+    }
   }  // RevExt: 82
   async initializeOpenedDocument(document: vscode.TextDocument): Promise<void> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (folder === undefined) {
+      return;
+    }
+    if (this.initializationState(folder) !== "initialized") {
       return;
     }
     await this.refreshEligiblePaths(folder);
@@ -192,10 +222,11 @@ export class ReviewService implements vscode.Disposable {
       eligible.map((path) => ({ kind: "file" as const, path })),
     );
     this.setEligiblePaths(folder, eligible);
+    const paths = eligible.filter((path) => store.summary(path) === undefined);
     let initialized = 0;
-    for (const path of eligible) {
+    for (const path of paths) {
       const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-      if (await this.withSource(uri, () => this.recompute(uri, true, true))) {
+      if (await this.withSource(uri, () => this.recompute(uri, false, true))) {
         initialized += 1;
       }
     }
@@ -220,7 +251,10 @@ export class ReviewService implements vscode.Disposable {
     ) {
       return false;
     }
-    const eligible = await this.refreshEligiblePaths(folder);
+    let eligible = await this.refreshEligiblePaths(folder);
+    if (eligible !== undefined && !eligible.includes(path)) {
+      eligible = await this.refreshEligiblePaths(folder, true);
+    }
     if (eligible === undefined || !eligible.includes(path)) {
       return false;
     }
@@ -233,7 +267,7 @@ export class ReviewService implements vscode.Disposable {
       return false;
     }
     const initialized = await this.withSource(uri, () =>
-      this.recompute(uri, true, true),
+      this.recompute(uri, false, true),
     );
     if (initialized) {
       this.log.info(`Initialized review metadata for opened file ${path}.`);
@@ -264,32 +298,48 @@ export class ReviewService implements vscode.Disposable {
       async (progress) => {
         let completed = 0;
         progress.report({ message: `0/${paths.size}` });
-        for (const path of paths) {
-          const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-          try {  // RevExt: 237
-            if (
-              await this.withSource(uri, () => this.recompute(uri, force, true))
-            ) {
-              changed += 1;
-            }  // RevExt: 188
-          } catch (error) {
-            if (!isFileNotFound(error)) {
-              this.log.warn(
-                `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
-              );  // RevExt: 455
-            } else {
-              if (eligible?.delete(path)) {
-                hidden += 1;
-              }
-            }  // RevExt: 189
-          } finally {
-            completed += 1;
-            progress.report({
-              increment: progressIncrement(paths.size),
-              message: `${completed}/${paths.size}`,
-            });
-          }  // RevExt: 214
-        }  // RevExt: 21
+        const pathList = [...paths];
+        let nextIndex = 0;
+        const worker = async (): Promise<void> => {
+          while (true) {
+            const index = nextIndex;
+            nextIndex += 1;
+            const path = pathList[index];
+            if (path === undefined) {
+              return;
+            }
+            const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+            try {  // RevExt: 237
+              if (
+                await this.withSource(uri, () => this.recompute(uri, force, true))
+              ) {
+                changed += 1;
+              }  // RevExt: 188
+            } catch (error) {
+              if (!isFileNotFound(error)) {
+                this.log.warn(
+                  `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
+                );  // RevExt: 455
+              } else {
+                if (eligible?.delete(path)) {
+                  hidden += 1;
+                }
+              }  // RevExt: 189
+            } finally {
+              completed += 1;
+              progress.report({
+                increment: progressIncrement(paths.size),
+                message: `${completed}/${paths.size}`,
+              });
+            }  // RevExt: 214
+          }
+        };
+        await Promise.all(
+          Array.from(
+            { length: Math.min(4, pathList.length) },
+            () => worker(),
+          ),
+        );
       },  // RevExt: 453
     );  // RevExt: 447
     if (changed > 0 || hidden > 0) {
@@ -358,18 +408,16 @@ export class ReviewService implements vscode.Disposable {
       path === undefined ||  // RevExt: 251
       store === undefined ||  // RevExt: 253
       folder === undefined ||
-      store.initializationState !== "initialized"
+      store.initializationState !== "initialized" ||
+      store.owns(uri) ||
+      isExcludedPath(path)
     ) {  // RevExt: 122
       return;  // RevExt: 165
     }  // RevExt: 23
-    const eligible = await this.refreshEligiblePaths(folder);
+    const eligible = await this.refreshEligiblePaths(folder, true);
     if (eligible === undefined || !eligible.includes(path)) {
       return;
     }
-    const stat = await vscode.workspace.fs.stat(uri);  // RevExt: 255
-    if ((stat.type & vscode.FileType.File) === 0) {
-      return;  // RevExt: 166
-    }  // RevExt: 24
     if (!(await this.initializeMissingSource(uri))) {
       return;
     }
@@ -390,11 +438,15 @@ export class ReviewService implements vscode.Disposable {
     if (  // RevExt: 116
       store === undefined ||  // RevExt: 254
       path === undefined ||  // RevExt: 252
-      folder === undefined
+      folder === undefined ||
+      store.initializationState !== "initialized"
     ) {  // RevExt: 123
       return;  // RevExt: 169
     }  // RevExt: 28
-    const eligible = await this.refreshEligiblePaths(folder);
+    let eligible = await this.refreshEligiblePaths(folder);
+    if (eligible !== undefined && !eligible.includes(path)) {
+      eligible = await this.refreshEligiblePaths(folder, true);
+    }
     if (eligible === undefined || !eligible.includes(path)) {
       return;
     }
@@ -546,7 +598,7 @@ export class ReviewService implements vscode.Disposable {
       throw new Error("Invalid baseline URI");
     }  // RevExt: 36
     return this.withSource(identity.source, async () => {
-      const file = await this.requireFresh(identity.source, identity);
+      const file = await this.requireFresh(identity.source, identity, false);
       const store = this.storeFor(identity.source);
       if (store === undefined) {  // RevExt: 278
         throw new Error("Baseline workspace is unavailable");
@@ -568,7 +620,10 @@ export class ReviewService implements vscode.Disposable {
     if (folder === undefined || path === undefined) {
       return undefined;
     }
-    const eligible = await this.refreshEligiblePaths(folder);
+    let eligible = await this.refreshEligiblePaths(folder);
+    if (eligible !== undefined && !eligible.includes(path)) {
+      eligible = await this.refreshEligiblePaths(folder, true);
+    }
     if (eligible === undefined || !eligible.includes(path)) {
       return undefined;
     }
@@ -577,7 +632,7 @@ export class ReviewService implements vscode.Disposable {
       if (this.dirtyDocument(source) !== undefined) {  // RevExt: 282
         throw new Error("Save the file before opening its review diff.");
       }  // RevExt: 217
-      await this.recompute(source, true);  // RevExt: 285
+      await this.recompute(source, false);  // RevExt: 285
       const store = this.storeFor(source);
       const file = await store?.load(path);
       return file === undefined
@@ -677,6 +732,7 @@ export class ReviewService implements vscode.Disposable {
     uri: vscode.Uri,  // RevExt: 317
     forceDigest: boolean,
     createMissing = false,
+    prepared?: PreparedSource,
   ): Promise<boolean> {  // RevExt: 293
     // Re-check the current ignore-rule snapshot at the final recomputation
     // boundary. All callers also perform an eligibility check, but this guard
@@ -717,14 +773,22 @@ export class ReviewService implements vscode.Disposable {
       );  // RevExt: 249
       return true;  // RevExt: 336
     }  // RevExt: 41
-    const stat = await vscode.workspace.fs.stat(uri);  // RevExt: 256
-    if (  // RevExt: 117
-      !forceDigest &&
-      !sourceMayHaveChanged(stat.mtime, stat.size, existing.current)
-    ) {  // RevExt: 124
-      return false;  // RevExt: 321
+    let initialStat: vscode.FileStat | undefined;
+    if (prepared === undefined) {
+      initialStat = await vscode.workspace.fs.stat(uri);  // RevExt: 256
+      if (
+        !forceDigest &&
+        !sourceMayHaveChanged(
+          initialStat.mtime,
+          initialStat.size,
+          existing.current,
+        )
+      ) {  // RevExt: 124
+        return false;  // RevExt: 321
+      }
     }  // RevExt: 42
-    const { bytes, source } = await readStableSource(uri, this.maxSize());
+    const { bytes, source } =
+      prepared ?? (await readStableSource(uri, this.maxSize(), initialStat));
     const digest = digestBytes(bytes);
     if (digest === existing.current.digest) {
       if (  // RevExt: 338
@@ -744,12 +808,14 @@ export class ReviewService implements vscode.Disposable {
       return true;  // RevExt: 337
     }  // RevExt: 43
     const baseline = await store.loadBaseline(existing, this.maxSize());  // RevExt: 347
-    const rawHunks = await diffWithProgress(
-      this.git,
-      baseline,
-      bytes,
-      this.relativePath(uri) ?? uri.fsPath,
-    );
+    const rawHunks =
+      prepared?.rawHunks ??
+      (await diffWithProgress(
+        this.git,
+        baseline,
+        bytes,
+        this.relativePath(uri) ?? uri.fsPath,
+      ));
     const diff = buildDiffRecords(baseline, bytes, rawHunks, existing);
     if (!(await this.isEligibleSource(uri))) {
       return false;
@@ -783,15 +849,21 @@ export class ReviewService implements vscode.Disposable {
       isEligibleSource: (uri) => this.isEligibleSource(uri),
       relativePath: (uri) => this.relativePath(uri),
       storeFor: (uri) => this.storeFor(uri),
-      recompute: (uri, forceDigest, createMissing) =>
-        this.recompute(uri, forceDigest, createMissing),
+      recompute: (uri, forceDigest, createMissing, prepared) =>
+        this.recompute(uri, forceDigest, createMissing, prepared),
     };
   }
   private async requireFresh(
     source: vscode.Uri,
     identity?: BaselineIdentity,
+    forceDigest = true,
   ): Promise<FileRecord> {
-    return requireFreshMutation(this.mutationContext(), source, identity);
+    return requireFreshMutation(
+      this.mutationContext(),
+      source,
+      identity,
+      forceDigest,
+    );
   }
   private async applyReview(
     source: vscode.Uri,
@@ -837,7 +909,8 @@ export class ReviewService implements vscode.Disposable {
         ),
       initializePendingFile: (uri) => this.initializePendingFile(uri),
       storeFor: (uri) => this.storeFor(uri),
-      refreshEligiblePaths: (folder) => this.refreshEligiblePaths(folder),
+      refreshEligiblePaths: (folder, force) =>
+        this.refreshEligiblePaths(folder, force),
     };
   }
   private mutationContext(): ReviewMutationContext {
@@ -864,16 +937,38 @@ export class ReviewService implements vscode.Disposable {
   }  // RevExt: 103
   private async refreshEligiblePaths(
     folder: vscode.WorkspaceFolder,
+    force = false,
   ): Promise<readonly string[] | undefined> {
+    const key = folder.uri.toString();
+    if (!force) {
+      const cached = this.discoveredPaths.get(key);
+      if (cached !== undefined) {
+        return cached;
+      }
+    }
+    const active = this.eligibilityRefreshes.get(key);
+    if (active !== undefined) {
+      return active;
+    }
+    const current = (async (): Promise<readonly string[] | undefined> => {
+      try {
+        const eligible = await eligibleWorkspacePaths(folder, this.ignoreRules);
+        this.setEligiblePaths(folder, eligible);
+        return eligible;
+      } catch (error) {
+        this.log.warn(
+          `Could not refresh ignore-rule eligibility for ${folder.uri.fsPath}: ${errorMessage(error)}`,
+        );
+        return undefined;
+      }
+    })();
+    this.eligibilityRefreshes.set(key, current);
     try {
-      const eligible = await eligibleWorkspacePaths(folder, this.ignoreRules);
-      this.setEligiblePaths(folder, eligible);
-      return eligible;
-    } catch (error) {
-      this.log.warn(
-        `Could not refresh ignore-rule eligibility for ${folder.uri.fsPath}: ${errorMessage(error)}`,
-      );
-      return undefined;
+      return await current;
+    } finally {
+      if (this.eligibilityRefreshes.get(key) === current) {
+        this.eligibilityRefreshes.delete(key);
+      }
     }
   }
   private async isEligibleSource(uri: vscode.Uri): Promise<boolean> {

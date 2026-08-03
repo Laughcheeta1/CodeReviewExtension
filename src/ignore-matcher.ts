@@ -16,6 +16,13 @@ export function ignoredPathsFromFiles(
   paths: readonly string[],
   files: readonly IgnoreFile[],
 ): ReadonlySet<string> {
+  return ignoredPathsFromMatcher(paths, createWorkspaceIgnoreMatcher(files));
+}
+
+/** Compile workspace ignore rules once so repeated path checks stay cheap. */
+export function createWorkspaceIgnoreMatcher(
+  files: readonly IgnoreFile[],
+): WorkspaceIgnoreMatcher {
   const scopes = files
     .map((file) => ({
       directory: normalizePath(file.directory),
@@ -25,7 +32,14 @@ export function ignoredPathsFromFiles(
       const depthDifference = pathDepth(left.directory) - pathDepth(right.directory);
       return depthDifference || left.directory.localeCompare(right.directory);
     });
-  const matcher = new WorkspaceIgnoreMatcher(scopes);
+  return new WorkspaceIgnoreMatcher(scopes);
+}
+
+/** Apply a previously compiled matcher to workspace-relative paths. */
+export function ignoredPathsFromMatcher(
+  paths: readonly string[],
+  matcher: WorkspaceIgnoreMatcher,
+): ReadonlySet<string> {
   const ignored = new Set<string>();
   for (const path of paths) {
     const normalized = normalizePath(path);
@@ -36,7 +50,7 @@ export function ignoredPathsFromFiles(
   return ignored;
 }
 
-class WorkspaceIgnoreMatcher {
+export class WorkspaceIgnoreMatcher {
   private readonly states = new Map<string, boolean>();
 
   constructor(private readonly scopes: readonly IgnoreScope[]) {}

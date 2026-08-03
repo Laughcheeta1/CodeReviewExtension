@@ -48,6 +48,8 @@ const lineComments = new Map<string, string>([
   ["asm", ";"],
   ["assembly", ";"],
 ]);
+const markerExpressions = new Map<string, RegExp>();
+const markerIdExpressions = new Map<string, RegExp>();
 // RevExt: 16
 export function revExtEdits(
   lines: readonly string[],  // RevExt: 26
@@ -144,9 +146,12 @@ function hasMarker(line: string, token: string): boolean {
 }  // RevExt: 8
 // RevExt: 20
 function markerId(line: string, token: string): number | undefined {
-  const match = new RegExp(`(?:${escape(token)})\\s+RevExt: ([1-9]\\d*)$`).exec(
-    line,
-  );  // RevExt: 68
+  let expression = markerIdExpressions.get(token);
+  if (expression === undefined) {
+    expression = new RegExp(`(?:${escape(token)})\\s+RevExt: ([1-9]\\d*)$`);
+    markerIdExpressions.set(token, expression);
+  }
+  const match = expression.exec(line);  // RevExt: 68
   return match === null ? undefined : Number(match[1]);
 }  // RevExt: 9
 // RevExt: 21
@@ -155,9 +160,15 @@ function withoutMarker(line: string, token: string): string {
 }  // RevExt: 10
 // RevExt: 22
 function markerExpression(token: string): RegExp {
-  return new RegExp(
+  const cached = markerExpressions.get(token);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const expression = new RegExp(
     `\\s{2}${escape(token)}\\s+RevExt: [1-9]\\d*$|^\\s*${escape(token)}\\s+RevExt: [1-9]\\d*$`,
   );  // RevExt: 69
+  markerExpressions.set(token, expression);
+  return expression;
 }  // RevExt: 11
 // RevExt: 23
 function escape(value: string): string {

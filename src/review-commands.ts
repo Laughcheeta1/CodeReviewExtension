@@ -5,6 +5,8 @@ import { ReviewService } from "./review-service";
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage } from "./extension-utils";
 
+const openingDocuments = new Map<string, Promise<void>>();
+
 export async function openReviewDiff(
   service: ReviewService,
   uri?: vscode.Uri,
@@ -38,7 +40,37 @@ export async function openReviewDiff(
   }
 }
 
-export async function openDocumentInReviewView(
+export function openDocumentInReviewView(
+  service: ReviewService,
+  document: vscode.TextDocument,
+): Promise<void> {
+  if (document.uri.scheme !== "file") {
+    return Promise.resolve();
+  }
+  const key = document.uri.toString();
+  const previous = openingDocuments.get(key);
+  if (previous !== undefined) {
+    return previous;
+  }
+  const operation = openDocumentInReviewViewImpl(service, document);
+  const current = operation.then(
+    () => {
+      if (openingDocuments.get(key) === current) {
+        openingDocuments.delete(key);
+      }
+    },
+    (error: unknown) => {
+      if (openingDocuments.get(key) === current) {
+        openingDocuments.delete(key);
+      }
+      throw error;
+    },
+  );
+  openingDocuments.set(key, current);
+  return current;
+}
+
+async function openDocumentInReviewViewImpl(
   service: ReviewService,
   document: vscode.TextDocument,
 ): Promise<void> {

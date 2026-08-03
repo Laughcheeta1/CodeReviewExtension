@@ -31,3 +31,4 @@
 - Keep release/version constraints out of a workspace-behavior test contract when the user explicitly excludes release work from the task.
 - Before building a VSIX after a code change, manually increment the extension version in the manifest and keep any runtime version identifier in sync; verify the artifact filename and packaged manifest.
 - After completing any task, automatically update the extension version in the manifest and keep every runtime version identifier synchronized; package and verify a new VSIX when the task changes the extension.
+- When the user limits an investigation to the current working tree, do not inspect Git history or prior revisions.

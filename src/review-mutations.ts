@@ -92,8 +92,9 @@ export async function requireFresh(
   context: ReviewMutationContext,
   source: vscode.Uri,
   identity?: BaselineIdentity,
+  forceDigest = true,
 ): Promise<FileRecord> {
-  await context.recompute(source, true);
+  await context.recompute(source, forceDigest);
   const path = context.relativePath(source);
   const file =
     path === undefined ? undefined : await context.storeFor(source)?.load(path);

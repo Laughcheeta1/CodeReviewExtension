@@ -38,6 +38,8 @@ export function isExcludedPath(path: string): boolean {
     path.startsWith(".git/") ||
     path === "node_modules" ||
     path.startsWith("node_modules/") ||
+    path === ".vscode-test" ||
+    path.startsWith(".vscode-test/") ||
     path === ".vscode/code-review-tracker" ||
     path.startsWith(".vscode/code-review-tracker/")
   );

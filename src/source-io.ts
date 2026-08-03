@@ -3,7 +3,6 @@ import {
   buildDiffRecords,
   digestBytes,
   fileStatus,
-  physicalLines,
   type FileRecord,
   type RawGitHunk,
   type SourceSnapshot,
@@ -12,13 +11,25 @@ import { GitService } from "./git";
 import { snapshotFileName } from "./storage-format";
 import { now } from "./review-service-utils";
 
+const decoder = new TextDecoder("utf-8", { fatal: true });
+
+export interface PreparedSource {
+  readonly bytes: Uint8Array;
+  readonly source: SourceSnapshot;
+  readonly rawHunks?: readonly RawGitHunk[];
+}
+
 /** Read a text source twice around its stat to avoid persisting a torn read. */
 export async function readStableSource(
   uri: vscode.Uri,
   maxSize: number,
-): Promise<{ bytes: Uint8Array; source: SourceSnapshot }> {
+  initialStat?: vscode.FileStat,
+): Promise<PreparedSource> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const before = await vscode.workspace.fs.stat(uri);
+    const before =
+      attempt === 0 && initialStat !== undefined
+        ? initialStat
+        : await vscode.workspace.fs.stat(uri);
     if (before.size > maxSize) {
       throw new Error("File exceeds the configured size limit");
     }
@@ -31,10 +42,10 @@ export async function readStableSource(
     ) {
       continue;
     }
+    decoder.decode(bytes);
     if (bytes.includes(0)) {
       throw new Error("Binary files are unsupported");
     }
-    physicalLines(bytes);
     return {
       bytes,
       source: { modifiedAt: after.mtime, size: after.size },
@@ -70,11 +81,13 @@ export async function createRecord(
   rawHunks?: readonly RawGitHunk[],
 ): Promise<FileRecord> {
   const baselineDigest = digestBytes(baseline);
+  const currentDigest = digestBytes(current);
   const generatedAt = now();
   const diff = buildDiffRecords(
     baseline,
     current,
-    rawHunks ?? (await git.diff(baseline, current)),
+    rawHunks ??
+      (baselineDigest === currentDigest ? [] : await git.diff(baseline, current)),
   );
   return {
     baseline: {
@@ -85,7 +98,7 @@ export async function createRecord(
       createdAt: generatedAt,
     },
     current: {
-      digest: digestBytes(current),
+      digest: currentDigest,
       ...source,
       gitAlgorithm: "myers",
       generatedAt,
