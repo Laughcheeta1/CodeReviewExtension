@@ -769,6 +769,7 @@ export class ReviewService implements vscode.Disposable {
     forceDigest: boolean,
     createMissing = false,
     prepared?: PreparedSource,
+    previous?: FileRecord,
   ): Promise<boolean> {  // RevExt: 293
     // Re-check the current ignore-rule snapshot at the final recomputation
     // boundary. All callers also perform an eligibility check, but this guard
@@ -781,7 +782,7 @@ export class ReviewService implements vscode.Disposable {
     if (path === undefined || store === undefined) {  // RevExt: 158
       return false;  // RevExt: 320
     }  // RevExt: 40
-    const existing = await store.load(path);  // RevExt: 328
+    const existing = previous ?? (await store.load(path));  // RevExt: 328
     if (existing === undefined) {  // RevExt: 330
       if (!createMissing) {
         return false;  // RevExt: 332
@@ -885,8 +886,20 @@ export class ReviewService implements vscode.Disposable {
       isEligibleSource: (uri) => this.isEligibleSource(uri),
       relativePath: (uri) => this.relativePath(uri),
       storeFor: (uri) => this.storeFor(uri),
-      recompute: (uri, forceDigest, createMissing, prepared) =>
-        this.recompute(uri, forceDigest, createMissing, prepared),
+      recompute: (
+        uri,
+        forceDigest,
+        createMissing,
+        prepared,
+        previous,
+      ) =>
+        this.recompute(
+          uri,
+          forceDigest,
+          createMissing,
+          prepared,
+          previous,
+        ),
     };
   }
   private migrationContext(): RevExtMigrationContext {

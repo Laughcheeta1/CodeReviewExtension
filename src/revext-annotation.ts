@@ -1,4 +1,8 @@
 import * as vscode from "vscode";
+import {
+  updateAddedLineDigests,
+  type FileRecord,
+} from "./domain";
 import { GitService } from "./git";
 import { PersistentStore } from "./store";
 import { revExtEdits } from "./revext";
@@ -7,7 +11,6 @@ import {
   readStableSource,
   type PreparedSource,
 } from "./source-io";
-import { now } from "./review-service-utils";
 
 export interface RevExtAnnotationContext {
   readonly git: GitService;
@@ -21,6 +24,7 @@ export interface RevExtAnnotationContext {
     forceDigest: boolean,
     createMissing?: boolean,
     prepared?: PreparedSource,
+    previous?: FileRecord,
   ) => Promise<boolean>;
 }
 
@@ -45,12 +49,12 @@ export async function recomputeSavedDocument(
     document.uri,
     context.maxSize(),
   );
-  const { bytes } = prepared;
+  const { bytes: beforeBytes } = prepared;
   const baseline = await store.loadBaseline(existing, context.maxSize());
   const hunks = await diffWithProgress(
     context.git,
     baseline,
-    bytes,
+    beforeBytes,
     context.relativePath(document.uri) ?? document.uri.fsPath,
   );
   const addedLines = new Set<number>();
@@ -94,20 +98,33 @@ export async function recomputeSavedDocument(
   } finally {
     context.internalSaves.delete(document.uri.toString());
   }
-  const changed = await context.recompute(document.uri, true, true);
-  const updated = await store.load(path);
-  if (
-    updated !== undefined &&
-    updated.nextRevExtId !== annotation.nextId &&
-    (await context.isEligibleSource(document.uri))
-  ) {
-    await store.commit(path, {
-      ...updated,
-      nextRevExtId: annotation.nextId,
-      updatedAt: now(),
-    });
+  if (!(await context.isEligibleSource(document.uri))) {
+    return false;
   }
-  return changed;
+  const annotated = await readStableSource(
+    document.uri,
+    context.maxSize(),
+  );
+  const annotatedHunks = await diffWithProgress(
+    context.git,
+    baseline,
+    annotated.bytes,
+    context.relativePath(document.uri) ?? document.uri.fsPath,
+  );
+  const previous = updateAddedLineDigests(
+    { ...existing, nextRevExtId: annotation.nextId },
+    beforeBytes,
+    annotated.bytes,
+    addedLines,
+    new Set(annotation.edits.map((change) => change.line)),
+  );
+  return context.recompute(
+    document.uri,
+    true,
+    true,
+    { ...annotated, rawHunks: annotatedHunks },
+    previous,
+  );
 }
 
 /** Add RevExt identity comments to every line when a file starts pending. */

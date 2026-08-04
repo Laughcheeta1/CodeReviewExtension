@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import ts from "typescript";
 import {
+  buildDiffRecords,
+  digestBytes,
+  updateAddedLineDigests,
+  type FileRecord,
+} from "../src/domain.ts";
+import {
   revExtEdits,
   revExtMarkerStart,
   revExtMigrationEdits,
@@ -21,6 +27,10 @@ function applyEdits(
     const suffix = byLine.get(index + 1);
     return suffix === undefined ? line : `${line}${suffix}`;
   });
+}
+
+function sourceBytes(lines: readonly string[]): Uint8Array {
+  return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
 
 function transpileJsx(lines: readonly string[], fileName: string): string {
@@ -412,6 +422,70 @@ test("preserves existing JSX marker identities when annotating duplicate peers",
       nextId: 12,
     },
   );
+});
+
+test("preserves reviewed duplicate decisions when save annotation changes digests", () => {
+  const baseline = new Uint8Array();
+  const originalBytes = sourceBytes(["repeat", "repeat"]);
+  const initialDiff = buildDiffRecords(
+    baseline,
+    originalBytes,
+    [{ oldStart: 0, oldCount: 0, newStart: 1, newCount: 2 }],
+  );
+  const previous: FileRecord = {
+    baseline: {
+      file: "snapshot.gz",
+      digest: digestBytes(baseline),
+      codec: "gzip",
+      size: 0,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    },
+    current: {
+      digest: digestBytes(originalBytes),
+      modifiedAt: 1,
+      size: originalBytes.byteLength,
+      gitAlgorithm: "myers",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    fileStatus: "reviewed",
+    ...initialDiff,
+    currentLines: initialDiff.currentLines.map((line) => ({
+      ...line,
+      reviewStatus: "reviewed",
+    })),
+    nextRevExtId: 1,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const beforeAnnotation = ["new line", "repeat", "repeat"];
+  const addedLines = new Set([1, 2, 3]);
+  const annotation = revExtEdits(
+    beforeAnnotation,
+    addedLines,
+    "typescript",
+    previous.nextRevExtId,
+  );
+  const afterAnnotation = applyEdits(beforeAnnotation, annotation.edits);
+  const afterBytes = sourceBytes(afterAnnotation);
+  const bridged = updateAddedLineDigests(
+    { ...previous, nextRevExtId: annotation.nextId },
+    sourceBytes(beforeAnnotation),
+    afterBytes,
+    addedLines,
+    new Set(annotation.edits.map((change) => change.line)),
+  );
+  const rebuilt = buildDiffRecords(
+    baseline,
+    afterBytes,
+    [{ oldStart: 0, oldCount: 0, newStart: 1, newCount: 3 }],
+    bridged,
+  );
+
+  assert.deepEqual(
+    rebuilt.currentLines.map((line) => line.reviewStatus),
+    ["pending", "reviewed", "reviewed"],
+  );
+  assert.match(afterAnnotation[1]!, /RevExt: 1/);
+  assert.match(afterAnnotation[2]!, /RevExt: 2/);
 });
 
 test("migrates only legacy markers that are in JSX children", () => {

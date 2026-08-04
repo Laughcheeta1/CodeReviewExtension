@@ -248,6 +248,68 @@ export function buildDiffRecords(
   currentLines.sort((a, b) => a.line - b.line);
   return { currentLines, deletedLines, hunks };
 }  // RevExt: 53
+
+/** Preserve added-line decisions across an internal suffix-only source rewrite. */
+export function updateAddedLineDigests(
+  previous: FileRecord,
+  beforeBytes: Uint8Array,
+  afterBytes: Uint8Array,
+  addedLines: ReadonlySet<number>,
+  updatedLines: ReadonlySet<number>,
+): FileRecord {
+  const before = physicalLines(beforeBytes);
+  const after = physicalLines(afterBytes);
+  const addedOccurrences = new Map<string, number>();
+  const occurrenceByLine = new Map<number, number>();
+  for (const lineNumber of [...addedLines].sort((a, b) => a - b)) {
+    const line = before[lineNumber - 1];
+    if (line === undefined) {
+      continue;
+    }
+    const occurrence = (addedOccurrences.get(line.digest) ?? 0) + 1;
+    addedOccurrences.set(line.digest, occurrence);
+    occurrenceByLine.set(lineNumber, occurrence);
+  }
+
+  const digestUpdates = new Map<string, string>();
+  for (const lineNumber of [...updatedLines].sort((a, b) => a - b)) {
+    if (!addedLines.has(lineNumber)) {
+      continue;
+    }
+    const beforeLine = before[lineNumber - 1];
+    const afterLine = after[lineNumber - 1];
+    const occurrence = occurrenceByLine.get(lineNumber);
+    if (
+      beforeLine === undefined ||
+      afterLine === undefined ||
+      occurrence === undefined
+    ) {
+      continue;
+    }
+    const matching = previous.currentLines.find(
+      (line) =>
+        line.changeType === "added" &&
+        line.digest === beforeLine.digest &&
+        line.occurrence === occurrence,
+    );
+    if (matching !== undefined) {
+      digestUpdates.set(
+        `${matching.digest}:${matching.occurrence}`,
+        afterLine.digest,
+      );
+    }
+  }
+  if (digestUpdates.size === 0) {
+    return previous;
+  }
+  return {
+    ...previous,
+    currentLines: previous.currentLines.map((line) => {
+      const digest = digestUpdates.get(`${line.digest}:${line.occurrence}`);
+      return digest === undefined ? line : { ...line, digest };
+    }),
+  };
+}
 // RevExt: 25
 /** The NUL separator is unambiguous because tracked source files reject NUL bytes. */
 export function baselineLineDigest(

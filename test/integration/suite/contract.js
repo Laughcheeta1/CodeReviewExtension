@@ -125,12 +125,12 @@ async function markFile(folder, relativePath, command) {
   );
 }
 
-async function markActive(folder, relativePath, command) {
+async function markActive(folder, relativePath, command, line = 0) {
   const document = await openSource(folder, relativePath);
   const editor = vscode.window.activeTextEditor;
   assert.ok(editor, "an editor must be active for line-level commands");
   assert.equal(editor.document.uri.toString(), document.uri.toString());
-  editor.selection = new vscode.Selection(0, 0, 0, 0);
+  editor.selection = new vscode.Selection(line, 0, line, 0);
   await vscode.commands.executeCommand(command);
 }
 
@@ -397,6 +397,70 @@ async function run() {
     await waitForMetadata(folder, createdEligible);
     expectedPaths.add(createdEligible);
     await settleForbidden(folder, [createdIgnored], watcher, "creation");
+
+    /*
+     * A save that adds RevExt markers is an internal source rewrite. It must
+     * preserve decisions made before the rewrite, even when a new line shifts
+     * the duplicate additions to different physical line numbers.
+     */
+    const markerSaveRegression = "marker-save-regression.ts";
+    await writeSource(folder, markerSaveRegression, "repeat\nrepeat\n");
+    await waitForMetadata(folder, markerSaveRegression);
+    await markActive(
+      folder,
+      markerSaveRegression,
+      "codeReviewTracker.markReviewed",
+      0,
+    );
+    const beforeMarkerSave = await assertStatus(
+      folder,
+      markerSaveRegression,
+      "inReview",
+    );
+    assert.equal(
+      beforeMarkerSave.file.currentLines[0]?.reviewStatus,
+      "reviewed",
+    );
+    assert.equal(
+      beforeMarkerSave.file.currentLines[1]?.reviewStatus,
+      "pending",
+    );
+    const markerDocument = await openSource(folder, markerSaveRegression);
+    const markerEdit = new vscode.WorkspaceEdit();
+    markerEdit.insert(
+      sourceUri(folder, markerSaveRegression),
+      new vscode.Position(0, 0),
+      "new line\n",
+    );
+    assert.equal(await vscode.workspace.applyEdit(markerEdit), true);
+    assert.equal(await markerDocument.save(), true);
+    const afterMarkerSave = await waitUntil(
+      "review decisions after RevExt marker save",
+      async () => {
+        const value = await assertMetadataPresent(folder, markerSaveRegression);
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        if (added.length !== 3) {
+          return false;
+        }
+        assert.deepEqual(
+          added.map((line) => line.reviewStatus),
+          ["pending", "reviewed", "pending"],
+        );
+        return value;
+      },
+    );
+    const markerSource = new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(sourceUri(folder, markerSaveRegression)),
+    );
+    assert.equal(
+      (markerSource.match(/RevExt:/g) ?? []).length,
+      2,
+      "save reconciliation must add each duplicate marker once",
+    );
+    assert.equal(afterMarkerSave.file.currentLines.length, 3);
+    expectedPaths.add(markerSaveRegression);
 
     // Repeat the same positive/negative pair through a real host filesystem
     // write. This proves that the extension's VS Code file watcher, rather
