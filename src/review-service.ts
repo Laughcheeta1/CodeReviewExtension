@@ -31,6 +31,10 @@ import {
   type RevExtAnnotationContext,
 } from "./revext-annotation";
 import {
+  migrateJsxDocument as migrateJsxSource,
+  type RevExtMigrationContext,
+} from "./revext-migration";
+import {
   applyReview as applyReviewMutation,
   initializePendingFile as initializePendingFileMutation,
   requireFresh as requireFreshMutation,
@@ -208,6 +212,38 @@ export class ReviewService implements vscode.Disposable {
   }
   async initializeSource(uri: vscode.Uri): Promise<void> {
     await this.initializeMissingSource(uri);
+  }
+  async migrateJsxMarkers(): Promise<number> {
+    let migrated = 0;
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const store = this.stores.get(folder.uri.toString());
+      if (store === undefined || store.initializationState !== "initialized") {
+        continue;
+      }
+      for (const path of [...store.paths].sort()) {
+        if (!/\.(?:jsx|tsx)$/i.test(path)) {
+          continue;
+        }
+        const source = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+        try {
+          if (
+            await this.withSource(source, () =>
+              migrateJsxSource(this.migrationContext(), source),
+            )
+          ) {
+            migrated += 1;
+          }
+        } catch (error) {
+          this.log.warn(
+            `Could not migrate JSX review markers in ${path}: ${String(error)}`,
+          );
+        }
+      }
+    }
+    if (migrated > 0) {
+      this.changedEmitter.fire(undefined);
+    }
+    return migrated;
   }
   async initializeDiscoveredSources(folder: vscode.WorkspaceFolder): Promise<void> {
     const store = this.stores.get(folder.uri.toString());
@@ -851,6 +887,16 @@ export class ReviewService implements vscode.Disposable {
       storeFor: (uri) => this.storeFor(uri),
       recompute: (uri, forceDigest, createMissing, prepared) =>
         this.recompute(uri, forceDigest, createMissing, prepared),
+    };
+  }
+  private migrationContext(): RevExtMigrationContext {
+    return {
+      internalSaves: this.internalSaves,
+      maxSize: () => this.maxSize(),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
+      relativePath: (uri) => this.relativePath(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      recompute: (uri, forceDigest) => this.recompute(uri, forceDigest),
     };
   }
   private async requireFresh(

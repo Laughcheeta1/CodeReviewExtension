@@ -33,3 +33,7 @@
 - After completing any task, automatically update the extension version in the manifest and keep every runtime version identifier synchronized; package and verify a new VSIX when the task changes the extension.
 - When the user limits an investigation to the current working tree, do not inspect Git history or prior revisions.
 - When a user reports that a supposedly automatic identity or cache flow still prompts, trace the complete runtime precedence path and test a second invocation; lookup-unit coverage alone does not prove that the prompt is unreachable after the first successful resolution.
+- When a user asks to discuss an implementation approach before coding, keep the turn design-only and wait for explicit approval before making implementation changes.
+- When generating syntax-sensitive markers, test their placement at both nested and root expression boundaries; a marker that is valid as a child can still create an invalid sibling when appended after a root JSX element.
+- When a user narrows migration scope to a specific legacy representation, keep migration limited to that representation and fix only the generation path for newer output.
+- When a user requests tests for a syntax-sensitive feature, cover the complete behavior matrix and parser-valid generated output, not only the original failing example.

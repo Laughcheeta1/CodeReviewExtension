@@ -8,6 +8,7 @@ import {
   markActive,
   markFile,
   markFolder,
+  migrateJsxMarkers,
   openDocumentInReviewView,
   openReviewDiff,
   sendSelection,
@@ -23,7 +24,7 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.6";
+const EXTENSION_VERSION = "0.5.10";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
@@ -177,6 +178,9 @@ export async function activate(
         await refreshFolder(folder, true);
       }
     }),
+    vscode.commands.registerCommand("codeReviewTracker.migrateJsxMarkers", () =>
+      migrateJsxMarkers(service),
+    ),
     vscode.commands.registerCommand("codeReviewTracker.showLogs", () =>
       log.show(),
     ),

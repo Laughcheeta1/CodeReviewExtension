@@ -193,6 +193,18 @@
     {
       "kind": "file",
       "path": "src/reviewer.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/revext-syntax.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/revext.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/revext-migration.ts"
     }
   ]
 }

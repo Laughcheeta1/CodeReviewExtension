@@ -20,6 +20,8 @@ Git is not used for pulls, HEAD synchronization, commits, or imported review dec
 - `storage-format.ts` validates schema 4 and derives lightweight summaries.
 - `store.ts` owns per-path transactions, the eight-entry detail cache, snapshot verification, and orphan cleanup.
 - `review-service.ts` owns stable reads, per-source operation serialization, recomputation, selection/hunk mutations, initialization, deletion, and promotion.
+- `revext-syntax.ts` classifies JavaScript/TypeScript versus JSX line contexts and owns the supported marker dialects.
+- `revext-migration.ts` converts legacy JSX line comments while preserving line review state and marker numbering.
 - `ui.ts` owns the baseline provider, native-diff decorations, sidebar, and explorer badges.
 - `extension.ts` registers commands and lifecycle events.
 
@@ -39,7 +41,11 @@ Blank and whitespace-only lines are records. Input must be UTF-8 text, contain n
 
 Baseline-originating lines use the SHA-256 of their exact physical bytes, a NUL separator, and their immutable one-based baseline line number. This identifies both unchanged and deleted versions of the same reviewed line.
 
-Only repeated added lines are annotated during saved-document reconciliation. Each receives a language-appropriate `RevExt: N` end-of-line comment; its digest is the complete tagged physical line. Unique additions are left untouched. Existing tagged duplicates retain their marker through the review cycle, and promotion removes markers before writing the clean next baseline.
+Only repeated added lines are annotated during saved-document reconciliation. JavaScript and TypeScript contexts receive a `// RevExt: N` suffix. JSX child contexts receive a `{/* RevExt: N */}` expression comment, which is valid JSX and produces no rendered child. JSX tag-attribute continuations and other ambiguous contexts are left unannotated and retain the conservative digest-plus-occurrence transfer rule. The complete tagged physical line remains the identity; unique additions are left untouched. Existing tagged duplicates retain their marker through the review cycle, and promotion removes either marker dialect before writing the clean next baseline.
+
+The marker style is selected per physical line, not once for the whole `javascriptreact` or `typescriptreact` document. A small stateful lexer tracks JavaScript strings/comments, JSX tags, JSX text, and JSX expression containers. It deliberately skips a line when the insertion point is inside an unfinished JSX tag, because preserving source validity is more important than forcing a duplicate marker into an unsafe location.
+
+Older React files may contain `// RevExt: N` inside JSX text from versions before JSX-aware markers existed. **Code Review: Migrate JSX Markers** rewrites only those legacy generated markers, updates the affected current-line digests and current descriptor, preserves review decisions, and advances `nextRevExtId` without changing the storage schema or baseline snapshot.
 
 Unsafe, unsupported, or unannotated additions retain the conservative digest-plus-occurrence transfer rule.
 

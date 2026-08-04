@@ -205,6 +205,7 @@ async function run() {
 
   const files = {
     tracked: "tracked.txt",
+    legacyJsx: "legacy-component.tsx",
     untracked: "untracked.txt",
     nested: "nested/eligible.txt",
     nestedIgnore: "nested/.gitignore",
@@ -257,6 +258,7 @@ async function run() {
   const expectedPaths = new Set([
     ".gitignore",
     files.tracked,
+    files.legacyJsx,
     files.untracked,
     files.nested,
     files.nestedIgnore,
@@ -293,6 +295,78 @@ async function run() {
     await assertEnabledInitialization(folder, "startup");
     await settleForbidden(folder, alwaysForbidden, watcher, "startup");
     await assertNoReservedRecords(folder);
+
+    /*
+     * Legacy JSX migration must rewrite only the generated JSX line comment.
+     * The command must also preserve existing review decisions and advance the
+     * per-file marker sequence beyond the migrated identity.
+     */
+    const legacyBefore = new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(sourceUri(folder, files.legacyJsx)),
+    );
+    assert.match(legacyBefore, /<span \/>\s{2}\/\/ RevExt: 7/);
+    await markFile(
+      folder,
+      files.legacyJsx,
+      "codeReviewTracker.markFileInReview",
+    );
+    const beforeMigration = await assertStatus(
+      folder,
+      files.legacyJsx,
+      "inReview",
+    );
+    await vscode.commands.executeCommand("codeReviewTracker.migrateJsxMarkers");
+    const legacyAfter = new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(sourceUri(folder, files.legacyJsx)),
+    );
+    assert.doesNotMatch(legacyAfter, /<span \/>\s{2}\/\/ RevExt:/);
+    assert.match(legacyAfter, /<span \/>\s{2}\{\/\* RevExt: 7 \*\/\}/);
+    const afterMigration = await assertStatus(
+      folder,
+      files.legacyJsx,
+      "inReview",
+    );
+    assert.notEqual(
+      beforeMigration.file.current.digest,
+      afterMigration.file.current.digest,
+      "migrating marker syntax must update the persisted current digest",
+    );
+    assert.equal(
+      afterMigration.file.nextRevExtId >= 8,
+      true,
+      "migrating an existing marker must preserve the next-id sequence",
+    );
+    assert.equal(
+      afterMigration.file.currentLines
+        .filter((line) => line.changeType === "added")
+        .every((line) => line.reviewStatus === "inReview"),
+      true,
+      "migrating marker syntax must preserve line review decisions",
+    );
+    await markFile(
+      folder,
+      files.legacyJsx,
+      "codeReviewTracker.markFileReviewed",
+    );
+    const promotedLegacy = new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(sourceUri(folder, files.legacyJsx)),
+    );
+    assert.doesNotMatch(
+      promotedLegacy,
+      /RevExt:/,
+      "promotion must remove migrated JSX markers",
+    );
+    await markFile(
+      folder,
+      files.legacyJsx,
+      "codeReviewTracker.markFilePending",
+    );
+    const newlyAnnotatedJsx = new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(sourceUri(folder, files.legacyJsx)),
+    );
+    assert.doesNotMatch(newlyAnnotatedJsx, /<span \/>\s{2}\/\/ RevExt:/);
+    assert.match(newlyAnnotatedJsx, /<span \/>\s{2}\{\/\* RevExt:/);
+    await assertStatus(folder, files.legacyJsx, "pending");
 
     /*
      * The generated metadata must be semantically valid, not merely present:

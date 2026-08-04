@@ -172,6 +172,7 @@ async function createWorkspace({ initialized }) {
 
   const files = {
     tracked: "tracked.txt",
+    legacyJsx: "legacy-component.tsx",
     untracked: "untracked.txt",
     nested: "nested/eligible.txt",
     nestedIgnore: "nested/.gitignore",
@@ -196,6 +197,20 @@ async function createWorkspace({ initialized }) {
   };
   const contents = new Map([
     [files.tracked, "tracked\n"],
+    [
+      files.legacyJsx,
+      [
+        "export function LegacyView() {",
+        "  return (",
+        "    <section>",
+        "      <span />  // RevExt: 7",
+        "      <span />",
+        "    </section>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    ],
     [files.untracked, "untracked\n"],
     [files.nested, "nested eligible\n"],
     [files.nestedIgnored, "nested ignored\n"],
