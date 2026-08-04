@@ -429,8 +429,8 @@ async function run() {
     const markerEdit = new vscode.WorkspaceEdit();
     markerEdit.insert(
       sourceUri(folder, markerSaveRegression),
-      new vscode.Position(0, 0),
-      "new line\n",
+      new vscode.Position(markerDocument.lineCount - 1, 0),
+      "new repeat\nnew repeat\n",
     );
     assert.equal(await vscode.workspace.applyEdit(markerEdit), true);
     assert.equal(await markerDocument.save(), true);
@@ -441,12 +441,12 @@ async function run() {
         const added = value.file.currentLines.filter(
           (line) => line.changeType === "added",
         );
-        if (added.length !== 3) {
+        if (added.length !== 4) {
           return false;
         }
         assert.deepEqual(
           added.map((line) => line.reviewStatus),
-          ["pending", "reviewed", "pending"],
+          ["reviewed", "pending", "pending", "pending"],
         );
         return value;
       },
@@ -457,9 +457,14 @@ async function run() {
     assert.equal(
       (markerSource.match(/RevExt:/g) ?? []).length,
       2,
-      "save reconciliation must add each duplicate marker once",
+      "save reconciliation must annotate only the newly added duplicates",
     );
-    assert.equal(afterMarkerSave.file.currentLines.length, 3);
+    const markerLines = markerSource.split(/\r?\n/);
+    assert.doesNotMatch(markerLines[0] ?? "", /RevExt:/);
+    assert.doesNotMatch(markerLines[1] ?? "", /RevExt:/);
+    assert.match(markerLines[2] ?? "", /RevExt:/);
+    assert.match(markerLines[3] ?? "", /RevExt:/);
+    assert.equal(afterMarkerSave.file.currentLines.length, 4);
     expectedPaths.add(markerSaveRegression);
 
     // Repeat the same positive/negative pair through a real host filesystem

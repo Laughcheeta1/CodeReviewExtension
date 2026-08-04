@@ -120,6 +120,7 @@ async function run() {
       "nested/root-only.txt",
       "created-after-activation.txt",
       "created-by-host-filesystem.txt",
+      "marker-save-regression.ts",
       "opened-after-activation.txt",
       "open-fallback.txt",
       "diff-fallback.txt",

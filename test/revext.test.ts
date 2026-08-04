@@ -4,6 +4,7 @@ import ts from "typescript";
 import {
   buildDiffRecords,
   digestBytes,
+  newlyAddedLineNumbers,
   updateAddedLineDigests,
   type FileRecord,
 } from "../src/domain.ts";
@@ -421,6 +422,51 @@ test("preserves existing JSX marker identities when annotating duplicate peers",
       ],
       nextId: 12,
     },
+  );
+});
+
+test("only annotates newly added duplicate lines", () => {
+  const lines = ["repeat", "repeat", "repeat"];
+
+  assert.deepEqual(
+    revExtEdits(
+      lines,
+      new Set([1, 2, 3]),
+      "typescript",
+      1,
+      new Set([3]),
+    ),
+    {
+      edits: [{ line: 3, suffix: "  // RevExt: 1" }],
+      nextId: 2,
+    },
+  );
+});
+
+test("finds added lines not present in the previous generation", () => {
+  const baseline = new Uint8Array();
+  const previousBytes = sourceBytes(["repeat", "repeat"]);
+  const previous = buildDiffRecords(
+    baseline,
+    previousBytes,
+    [{ oldStart: 0, oldCount: 0, newStart: 1, newCount: 2 }],
+  );
+
+  assert.deepEqual(
+    newlyAddedLineNumbers(
+      sourceBytes(["repeat", "repeat", "new", "new"]),
+      new Set([1, 2, 3, 4]),
+      previous,
+    ),
+    new Set([3, 4]),
+  );
+  assert.deepEqual(
+    newlyAddedLineNumbers(
+      sourceBytes(["repeat", "repeat", "repeat"]),
+      new Set([1, 2, 3]),
+      previous,
+    ),
+    new Set(),
   );
 });
 

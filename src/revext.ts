@@ -25,6 +25,7 @@ export function revExtEdits(
   addedLines: ReadonlySet<number>,
   languageId: string,
   nextId: number,
+  linesToAnnotate: ReadonlySet<number> = addedLines,
 ): {
   readonly edits: readonly RevExtEdit[];
   readonly nextId: number;
@@ -60,6 +61,9 @@ export function revExtEdits(
       continue;
     }
     for (const line of matching) {
+      if (!linesToAnnotate.has(line)) {
+        continue;
+      }
       const text = lines[line - 1]!;
       const style = styles[line - 1];
       if (

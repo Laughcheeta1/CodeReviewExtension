@@ -249,6 +249,67 @@ export function buildDiffRecords(
   return { currentLines, deletedLines, hunks };
 }  // RevExt: 53
 
+/**
+ * Return diff-added lines that were not already present in the saved generation.
+ * A changed duplicate count is deliberately treated as ambiguous, so no
+ * occurrence from that digest is selected for annotation.
+ */
+export function newlyAddedLineNumbers(
+  currentBytes: Uint8Array,
+  addedLines: ReadonlySet<number>,
+  previous: Pick<FileRecord, "currentLines">,
+): ReadonlySet<number> {
+  const current = physicalLines(currentBytes);
+  const previousAdded = new Set<string>();
+  const previousCounts = new Map<string, number>();
+  for (const line of previous.currentLines) {
+    if (line.changeType !== "added") {
+      continue;
+    }
+    previousAdded.add(`${line.digest}:${line.occurrence}`);
+    previousCounts.set(
+      line.digest,
+      (previousCounts.get(line.digest) ?? 0) + 1,
+    );
+  }
+  const addedLineNumbers = [...addedLines].sort((a, b) => a - b);
+  const occurrences = new Map<string, number>();
+  const currentCounts = new Map<string, number>();
+  const occurrenceByLine = new Map<number, number>();
+  for (const lineNumber of addedLineNumbers) {
+    const line = current[lineNumber - 1];
+    if (line === undefined) {
+      continue;
+    }
+    const occurrence = (occurrences.get(line.digest) ?? 0) + 1;
+    occurrences.set(line.digest, occurrence);
+    occurrenceByLine.set(lineNumber, occurrence);
+    currentCounts.set(
+      line.digest,
+      (currentCounts.get(line.digest) ?? 0) + 1,
+    );
+  }
+  const result = new Set<number>();
+  for (const lineNumber of addedLineNumbers) {
+    const line = current[lineNumber - 1];
+    const occurrence = occurrenceByLine.get(lineNumber);
+    if (line === undefined || occurrence === undefined) {
+      continue;
+    }
+    const previousCount = previousCounts.get(line.digest) ?? 0;
+    if (
+      previousCount > 0 &&
+      previousCount !== currentCounts.get(line.digest)
+    ) {
+      continue;
+    }
+    if (!previousAdded.has(`${line.digest}:${occurrence}`)) {
+      result.add(lineNumber);
+    }
+  }
+  return result;
+}
+
 /** Preserve added-line decisions across an internal suffix-only source rewrite. */
 export function updateAddedLineDigests(
   previous: FileRecord,

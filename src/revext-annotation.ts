@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import {
+  newlyAddedLineNumbers,
   updateAddedLineDigests,
   type FileRecord,
 } from "./domain";
@@ -67,6 +68,11 @@ export async function recomputeSavedDocument(
       addedLines.add(line);
     }
   }
+  const linesToAnnotate = newlyAddedLineNumbers(
+    beforeBytes,
+    addedLines,
+    existing,
+  );
   const annotation = revExtEdits(
     Array.from(
       { length: document.lineCount },
@@ -75,6 +81,7 @@ export async function recomputeSavedDocument(
     addedLines,
     document.languageId,
     existing.nextRevExtId,
+    linesToAnnotate,
   );
   if (annotation.edits.length === 0) {
     return context.recompute(document.uri, true, true, {
