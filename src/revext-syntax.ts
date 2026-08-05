@@ -6,13 +6,6 @@ export interface RevExtMarkerMatch {
   readonly id: number;
 }
 
-export interface RevExtMigrationEdit {
-  readonly line: number;
-  readonly start: number;
-  readonly replacement: string;
-  readonly id: number;
-}
-
 const lineCommentTokens = new Map<string, string>([
   ["javascript", "//"],
   ["javascriptreact", "//"],
@@ -123,34 +116,6 @@ export function findRevExtMarker(
 export function stripRevExtMarker(line: string, languageId: string): string {
   const marker = findRevExtMarker(line, languageId);
   return marker === undefined ? line : line.slice(0, marker.start);
-}
-
-export function migrationEdits(
-  lines: readonly string[],
-  languageId: string,
-): readonly RevExtMigrationEdit[] {
-  if (!reactLanguages.has(languageId)) {
-    return [];
-  }
-  const styles = markerStyles(lines, languageId);
-  const result: RevExtMigrationEdit[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    const marker = findRevExtMarker(line, languageId);
-    if (marker === undefined) {
-      continue;
-    }
-    const separator = line.slice(marker.start).startsWith("  ") ? "  " : "";
-    if (marker.style === "line" && styles[index] === "jsx") {
-      result.push({
-        line: index + 1,
-        start: marker.start,
-        replacement: `${separator}{/* RevExt: ${marker.id} */}`,
-        id: marker.id,
-      });
-    }
-  }
-  return result;
 }
 
 function markerExpression(token: string): RegExp {
@@ -359,6 +324,11 @@ function reactMarkerStyles(
       character === "<" &&
       isLikelyJsxStart(source, index)
     ) {
+      const typeParameterEnd = likelyTypeParameterListEnd(source, index);
+      if (typeParameterEnd !== undefined) {
+        index = typeParameterEnd;
+        continue;
+      }
       mode = {
         kind: "jsx-tag",
         returnMode: mode,
@@ -431,6 +401,268 @@ function isLikelyJsxStart(source: string, index: number): boolean {
   const wordStart = previousWordStart(source, previousIndex);
   const word = source.slice(wordStart, previousIndex + 1);
   return word === "return" || word === "yield" || word === "await";
+}
+
+function likelyTypeParameterListEnd(
+  source: string,
+  index: number,
+): number | undefined {
+  if (source[index] !== "<") {
+    return undefined;
+  }
+  const end = typeParameterListEnd(source, index);
+  if (end === undefined) {
+    return undefined;
+  }
+  const parameters = source.slice(index + 1, end);
+  if (
+    !/[,=]|\bextends\b/.test(parameters) ||
+    !isGenericArrowFunction(source, end)
+  ) {
+    return undefined;
+  }
+  return end;
+}
+
+function typeParameterListEnd(
+  source: string,
+  start: number,
+): number | undefined {
+  let depth = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n") {
+        lineComment = false;
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "\"" || character === "'" || character === "`") {
+      quote = character;
+      escaped = false;
+      continue;
+    }
+    if (character === "<") {
+      depth += 1;
+      continue;
+    }
+    if (character === ">") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
+}
+
+function isGenericArrowFunction(source: string, typeParameterEnd: number): boolean {
+  const parameterStart = skipWhitespaceAndComments(source, typeParameterEnd + 1);
+  if (source[parameterStart] !== "(") {
+    return false;
+  }
+  const parameterEnd = matchingParenthesisEnd(source, parameterStart);
+  if (parameterEnd === undefined) {
+    return false;
+  }
+  return hasTopLevelArrow(source, parameterEnd + 1);
+}
+
+function hasTopLevelArrow(source: string, start: number): boolean {
+  let parentheses = 0;
+  let brackets = 0;
+  let braces = 0;
+  let angles = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n") {
+        lineComment = false;
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "\"" || character === "'" || character === "`") {
+      quote = character;
+      escaped = false;
+      continue;
+    }
+    if (
+      character === "=" &&
+      next === ">" &&
+      parentheses === 0 &&
+      brackets === 0 &&
+      braces === 0 &&
+      angles === 0
+    ) {
+      return true;
+    }
+    if (character === "(") {
+      parentheses += 1;
+    } else if (character === ")") {
+      parentheses = Math.max(0, parentheses - 1);
+    } else if (character === "[") {
+      brackets += 1;
+    } else if (character === "]") {
+      brackets = Math.max(0, brackets - 1);
+    } else if (character === "{") {
+      braces += 1;
+    } else if (character === "}") {
+      braces = Math.max(0, braces - 1);
+    } else if (character === "<") {
+      angles += 1;
+    } else if (character === ">") {
+      angles = Math.max(0, angles - 1);
+    }
+  }
+  return false;
+}
+
+function skipWhitespaceAndComments(source: string, start: number): number {
+  let index = start;
+  while (index < source.length) {
+    if (/\s/.test(source[index]!)) {
+      index += 1;
+      continue;
+    }
+    if (source[index] === "/" && source[index + 1] === "/") {
+      const newline = source.indexOf("\n", index + 2);
+      index = newline < 0 ? source.length : newline + 1;
+      continue;
+    }
+    if (source[index] === "/" && source[index + 1] === "*") {
+      const end = source.indexOf("*/", index + 2);
+      index = end < 0 ? source.length : end + 2;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function matchingParenthesisEnd(
+  source: string,
+  start: number,
+): number | undefined {
+  let depth = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n") {
+        lineComment = false;
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "\"" || character === "'" || character === "`") {
+      quote = character;
+      escaped = false;
+      continue;
+    }
+    if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
 }
 
 function isLikelyRegexStart(source: string, index: number): boolean {

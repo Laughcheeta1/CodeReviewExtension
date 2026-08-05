@@ -205,6 +205,18 @@
     {
       "kind": "file",
       "path": "src/revext-migration.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/fixtures/complex-dashboard.tsx"
+    },
+    {
+      "kind": "file",
+      "path": "test/fixtures/complex-dashboard.jsx"
+    },
+    {
+      "kind": "file",
+      "path": "test/browser/complex-jsx-render.test.ts"
     }
   ]
 }

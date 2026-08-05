@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import ts from "typescript";
 import {
@@ -11,7 +13,6 @@ import {
 import {
   revExtEdits,
   revExtMarkerStart,
-  revExtMigrationEdits,
   revExtRemovals,
 } from "../src/revext.ts";
 import {
@@ -52,6 +53,15 @@ function assertNoRuntimeMarker(output: string): void {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/[^\r\n]*/g, "");
   assert.doesNotMatch(withoutComments, /RevExt:/);
+}
+
+function fixtureLines(name: string): string[] {
+  const source = readFileSync(path.join("test", "fixtures", name), "utf8");
+  const lines = source.split(/\r?\n/);
+  if (lines.at(-1) === "") {
+    lines.pop();
+  }
+  return lines;
 }
 
 test("uses JSX expression comments for JSX children", () => {
@@ -343,6 +353,55 @@ test("covers JSX and TSX placement through the React transform", () => {
   }
 });
 
+test("annotates complex JSX and TSX fixtures without breaking their syntax", () => {
+  const variants = [
+    {
+      fileName: "complex-dashboard.jsx",
+      languageId: "javascriptreact",
+    },
+    {
+      fileName: "complex-dashboard.tsx",
+      languageId: "typescriptreact",
+    },
+  ];
+
+  for (const variant of variants) {
+    const lines = fixtureLines(variant.fileName);
+    const addedLines = new Set(lines.map((_, index) => index + 1));
+    const annotation = revExtEdits(
+      lines,
+      addedLines,
+      variant.languageId,
+      1,
+    );
+    const annotated = applyEdits(lines, annotation.edits);
+    const result = ts.transpileModule(annotated.join("\n"), {
+      compilerOptions: {
+        jsx: ts.JsxEmit.ReactJSX,
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.Latest,
+      },
+      fileName: variant.fileName,
+      reportDiagnostics: true,
+    });
+
+    assert.ok(
+      annotation.edits.length >= 30,
+      `${variant.fileName} should exercise many duplicate-line annotations`,
+    );
+    assert.ok(
+      annotation.edits.some((edit) => edit.suffix.includes("{/* RevExt:")),
+      `${variant.fileName} should use JSX expression comments`,
+    );
+    assert.ok(
+      annotation.edits.some((edit) => edit.suffix.includes("// RevExt:")),
+      `${variant.fileName} should use JavaScript comments outside JSX children`,
+    );
+    assert.deepEqual(result.diagnostics ?? [], [], variant.fileName);
+    assertNoRuntimeMarker(result.outputText);
+  }
+});
+
 test("does not classify JSX-looking strings, regular expressions, or comments as JSX", () => {
   const lines = [
     'const text = "<Card>";',
@@ -387,17 +446,17 @@ test("handles supported languages, unsupported languages, and empty documents", 
   ]);
 });
 
-test("recognizes and removes both JSX and legacy line markers", () => {
+test("recognizes and removes JSX and JavaScript marker dialects", () => {
   const jsx = "  <span />  {/* RevExt: 9 */}";
-  const legacy = "  <span />  // RevExt: 10";
+  const javascript = "const element = <span />  // RevExt: 10";
 
   assert.equal(revExtMarkerStart(jsx, "typescriptreact"), 10);
-  assert.equal(revExtMarkerStart(legacy, "typescriptreact"), 10);
+  assert.equal(revExtMarkerStart(javascript, "typescriptreact"), 24);
   assert.deepEqual(
-    revExtRemovals([jsx, legacy], new Set([1, 2]), "typescriptreact"),
+    revExtRemovals([jsx, javascript], new Set([1, 2]), "typescriptreact"),
     [
       { line: 1, start: 10 },
-      { line: 2, start: 10 },
+      { line: 2, start: 24 },
     ],
   );
 });
@@ -532,37 +591,6 @@ test("preserves reviewed duplicate decisions when save annotation changes digest
   );
   assert.match(afterAnnotation[1]!, /RevExt: 1/);
   assert.match(afterAnnotation[2]!, /RevExt: 2/);
-});
-
-test("migrates only legacy markers that are in JSX children", () => {
-  const lines = [
-    "const value = 1;  // RevExt: 1",
-    "const element = (",
-    "  <section>",
-    "    <span />  // RevExt: 2",
-    "  </section>",
-    ");",
-  ];
-
-  const expected = [
-    {
-      line: 4,
-      start: 12,
-      replacement: "  {/* RevExt: 2 */}",
-      id: 2,
-    },
-  ];
-  assert.deepEqual(revExtMigrationEdits(lines, "typescriptreact"), expected);
-  assert.deepEqual(revExtMigrationEdits(lines, "javascriptreact"), expected);
-});
-
-test("does not expand migration to existing JSX expression markers", () => {
-  const lines = [
-    "const element = <span />  {/* RevExt: 3 */}",
-    "const other = <span />  // RevExt: 4",
-  ];
-
-  assert.deepEqual(revExtMigrationEdits(lines, "typescriptreact"), []);
 });
 
 test("generated JSX markers remain valid TSX and produce no JSX text node", () => {

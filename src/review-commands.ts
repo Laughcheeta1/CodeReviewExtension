@@ -274,19 +274,6 @@ export async function initializeAll(
   }
 }
 
-export async function migrateJsxMarkers(service: ReviewService): Promise<void> {
-  try {
-    const migrated = await service.migrateJsxMarkers();
-    void vscode.window.showInformationMessage(
-      migrated === 0
-        ? "No legacy JSX review markers were found."
-        : `Migrated JSX review markers in ${migrated} file${migrated === 1 ? "" : "s"}.`,
-    );
-  } catch (error) {
-    void vscode.window.showWarningMessage(errorMessage(error));
-  }
-}
-
 function selectionRanges(editor: vscode.TextEditor): readonly {
   start: number;
   end: number;

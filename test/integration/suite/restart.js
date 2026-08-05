@@ -109,7 +109,6 @@ async function run() {
     await assertMetadataPaths(folder, [
       ".gitignore",
       "tracked.txt",
-      "legacy-component.tsx",
       "untracked.txt",
       "nested/eligible.txt",
       "nested/.gitignore",

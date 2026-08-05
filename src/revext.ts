@@ -2,10 +2,8 @@ import {
   findRevExtMarker,
   markerStyles,
   markerSuffix,
-  migrationEdits,
   stripRevExtMarker,
   supportsRevExt,
-  type RevExtMigrationEdit,
 } from "./revext-syntax";
 
 export interface RevExtEdit {
@@ -18,7 +16,7 @@ export interface RevExtRemoval {
   readonly start: number;
 }
 
-export type { RevExtMarkerStyle, RevExtMigrationEdit } from "./revext-syntax";
+export type { RevExtMarkerStyle } from "./revext-syntax";
 
 export function revExtEdits(
   lines: readonly string[],
@@ -111,14 +109,6 @@ export function revExtMarkerStart(
   languageId: string,
 ): number | undefined {
   return findRevExtMarker(line, languageId)?.start;
-}
-
-/** Return legacy JSX line comments that can be converted without parsing again. */
-export function revExtMigrationEdits(
-  lines: readonly string[],
-  languageId: string,
-): readonly RevExtMigrationEdit[] {
-  return migrationEdits(lines, languageId);
 }
 
 function safeForSuffix(line: string, languageId: string): boolean {

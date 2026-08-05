@@ -21,7 +21,6 @@ Git is not used for pulls, HEAD synchronization, commits, or imported review dec
 - `store.ts` owns per-path transactions, the eight-entry detail cache, snapshot verification, and orphan cleanup.
 - `review-service.ts` owns stable reads, per-source operation serialization, recomputation, selection/hunk mutations, initialization, deletion, and promotion.
 - `revext-syntax.ts` classifies JavaScript/TypeScript versus JSX line contexts and owns the supported marker dialects.
-- `revext-migration.ts` converts legacy JSX line comments while preserving line review state and marker numbering.
 - `ui.ts` owns the baseline provider, native-diff decorations, sidebar, and explorer badges.
 - `extension.ts` registers commands and lifecycle events.
 
@@ -45,9 +44,7 @@ Only repeated added lines are annotated during saved-document reconciliation. Ja
 
 The marker style is selected per physical line, not once for the whole `javascriptreact` or `typescriptreact` document. A small stateful lexer tracks JavaScript strings/comments, JSX tags, JSX text, and JSX expression containers. It deliberately skips a line when the insertion point is inside an unfinished JSX tag, because preserving source validity is more important than forcing a duplicate marker into an unsafe location.
 
-Older React files may contain `// RevExt: N` inside JSX text from versions before JSX-aware markers existed. **Code Review: Migrate JSX Markers** rewrites only those legacy generated markers, updates the affected current-line digests and current descriptor, preserves review decisions, and advances `nextRevExtId` without changing the storage schema or baseline snapshot.
-
-Unsafe, unsupported, or unannotated additions retain the conservative digest-plus-occurrence transfer rule.
+This contract applies to newly tracked JSX and TSX source. Older JSX marker syntax is intentionally not migrated. Unsafe, unsupported, or unannotated additions retain the conservative digest-plus-occurrence transfer rule.
 
 ## Diff generation
 

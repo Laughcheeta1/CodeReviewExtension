@@ -30,7 +30,6 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 - The default shortcuts are <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> for pending review, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> for in review, and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> for reviewed. Rebind them in **Preferences: Open Keyboard Shortcuts**.
 - Unsaved editors cannot be reviewed. Save first so disk content remains authoritative.
 - Only duplicate added lines receive a temporary `RevExt` end-of-line comment. The complete tagged line becomes its identity, so later insertions do not disturb the review state of its duplicate peers. JavaScript and TypeScript lines use `// RevExt: N`; JSX child lines use `{/* RevExt: N */}` so the marker cannot render in the frontend. The comments are removed when the file is promoted.
-- Existing JSX files created by an older extension version can be migrated with **Code Review: Migrate JSX Markers**. The migration preserves review decisions and marker numbering.
 
 When every addition and deletion is reviewed, the saved file is automatically promoted to the next baseline and its obsolete diff tab closes.
 

@@ -58,7 +58,6 @@ async function run() {
 
   const existing = [
     "tracked.txt",
-    "legacy-component.tsx",
     "untracked.txt",
     "nested/eligible.txt",
     "ignored-root.txt",
