@@ -1,6 +1,10 @@
 const assert = require("node:assert/strict");
 const { execFile } = require("node:child_process");
-const { mkdir, writeFile: writePhysicalFile } = require("node:fs/promises");
+const {
+  mkdir,
+  readFile: readPhysicalFile,
+  writeFile: writePhysicalFile,
+} = require("node:fs/promises");
 const { dirname, join } = require("node:path");
 const { promisify } = require("node:util");
 const vscode = require("vscode");
@@ -143,6 +147,47 @@ async function assertStatus(folder, relativePath, status) {
   const value = await assertMetadataPresent(folder, relativePath, { status });
   assert.equal(value.file.fileStatus, status);
   return value;
+}
+
+async function assertMetadataStableDuring(
+  folder,
+  relativePath,
+  expected,
+  context,
+) {
+  const deadline = Date.now() + 1_000;
+  do {
+    const value = await assertMetadataPresent(folder, relativePath);
+    assert.equal(
+      value.file.current.digest,
+      expected.file.current.digest,
+      `${context} changed the persisted current digest`,
+    );
+    assert.equal(
+      value.file.updatedAt,
+      expected.file.updatedAt,
+      `${context} changed persisted metadata for a dirty buffer`,
+    );
+    assert.deepEqual(
+      value.file.currentLines,
+      expected.file.currentLines,
+      `${context} changed persisted current line records`,
+    );
+    assert.deepEqual(
+      value.file.deletedLines,
+      expected.file.deletedLines,
+      `${context} changed persisted deleted line records`,
+    );
+    assert.deepEqual(
+      value.file.hunks,
+      expected.file.hunks,
+      `${context} changed persisted hunks`,
+    );
+    if (Date.now() >= deadline) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } while (true);
 }
 
 async function assertNoReservedRecords(folder) {
@@ -411,6 +456,200 @@ async function run() {
       watcher,
       "external creation",
     );
+
+    /*
+     * Persisted filesystem-change reconciliation is deliberately tested as a
+     * complete state transition. The first write happens with no source
+     * editor or review diff open; the second happens with a review diff open;
+     * the dirty-buffer check proves that editor-only content is not persisted;
+     * and the final write proves that a real host write is still observed for
+    * an open dirty source. Every assertion reads the persisted JSON and its
+     * referenced snapshot rather than trusting an event or UI callback.
+     */
+    await closeAllTabs();
+    await markFile(
+      folder,
+      files.tracked,
+      "codeReviewTracker.markFileReviewed",
+    );
+    const trackedBeforeHostWrite = await assertMetadataPresent(
+      folder,
+      files.tracked,
+    );
+    assert.equal(
+      trackedBeforeHostWrite.file.baseline.digest,
+      trackedBeforeHostWrite.file.current.digest,
+      "the external-change fixture must begin from a reviewed baseline",
+    );
+    assert.ok(
+      trackedBeforeHostWrite.file.currentLines.every(
+        (line) => line.changeType === "unchanged",
+      ),
+      "the external-change fixture must begin with unchanged current lines",
+    );
+    const firstHostContent = "tracked\nhost change one\n";
+    await writeExternalSource(folder, files.tracked, firstHostContent);
+    const trackedAfterClosedHostWrite = await waitUntil(
+      "closed tracked file host-write reconciliation",
+      async () => {
+        const value = await assertMetadataPresent(folder, files.tracked);
+        if (
+          value.file.current.digest ===
+          trackedBeforeHostWrite.file.current.digest
+        ) {
+          return false;
+        }
+        assert.notEqual(
+          value.file.updatedAt,
+          trackedBeforeHostWrite.file.updatedAt,
+          "host-write reconciliation must persist a new metadata generation",
+        );
+        assert.equal(value.file.currentLines.length, 2);
+        assert.deepEqual(
+          value.file.currentLines.map((line) => ({
+            line: line.line,
+            changeType: line.changeType,
+            reviewStatus: line.reviewStatus,
+          })),
+          [
+            { line: 1, changeType: "unchanged", reviewStatus: "reviewed" },
+            { line: 2, changeType: "added", reviewStatus: "pending" },
+          ],
+        );
+        assert.deepEqual(value.file.deletedLines, []);
+        assert.equal(value.file.hunks.length, 1);
+        assert.equal(value.file.hunks[0].newStart, 2);
+        assert.equal(value.file.hunks[0].newCount, 1);
+        assert.equal(value.file.fileStatus, "pending");
+        return value;
+      },
+    );
+    assert.notEqual(
+      trackedAfterClosedHostWrite.file.current.digest,
+      trackedBeforeHostWrite.file.current.digest,
+    );
+
+    await vscode.commands.executeCommand(
+      "codeReviewTracker.openReviewDiff",
+      sourceUri(folder, files.tracked),
+    );
+    await waitUntil("tracked review diff for host-write test", () =>
+      vscode.window.tabGroups.all.some((group) =>
+        group.tabs.some(
+          (tab) =>
+            tab.input instanceof vscode.TabInputTextDiff &&
+            tab.input.modified.toString() ===
+              sourceUri(folder, files.tracked).toString() &&
+            tab.input.original.scheme === "code-review-baseline",
+        ),
+      ),
+    );
+
+    const secondHostContent =
+      "tracked\nhost change one\nhost change two\n";
+    await writeExternalSource(folder, files.tracked, secondHostContent);
+    const trackedAfterOpenDiffHostWrite = await waitUntil(
+      "open-diff tracked file host-write reconciliation",
+      async () => {
+        const value = await assertMetadataPresent(folder, files.tracked);
+        if (
+          value.file.current.digest ===
+          trackedAfterClosedHostWrite.file.current.digest
+        ) {
+          return false;
+        }
+        assert.notEqual(
+          value.file.updatedAt,
+          trackedAfterClosedHostWrite.file.updatedAt,
+          "open-diff host-write reconciliation must persist a new generation",
+        );
+        assert.equal(value.file.currentLines.length, 3);
+        assert.deepEqual(
+          value.file.currentLines.map((line) => ({
+            line: line.line,
+            changeType: line.changeType,
+            reviewStatus: line.reviewStatus,
+          })),
+          [
+            { line: 1, changeType: "unchanged", reviewStatus: "reviewed" },
+            { line: 2, changeType: "added", reviewStatus: "pending" },
+            { line: 3, changeType: "added", reviewStatus: "pending" },
+          ],
+        );
+        assert.deepEqual(value.file.deletedLines, []);
+        assert.equal(value.file.hunks.length, 1);
+        assert.equal(value.file.hunks[0].newStart, 2);
+        assert.equal(value.file.hunks[0].newCount, 2);
+        assert.equal(value.file.fileStatus, "pending");
+        return value;
+      },
+    );
+
+    const trackedDocument = await openSource(folder, files.tracked);
+    const dirtyEdit = new vscode.WorkspaceEdit();
+    dirtyEdit.insert(
+      sourceUri(folder, files.tracked),
+      new vscode.Position(trackedDocument.lineCount - 1, 0),
+      "dirty editor buffer only\n",
+    );
+    assert.equal(await vscode.workspace.applyEdit(dirtyEdit), true);
+    assert.equal(trackedDocument.isDirty, true);
+    assert.equal(
+      new TextDecoder().decode(
+        await readPhysicalFile(join(folder.uri.fsPath, files.tracked)),
+      ),
+      secondHostContent,
+      "dirty editor content must not be written to the host file",
+    );
+    await assertMetadataStableDuring(
+      folder,
+      files.tracked,
+      trackedAfterOpenDiffHostWrite,
+      "dirty editor-buffer-only edit",
+    );
+
+    const finalHostContent =
+      "tracked\nhost change one\nhost change two\nhost change three\n";
+    await writeExternalSource(folder, files.tracked, finalHostContent);
+    const trackedAfterDirtyHostWrite = await waitUntil(
+      "dirty-open tracked file host-write reconciliation",
+      async () => {
+        const value = await assertMetadataPresent(folder, files.tracked);
+        if (
+          value.file.current.digest ===
+          trackedAfterOpenDiffHostWrite.file.current.digest
+        ) {
+          return false;
+        }
+        assert.notEqual(
+          value.file.updatedAt,
+          trackedAfterOpenDiffHostWrite.file.updatedAt,
+          "persisted host bytes must reconcile after a dirty buffer edit",
+        );
+        assert.equal(value.file.currentLines.length, 4);
+        assert.equal(value.file.currentLines.at(-1).line, 4);
+        assert.equal(value.file.currentLines.at(-1).changeType, "added");
+        assert.equal(value.file.currentLines.at(-1).reviewStatus, "pending");
+        assert.equal(value.file.hunks.length, 1);
+        assert.equal(value.file.hunks[0].newStart, 2);
+        assert.equal(value.file.hunks[0].newCount, 3);
+        assert.equal(value.file.fileStatus, "pending");
+        return value;
+      },
+    );
+    assert.notEqual(
+      trackedAfterDirtyHostWrite.file.current.digest,
+      trackedAfterOpenDiffHostWrite.file.current.digest,
+    );
+
+    await writeExternalSource(folder, files.externalIgnored, "ignored update\n");
+    await settleForbidden(
+      folder,
+      [files.externalIgnored],
+      watcher,
+      "ignored host-write reconciliation",
+    );
+    await assertNoUnknownTrackerEntries(folder);
 
     /*
      * Opening a saved file and saving an edited document are independent

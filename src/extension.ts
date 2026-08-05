@@ -23,7 +23,7 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.15";
+const EXTENSION_VERSION = "0.5.16";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
@@ -187,7 +187,7 @@ export async function activate(
     const watcher = vscode.workspace.createFileSystemWatcher(
       pattern,
       false,
-      true,
+      false,
       false,
     );
     const creation = watcher.onDidCreate((uri) =>
@@ -199,6 +199,13 @@ export async function activate(
     );
     const deletion = watcher.onDidDelete((uri) =>
       service.hideSources([uri]),
+    );
+    const change = watcher.onDidChange((uri) =>
+      runLogged(
+        log,
+        "External-file reconciliation",
+        service.reconcileExternalSource(uri),
+      ),
     );
     const gitIgnoreWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(folder, "**/.gitignore"),
@@ -219,6 +226,7 @@ export async function activate(
       watcher,
       creation,
       deletion,
+      change,
       gitIgnoreWatcher,
       gitIgnoreWatcher.onDidCreate(refreshIgnoredPaths),
       gitIgnoreWatcher.onDidChange(refreshIgnoredPaths),

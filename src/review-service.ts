@@ -424,6 +424,48 @@ export class ReviewService implements vscode.Disposable {
     this.eligiblePaths.get(folder.uri.toString())?.add(path);
     this.changedEmitter.fire(uri);
   }  // RevExt: 84
+  async reconcileExternalSource(uri: vscode.Uri): Promise<void> {
+    if (uri.scheme !== "file") {
+      return;
+    }
+    const path = this.relativePath(uri);
+    const store = this.storeFor(uri);
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (
+      path === undefined ||
+      store === undefined ||
+      folder === undefined ||
+      store.initializationState !== "initialized" ||
+      store.owns(uri) ||
+      isExcludedPath(path)
+    ) {
+      return;
+    }
+    const eligible = await this.refreshEligiblePaths(folder, true);
+    if (
+      eligible === undefined ||
+      !eligible.includes(path) ||
+      !store.tracksPath(path)
+    ) {
+      return;
+    }
+    try {
+      const changed = await this.withSource(uri, () =>
+        this.recompute(uri, true, true),
+      );
+      if (changed) {
+        this.changedEmitter.fire(uri);
+      }
+    } catch (error) {
+      if (isFileNotFound(error)) {
+        this.hideSources([uri]);
+        return;
+      }
+      this.log.warn(
+        `Could not reconcile externally changed source ${path}: ${String(error)}`,
+      );
+    }
+  }
   async reconcileSavedDocument(document: vscode.TextDocument): Promise<void> {
     if (document.uri.scheme !== "file") {
       return;  // RevExt: 167

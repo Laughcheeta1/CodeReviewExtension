@@ -1,3 +1,7 @@
+# Change Preconditions
+
+- Before making any repository change, take a deep look at `ARCHITECTURE.md` and reconcile the planned change with its specifications. The implementation must never contradict the architecture or remove a previously implemented capability; preserve its invariants and existing behavior.
+
 # Lessons
 
 - When a user specifies an exact hash input, preserve that byte-level contract verbatim and do not introduce a separate identity component unless they ask for one.
@@ -17,6 +21,8 @@
 - Treat user-observed initialization failures as an eligibility-path issue to trace end-to-end; untracked but non-ignored sources must remain eligible when the configured tracking scope includes them.
 - Git ignore rules are absolute exclusions for tracking: preserve them across setup, file-open, and every command-triggered automatic initialization path.
 - When lifecycle behavior is required for newly Git-tracked sources, refresh Git-derived eligibility at the event boundary and reconcile all existing tracked sources at extension activation rather than relying on a stale in-memory path set.
+- When persisted workspace tracking is required, reconcile every eligible tracked source affected by a workspace event regardless of editor, diff, or viewer visibility; distinguish this workspace-wide guarantee from unsaved editor-buffer state.
+- When documenting event-driven behavior, state the persisted-data authority and the unsaved-buffer boundary in plain language; do not conflate event names with which content is eligible for reconciliation.
 - Use Git for both diff calculation and reviewer identity lookup (`user.name` and `user.email`); `.gitignore` evaluation must be implemented by the extension itself, while file discovery and automatic metadata initialization remain driven by VS Code workspace events and enumeration.
 - Route every metadata-creating lifecycle event through one Git-ignore eligibility guard; testing startup enumeration alone is insufficient because save and refresh paths can bypass it.
 - Treat Git-ignore evaluation failures as a security-boundary failure: never convert an unavailable ignore check into an empty ignore set, and test both startup cleanup of already-tracked files that become ignored and interactions with force-added ignored files.

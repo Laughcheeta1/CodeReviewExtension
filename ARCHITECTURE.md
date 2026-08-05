@@ -2,7 +2,7 @@
 
 ## Authorities and scope
 
-Code Review Tracker 0.4.0 is a single-reviewer, saved-content system:
+Code Review Tracker is a single-reviewer, saved-content system:
 
 1. The gzip baseline snapshot is authoritative for reviewed old content.
 2. The saved source file is authoritative for current content.
@@ -241,11 +241,13 @@ Deleted duplicates do not have this ambiguity because immutable baseline line nu
 
 This conservative reset spends a small amount of repeat-review effort to guarantee the extension never accepts an ambiguous line automatically. Alternatives are tracked in `TODO.md`.
 
-### Workspace coverage and save authority
+### Workspace coverage and source-change authority
 
 Git remains only the diff executable. Eligible files are enumerated from the workspace rather than `git ls-files`, so new and untracked saved files cannot disappear from review tracking. After a workspace has been initialized, a newly discovered eligible file receives an empty baseline and is classified as added/pending. Tracker files, `.git`, and `node_modules` remain excluded even when saved directly.
 
-The pipeline runs from `onDidSaveTextDocument`, startup reconciliation, and manual refresh. Ordinary buffer-change events refresh presentation only. This prevents reverted, unsaved editor text from becoming shared review metadata.
+The reconciliation pipeline runs from `onDidSaveTextDocument`, startup reconciliation, manual refresh, and eligible workspace file-change events. While VS Code is active, every persisted filesystem change to every eligible tracked source must trigger the same stable-read, digest verification, Git diff, and metadata commit without requiring a second manual save. This includes writes made by an in-editor agent, another external process, or a Git operation that changes workspace files. The changed source must be reconciled even when it has no open editor, is not visible, and has no review diff open. File-change handling must not suppress updates for already tracked eligible sources; restricting reconciliation to visible files would make workspace tracking incomplete and violate this core invariant.
+
+Review metadata follows the bytes persisted on disk, not the editor's visibility. A text edit that exists only in a dirty editor buffer must not update review metadata. Once the bytes are written to disk—by an editor save, an agent, another process, or a Git operation—the eligible source must be reconciled immediately, even when no editor or diff is open.
 
 Stable reads compare stat information before and after reading and retry once. If a concurrent writer keeps changing the file, the pipeline aborts without replacing existing metadata.
 
@@ -291,10 +293,11 @@ Run the extension in an Extension Development Host, open a local filesystem work
 4. Open **Code Review: Open Review Diff**. Confirm the replacement is an independent left deletion and right addition.
 5. Review a right-side selection and a left-side selection. Confirm unchanged selections are ignored.
 6. Leave an editor dirty and confirm diff opening/review mutations require a save.
-7. Change and save the file while an old diff is open; confirm old actions are rejected as stale.
-8. Review every addition/deletion and confirm automatic promotion closes the diff.
-9. Delete the source and confirm its JSON, gzip, summary, and sidebar row disappear after the next startup.
-10. Repeat with **Start Pending** and confirm every physical current line, including blanks, is an addition.
+7. Modify a tracked file through an agent, host filesystem write, or Git operation that changes workspace files while neither its editor nor review diff is open; confirm its metadata updates automatically and opening it shows the new line decorations. Repeat with another tracked file whose editor and review diff are open, without manually saving the editor, and confirm the same update occurs.
+8. Change and save the file while an old diff is open; confirm old actions are rejected as stale.
+9. Review every addition/deletion and confirm automatic promotion closes the diff.
+10. Delete the source and confirm its JSON, gzip, summary, and sidebar row disappear after the next startup.
+11. Repeat with **Start Pending** and confirm every physical current line, including blanks, is an addition.
 
 ### Package smoke test
 
