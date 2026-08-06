@@ -1,309 +1,332 @@
 # Architecture
 
-## Authorities and scope
+This document describes the implementation in the current working tree. The
+extension is a local, saved-content review tracker; it is not a source-control
+provider and it does not synchronize branches, commits, remotes, or review
+decisions.
 
-Code Review Tracker is a single-reviewer, saved-content system:
+## Authorities and boundaries
 
-1. The gzip baseline snapshot is authoritative for reviewed old content.
-2. The saved source file is authoritative for current content.
-3. Local `git diff --no-index` output is authoritative for unchanged, added, and deleted classification.
-4. Local Git `user.name` and `user.email` configuration supplies reviewer identity when available; the first resolved identity is cached per workspace for later decisions.
-5. Per-file JSON is authoritative for review state only for its exact baseline and current digests.
+- The gzip snapshot is the reviewed baseline.
+- The saved file on disk is the current source. A dirty editor buffer is not
+  reconciled or reviewable until it is saved.
+- Local `git diff --no-index` output supplies addition/deletion hunks. Git is
+  not used to read `HEAD`, stage files, or import review state.
+- Local Git `user.name` and `user.email` are the first reviewer-identity
+  source. A configured or prompted reviewer is the fallback. The resolved
+  identity is cached per workspace in VS Code global state; only the resulting
+  `LastReviewer` decision is stored in a file record.
+- Workspace `.gitignore` files are read and evaluated by the extension. Git's
+  global excludes, repository `.git/info/exclude`, and Git ignore configuration
+  are deliberately not consulted.
 
-Git is not used for pulls, HEAD synchronization, commits, or imported review decisions. A replacement is deliberately stored as deleted old lines plus added new lines. There is no synthetic `modified` classification.
+Review state is meaningful only for the exact baseline and current digests in
+the record. A replacement is represented as one deleted old line and one added
+new line; there is no synthetic `modified` record.
 
-## Modules
+## Runtime pieces
 
-- `domain.ts` defines v4 records, exact physical-line hashing, diff record construction, review transfer, status, and counts.
-- `git.ts` reads local Git reviewer configuration and runs the required deterministic local Git diff, parsing zero-context hunk headers.
-- `snapshot.ts` encodes and validates gzip snapshots.
-- `storage-format.ts` validates schema 4 and derives lightweight summaries.
-- `store.ts` owns per-path transactions, the eight-entry detail cache, snapshot verification, and orphan cleanup.
-- `review-service.ts` owns stable reads, per-source operation serialization, recomputation, selection/hunk mutations, initialization, deletion, and promotion.
-- `revext-syntax.ts` classifies JavaScript/TypeScript versus JSX line contexts and owns the supported marker dialects.
-- `ui.ts` owns the baseline provider, native-diff decorations, sidebar, and explorer badges.
-- `extension.ts` registers commands and lifecycle events.
+- `extension.ts` activates the extension, creates services, performs startup
+  reconciliation, registers VS Code commands/providers/watchers, and connects
+  saved-file and external-file events.
+- `review-service.ts` is the orchestration boundary. It owns workspace stores,
+  eligibility checks, reconciliation, per-source serialization, stale checks,
+  and the events consumed by the UI.
+- `domain.ts`, `source-io.ts`, and `git.ts` implement byte/line identity,
+  stable reads, record construction, and local Git hunk calculation.
+- `store.ts`, `store-io.ts`, `snapshot.ts`, `storage-format.ts`, and
+  `tracking.ts` implement persisted configuration, v4 metadata, gzip
+  snapshots, validation, atomic writes, cleanup, and the small detail cache.
+- `git-ignore.ts`, `ignore-matcher.ts`, and `workspace-discovery.ts` enumerate
+  workspace files and apply nested workspace `.gitignore` rules.
+- `review-actions.ts` and `review-mutations.ts` apply line/file/folder
+  decisions and promote a fully reviewed file.
+- `revext.ts`, `revext-syntax.ts`, and `revext-annotation.ts` preserve
+  duplicate-added-line identity with temporary source comments.
+- `review-commands.ts`, `initialization-setup.ts`, and `ui.ts` provide setup,
+  commands, the native diff provider, sidebar, decorations, and terminal
+  integration.
 
-## Exact content identity
+## Workspace lifecycle and eligibility
 
-SHA-256 hex digests are calculated over exact file bytes for `baseline.digest` and `current.digest`. Physical-line digests include their terminator bytes, so these are distinct:
+On activation, each workspace folder is handled as follows:
 
-```text
-"value\n"
-"value\r\n"
-"value"       (no final newline)
-```
+1. `PersistentStore` loads `initialization.json` and v4 metadata summaries.
+   If metadata exists without an initialization file, the store treats the
+   workspace as root-tracked for compatibility, without inventing a migration.
+2. Metadata for missing files is removed. Eligible paths are enumerated from
+   the workspace filesystem, excluding `.git`, `node_modules`, `.vscode-test`,
+   and `.vscode/code-review-tracker`.
+3. Root and nested `.gitignore` files are refreshed. Ignore evaluation errors
+   fail closed: the affected path is not written, and existing metadata is
+   preserved when cleanup cannot be trusted.
+4. When tracking is initialized, newly discovered eligible sources are
+   initialized and existing eligible sources are reconciled. Normal startup
+   can use the stored mtime/size shortcut; forced refresh uses a digest read.
 
-Blank and whitespace-only lines are records. Input must be UTF-8 text, contain no NUL byte, and fit `codeReviewTracker.maxFileSizeBytes`.
+The filesystem watcher handles file creation, deletion, and external changes.
+Save events reconcile the saved document. A `.gitignore` watcher refreshes
+eligibility, removes metadata that is newly ignored, and initializes newly
+eligible sources. The explicit **Refresh** command performs a forced workspace
+reconciliation. An external change is reconciled even when the file has no
+open editor or review diff.
 
-### Line identity
+Deletion events only hide a source from the current session. Startup checks the
+filesystem and permanently removes the source's metadata and snapshot when it
+is still missing. The tracker never writes metadata for its own storage files.
 
-Baseline-originating lines use the SHA-256 of their exact physical bytes, a NUL separator, and their immutable one-based baseline line number. This identifies both unchanged and deleted versions of the same reviewed line.
+### Initialization and tracking configuration
 
-Only repeated added lines are annotated during saved-document reconciliation. JavaScript and TypeScript contexts receive a `// RevExt: N` suffix. JSX child contexts receive a `{/* RevExt: N */}` expression comment, which is valid JSX and produces no rendered child. JSX tag-attribute continuations and other ambiguous contexts are left unannotated and retain the conservative digest-plus-occurrence transfer rule. The complete tagged physical line remains the identity; unique additions are left untouched. Existing tagged duplicates retain their marker through the review cycle, and promotion removes either marker dialect before writing the clean next baseline.
-
-The marker style is selected per physical line, not once for the whole `javascriptreact` or `typescriptreact` document. A small stateful lexer tracks JavaScript strings/comments, JSX tags, JSX text, and JSX expression containers. It deliberately skips a line when the insertion point is inside an unfinished JSX tag, because preserving source validity is more important than forcing a duplicate marker into an unsafe location.
-
-This contract applies to newly tracked JSX and TSX source. Older JSX marker syntax is intentionally not migrated. Unsafe, unsupported, or unannotated additions retain the conservative digest-plus-occurrence transfer rule.
-
-## Diff generation
-
-Baseline and current bytes are written to a temporary directory and passed to:
-
-```text
-git diff --no-index --no-ext-diff --no-textconv --no-color --text
-  --unified=0 --diff-algorithm=myers --indent-heuristic
-```
-
-Exit code 0 means unchanged, 1 means a valid diff, and every other result is an error. Temporary files are always removed.
-
-Git hunk ranges identify old deletions and new additions. The model fills unchanged spans from the two source arrays. It never pairs old/new lines into changes. Hunk membership is derived directly from those zero-context ranges.
-
-## Per-file schema
-
-Each `<sha256(relative-path)>.json` has `schemaVersion: 4`, the normalized relative path, and:
-
-- a baseline snapshot filename, SHA-256 digest, `gzip` codec, uncompressed byte size, and creation time;
-- a current SHA-256 digest, last reconciled filesystem mtime/size, `myers` algorithm identifier, and reconciliation time;
-- `lastReviewTime`, updated only by an explicit line or file review action;
-- `updatedAt`, recording the last metadata write;
-- `fileStatus`, a fast sidebar cache that must equal the status derived from line records;
-- `nextRevExtId`, the next per-file marker number for the current baseline generation;
-- every current physical line with one-based line number, digest, occurrence, `changeType: unchanged | added`, independent `reviewStatus`, and optional decision metadata;
-- deleted baseline lines with one-based old line number, digest, occurrence, independent `reviewStatus`, and optional decision metadata;
-- Git hunk old/new ranges.
-
-Persisted objects are defined with explicit TypeScript interfaces. The complete saved-review model is:
-
-```ts
-type ReviewStatus = "pending" | "inReview" | "reviewed";
-type ChangeType = "unchanged" | "added";
-
-interface Reviewer {
-    name: string;
-    email?: string;
-}
-
-interface LastReviewer {
-    name: string;
-    email?: string;
-    time: string; // ISO-8601
-}
-
-interface SourceSnapshot {
-    modifiedAt: number;
-    size: number;
-}
-
-interface BaselineDescriptor {
-    file: string; // snapshots/<pathHash>.<baselineDigest>.gz
-    digest: string; // SHA-256 of the exact baseline bytes
-    codec: "gzip";
-    size: number; // uncompressed byte size
-    createdAt: string; // ISO-8601
-}
-
-interface CurrentDescriptor extends SourceSnapshot {
-    digest: string; // SHA-256 of the exact saved bytes
-    gitAlgorithm: "myers";
-    generatedAt: string; // ISO-8601 reconciliation time
-}
-
-interface DiffHunk {
-    oldStart: number;
-    oldCount: number;
-    newStart: number;
-    newCount: number;
-}
-
-interface StoredFile {
-    schemaVersion: 4;
-    path: string;
-    file: FileRecord;
-}
-
-interface FileRecord {
-    baseline: BaselineDescriptor;
-    current: CurrentDescriptor;
-    fileStatus: ReviewStatus;
-    lastReviewTime?: string; // ISO-8601, explicit review action time
-    currentLines: readonly CurrentLineRecord[];
-    deletedLines: readonly DeletedLineRecord[];
-    hunks: readonly DiffHunk[];
-    nextRevExtId: number;
-    updatedAt: string; // ISO-8601 metadata write time
-}
-
-interface CurrentLineRecord {
-    line: number;
-    digest: string;
-    occurrence: number;
-    changeType: ChangeType;
-    reviewStatus: ReviewStatus;
-    lastReviewer?: LastReviewer;
-}
-
-interface DeletedLineRecord {
-    baselineLine: number;
-    digest: string;
-    occurrence: number;
-    changeType: "deleted";
-    reviewStatus: ReviewStatus;
-    lastReviewer?: LastReviewer;
-}
-```
-
-`Reviewer` is transient input collected when a user makes a decision; only the resulting `LastReviewer` is persisted on a changed line. `SourceSnapshot` is the shared filesystem metadata portion of `CurrentDescriptor`. `BaselineDescriptor`, `CurrentDescriptor`, `CurrentLineRecord`, `DeletedLineRecord`, `DiffHunk`, and `FileRecord` are nested in the persisted `StoredFile` JSON record.
-
-`FileSummary` is a derived sidebar/cache model, not an additional persisted review record. `PhysicalLine` and `RawGitHunk` are transient diff-generation models and are not saved. Hunk membership is derived from each zero-context Git range instead of storing duplicate arrays of line numbers. An unchanged line does not store a baseline line or old digest because neither value participates in review transfer or UI mapping. Keeping the persisted contract interface-based makes schema changes visible to the compiler and keeps storage validation aligned with the domain model.
-
-Unchanged records are automatically `reviewed` without inventing reviewer attribution. Pending is an explicit status; `lastReviewer` is omitted when no non-pending human decision exists.
-
-`fileStatus` is never an independent authority. The storage boundary recomputes it before every write, and the parser rejects metadata whose cached value disagrees with the line records. The cache exists so the sidebar can load one small summary per file without retaining every detailed record.
-
-Older schemas are ignored, not migrated. Dismissing first-launch initialization leaves them untouched. Choosing either initialization mode resets the tracker directory before writing v4.
-
-## Initialization choices and tracking scope
-
-Before a new workspace creates review metadata, the extension asks whether to initialize it. A workspace-local `initialization.json` records either a disabled state, which suppresses all future automatic initialization, or an initialized state with the selected file targets. The setup checklist starts with every candidate selected: workspace files filtered by root and nested `.gitignore` rules when those files exist, otherwise every workspace file. Git's global configuration and `.git/info/exclude` are deliberately not consulted. Startup, refresh, save, and file-creation reconciliation only create metadata for paths inside that saved scope. Existing metadata without this file remains compatible and is treated as tracking the workspace root.
-
-## Snapshot transaction
-
-Snapshots use `snapshots/<pathHash>.<baselineDigest>.gz`.
-
-1. Exact baseline bytes are gzip-compressed to a unique temporary file.
-2. The temporary gzip is read back with a decompression cap and verified against digest and uncompressed size.
-3. It is renamed to its content-addressed target.
-4. JSON is written to a unique sibling temporary file and atomically renamed over the per-file record.
-5. The previously referenced snapshot is removed only after the JSON commit.
-
-A failed JSON commit leaves the old JSON and snapshot authoritative; the new snapshot is an orphan cleaned on a later safe startup. Temporary snapshot and JSON files are removed in `finally` blocks, and startup removes leftovers from interrupted processes. Unreferenced gzip files are deleted only when every metadata file was parsed safely. Corrupt, mismatched, oversized, binary, or invalid-UTF-8 inputs leave existing review decisions intact.
-
-Deleting a source removes its JSON, referenced snapshot, summary, cache entry, and sidebar entry.
-
-## Recompute and review transfer
-
-Startup normally stats known sources and skips content reads when mtime and size still match. Save, manual refresh, diff opening, and review mutations force a stable saved-file read and digest check.
-
-### Why review time is not the startup checkpoint
-
-`lastReviewTime` answers when the user last made a review decision. It does not identify which saved bytes the metadata already describes. A file may be saved and reconciled at 10:00 while remaining pending from a 09:00 review. Comparing file mtime to review time would diff that already-reconciled file again on every activation.
-
-The current descriptor therefore records three separate reconciliation facts:
+`initialization.json` is schema 1 and has one of these forms:
 
 ```text
-modifiedAt   filesystem mtime observed by the last successful pipeline
-size         filesystem byte size observed by that pipeline
-digest       SHA-256 of the exact saved bytes processed by that pipeline
+{ schemaVersion: 1, state: "disabled" }
+{ schemaVersion: 1, state: "initialized", targets: [{ kind: "file" | "folder", path: string }] }
 ```
 
-On activation, `(mtime, size)` is the inexpensive filter:
+The first-activation setup flow offers:
 
-- if both match, startup skips reading, decompressing, and diffing that file;
-- if either differs, the extension stable-reads the file and runs the pipeline;
-- if a source is missing, its metadata and snapshot are removed.
+- **Never Initialize**, which persists the disabled state and blocks automatic
+  initialization paths.
+- **Start Reviewed**, which uses each selected saved file as its baseline.
+- **Start Pending**, which uses an empty baseline so every current physical
+  line is an added/pending line.
 
-Mtime and size are optimization signals, not content authority. Before opening a diff or mutating review state, the extension stable-reads the saved file and verifies its digest even if the stat pair appears unchanged. A digest mismatch forces recomputation and makes old diff URIs stale. This combination gives fast normal startup without allowing a review action to apply to unverified bytes.
+The setup picker starts with all currently eligible files selected and lets the
+user choose file targets. Re-running **Set Up Tracking** resets existing
+tracking before writing the new selection. The two whole-workspace
+initialization commands do the same with a root-folder target.
 
-The choice and its possible alternatives are intentionally recorded in `TODO.md` for a later design discussion.
+The selected targets are a seed for the current implementation, not a durable
+deny-list: startup discovery and explicit open/save/command paths can call
+`includeTrackingTarget` for eligible files encountered later. Ignore rules and
+the disabled-state guard still gate every source JSON/snapshot write.
 
-### The reconciliation pipeline
+Target inclusion and source metadata creation are separate operations. A race
+with a `.gitignore` change can therefore leave an ignored path in
+`initialization.json` even though the final source eligibility check prevents
+its JSON record or snapshot from being written. Later source operations still
+fail the ignore guard; the target itself is not automatically rolled back.
 
-The implementation follows the agreed previous-added/previous-deleted pipeline, with explicit duplicate safety:
+## Content identity and diff generation
 
-1. Index existing added records by exact line digest and ordered added-side occurrence. Index deleted records by exact digest and baseline line number.
-2. Load and validate the compressed baseline, stable-read the saved source, and run the required local Git diff.
-3. Rebuild current unchanged ranges from the baseline/current arrays. Unchanged lines are automatically reviewed.
-4. For every Git deletion, reuse the previous deleted record with the same digest and exact baseline line. A new deletion starts pending.
-5. For every Git addition, reuse the previous added record with the same `(digest, occurrence)` when the number of identical added records is unchanged. A new addition starts pending.
-6. A previous deletion absent from the new Git result was restored. It naturally reappears in the rebuilt unchanged range as reviewed and is absent from `deletedLines`.
-7. A previous addition absent from the new Git result was removed. It is absent from the rebuilt current-line array.
-8. Recompute the cached file status from all remaining addition/deletion review states and atomically persist the new generation.
+`readStableSource` reads exact bytes as fatal UTF-8 text, rejects NUL bytes,
+enforces `codeReviewTracker.maxFileSizeBytes` (default 1 MiB), and compares
+filesystem stats before and after the read. It retries once if the source
+changes while being read. File-level `baseline.digest` and `current.digest`
+are SHA-256 hex digests of the exact bytes.
 
-Both `reviewed` and `inReview` decisions transfer when identity remains unambiguous. New or changed records start pending. Rebuilding the generation produces the same transitions as mutating sets in place while preventing stale removed records from surviving accidentally.
+`physicalLines` splits only at LF and retains each line's terminator bytes.
+Therefore LF, CRLF, missing final newlines, blank lines, and whitespace-only
+lines have distinct physical identities. An empty file has no physical lines.
 
-### Operation serialization
+Line records use two identity strategies:
 
-Saved-file reconciliation, diff preparation, baseline reads, line/file decisions, deletion, and promotion are serialized per source URI. This prevents two asynchronous VS Code events from reading the same old generation and committing conflicting successors. Workspace initialization temporarily blocks new source operations and waits for existing source operations before resetting metadata. The persistence layer also serializes writes per path; a failed write does not poison the next queued operation.
+- Unchanged and deleted baseline lines use
+  `SHA-256(exact baseline line bytes + NUL + one-based baseline line number)`.
+  The immutable baseline line number makes a deleted line distinguishable from
+  other equal text and lets a restored line become unchanged again.
+- Added current lines use the SHA-256 of their exact current physical bytes
+  plus an ordered occurrence number for duplicate-transfer decisions. A
+  temporary `RevExt` suffix is part of those bytes while it exists.
 
-### Duplicate-addition safety
-
-Occurrence solves duplicate identity while the number and order of identical added records remain stable. One case is fundamentally ambiguous without saving another full current snapshot:
+For different content, `GitService` writes the two byte arrays to temporary
+files and runs:
 
 ```text
-previous additions: identical occurrence 1 pending, occurrence 2 reviewed
-new additions:      one identical occurrence remains
+git diff --no-index --no-ext-diff --no-textconv --no-color --text \
+  --unified=0 --diff-algorithm=myers --indent-heuristic -- baseline current
 ```
 
-The baseline diff cannot prove which occurrence was removed. Blind occurrence matching could incorrectly transfer `reviewed` to the pending survivor. The implementation therefore uses a fail-safe rule: if the cardinality of an identical added digest changes, no decision transfers for that digest and its surviving additions become pending.
+Exit code 0 means unchanged, 1 is a valid diff, and all other results fail.
+Only zero-context hunk headers are persisted. `buildDiffRecords` rebuilds
+unchanged spans, current additions, and deleted baseline lines from those
+hunks; it never pairs old and new lines as a modification.
 
-Deleted duplicates do not have this ambiguity because immutable baseline line numbers identify the exact old occurrences.
+## Persisted state
 
-This conservative reset spends a small amount of repeat-review effort to guarantee the extension never accepts an ambiguous line automatically. Alternatives are tracked in `TODO.md`.
+The current layout is:
 
-### Workspace coverage and source-change authority
+```text
+.vscode/code-review-tracker/
+  initialization.json
+  <sha256(relative-path)>.json
+  snapshots/
+    <sha256(relative-path)>.<baseline-digest>.gz
+```
 
-Git remains only the diff executable. Eligible files are enumerated from the workspace rather than `git ls-files`, so new and untracked saved files cannot disappear from review tracking. After a workspace has been initialized, a newly discovered eligible file receives an empty baseline and is classified as added/pending. Tracker files, `.git`, and `node_modules` remain excluded even when saved directly.
+Each metadata file is a `StoredFile` with `schemaVersion: 4`, the normalized
+workspace-relative path, and a `FileRecord` containing:
 
-The reconciliation pipeline runs from `onDidSaveTextDocument`, startup reconciliation, manual refresh, and eligible workspace file-change events. While VS Code is active, every persisted filesystem change to every eligible tracked source must trigger the same stable-read, digest verification, Git diff, and metadata commit without requiring a second manual save. This includes writes made by an in-editor agent, another external process, or a Git operation that changes workspace files. The changed source must be reconciled even when it has no open editor, is not visible, and has no review diff open. File-change handling must not suppress updates for already tracked eligible sources; restricting reconciliation to visible files would make workspace tracking incomplete and violate this core invariant.
+- `baseline`: snapshot filename, exact digest, `gzip` codec, uncompressed
+  size, and creation time;
+- `current`: exact digest, filesystem mtime/size, `gitAlgorithm: "myers"`, and
+  reconciliation time;
+- `fileStatus`, optional `lastReviewTime`, `updatedAt`, and `nextRevExtId`;
+- `currentLines`: one-based current line, digest, occurrence,
+  `changeType: "unchanged" | "added"`, review status, and optional reviewer;
+- `deletedLines`: baseline line, digest, occurrence, `changeType: "deleted"`,
+  review status, and optional reviewer;
+- `hunks`: old/new start and count ranges.
 
-Review metadata follows the bytes persisted on disk, not the editor's visibility. A text edit that exists only in a dirty editor buffer must not update review metadata. Once the bytes are written to disk—by an editor save, an agent, another process, or a Git operation—the eligible source must be reconciled immediately, even when no editor or diff is open.
+`ReviewStatus` is `pending`, `inReview`, or `reviewed`. Unchanged lines are
+automatically reviewed and have no reviewer attribution. Only added and
+deleted lines are reviewable. `fileStatus` and sidebar counts are derived from
+those lines; the storage boundary recomputes `fileStatus` before every write
+and rejects inconsistent metadata on read. `FileSummary` is a derived cache,
+not another persisted record. Older or malformed schemas are ignored rather
+than migrated.
 
-Stable reads compare stat information before and after reading and retry once. If a concurrent writer keeps changing the file, the pipeline aborts without replacing existing metadata.
+## Persistence safety
 
-## Native diff UI and stale safety
+Snapshots are content-addressed and verified before they become authoritative:
 
-The read-only `code-review-baseline:` provider validates the digest-addressed snapshot before returning UTF-8 text. Its URI embeds the baseline and current digests. The right pane is the real saved source URI.
+1. gzip bytes are written to a unique temporary snapshot;
+2. the temporary bytes are read back and checked against the baseline digest,
+   size, and configured decompression limit;
+3. the snapshot is renamed into place without overwriting a valid target;
+4. JSON is written to a unique temporary sibling and atomically renamed over
+   the metadata file;
+5. an old snapshot is removed only after the metadata commit succeeds.
 
-- Right selections map only to added records.
-- Left selections map only to deleted records.
-- Unchanged-only selections report that no reviewable changes were selected.
-- Decorations and hover text appear in both panes.
+If the JSON commit fails, the old metadata remains authoritative and the new
+snapshot may remain as an orphan until a safe startup cleanup. Temporary files
+are removed in `finally` blocks. Unreferenced gzip files are deleted only when
+all metadata files were parsed safely. Corrupt, oversized, binary, or invalid
+UTF-8 input does not replace an existing review record.
 
-Before every mutation the service stable-reads the source and validates both URI digests. A stale diff is rejected and must be reopened. Dirty source editors are rejected with a save-first message.
+The store keeps one summary per known source and at most eight detailed records
+in an LRU-style cache. Loads are coalesced and writes are serialized per path;
+`ReviewService` serializes the larger source operation around them. Deleting a
+record removes its JSON, referenced snapshot, summary, and cached detail.
 
-When every addition and deletion is reviewed, promotion stable-reads and verifies the expected current digest, writes the saved bytes as the next baseline, replaces the record with unchanged/reviewed current lines, clears deletions/hunks, retires the old snapshot, and closes obsolete native diff tabs.
+## Reconciliation and review transfer
 
-## Performance boundaries
+The common recomputation pipeline is:
 
-Startup keeps one summary per file and at most eight detailed records. An unchanged startup path performs metadata parsing plus filesystem stats. Baselines are decompressed and Git is invoked only for changed/forced files or when a baseline pane is opened. File-size and decompression limits bound memory use.
+1. check the current ignore and initialization boundaries;
+2. load the previous record and use mtime/size only when the caller permits
+   the fast path;
+3. stable-read the saved source and calculate its exact digest;
+4. if the digest changed, load and verify the baseline snapshot, run Git, and
+   rebuild the line records;
+5. atomically commit the new generation only after the final eligibility check.
+
+New additions and deletions start `pending`. Existing decisions transfer as
+follows:
+
+- A deletion matches the previous deleted record by baseline digest and exact
+  baseline line number. If the old line is restored, it is rebuilt as an
+  unchanged/reviewed line.
+- An added line matches by exact digest and ordered added-side occurrence, but
+  only when the number of equal additions is unchanged. If that count changes,
+  all surviving additions with that digest become pending because the diff
+  cannot prove which duplicate was removed.
+- `inReview` and `reviewed` transfer together when identity is unambiguous;
+  new or ambiguous records are pending.
+
+Save reconciliation may add identity comments to new duplicate additions. The
+internal save is marked so it does not recursively reconcile itself; the
+review decisions are bridged across the marker-induced digest change before
+the final record is committed.
+
+Per-source operations—save/external reconciliation, diff preparation, baseline
+reads, decisions, deletion, and promotion—are serialized by `ReviewService`.
+Workspace initialization waits for existing source operations and rejects new
+ones while it resets the store. This prevents asynchronous VS Code events from
+committing conflicting generations.
+
+The stat pair is an optimization signal, not content authority. Startup and
+ordinary diff preparation may skip a read when mtime and size match. Save and
+external-file reconciliation stable-read the source, and explicit review
+mutations force a digest check. Diff preparation rejects dirty source editors;
+the baseline URI carries baseline/current digests and is checked when the
+baseline provider or a review action consumes it. A same-size, same-mtime
+rewrite can still be missed while opening or displaying a diff because those
+paths use the stat shortcut; a later review mutation uses the forced check and
+rejects the stale action.
+
+## RevExt duplicate markers
+
+The marker system is enabled only for language IDs listed in
+`revext-syntax.ts`; unsupported languages are left untouched. It annotates
+duplicate added lines, not unique additions. Existing markers are recognized
+and preserved while duplicate peers are annotated. Promotion removes generated
+markers from added lines before saving the next clean baseline.
+
+- Normal line-comment languages receive a `//`, `#`, `--`, `%`, or equivalent
+  `RevExt: N` suffix according to the language map.
+- JavaScript/TypeScript React documents are scanned with a small stateful
+  lexer. JavaScript contexts use line comments; JSX child contexts use
+  `{/* RevExt: N */}`, which is a non-rendering JSX expression comment.
+- JSX tag attributes, unfinished tags, strings, comments, regular expressions,
+  and other unsafe/ambiguous insertion points are skipped to preserve source
+  validity. The affected duplicate remains protected by conservative
+  digest/occurrence transfer.
+
+The marker is an implementation aid, not review content: it is transparent in
+the editor decoration layer, is removed on promotion, and does not become a
+rendered JSX child.
+
+## Native diff UI and commands
+
+The `code-review-baseline:` content provider exposes a digest-addressed,
+read-only baseline. The native VS Code diff editor shows that baseline on the
+left and the saved file URI on the right. Left selections map to deleted lines;
+right selections map to added lines. Selections containing only unchanged lines
+do nothing.
+
+The Code Review sidebar groups files by pending/in-review/reviewed status and
+shows reviewed/total changed-line counts. Gutter decorations and hover text
+show line state and the last reviewer in both panes. Explorer context actions
+mark files or folders pending, in review, or reviewed; editor actions mark the
+active selection, open the review diff, or send the selection to a terminal.
+The default line shortcuts are Ctrl+Alt+J/K/L, and Ctrl+Alt+P sends a selection
+to the agent terminal.
+
+When every added and deleted line is reviewed, promotion stable-reads the
+current file, removes `RevExt` markers, writes the current bytes as the next
+baseline, clears the diff/deleted records, and closes obsolete native diff
+tabs. Marking a clean tracked file pending creates an empty-baseline generation
+for that file without changing other files.
+
+Reviewer resolution is cached per workspace and follows this order: cached
+identity, local Git identity, configured `reviewerName`/`reviewerEmail`, then
+interactive fallback. `sendSelectionToTerminal` sends fenced, line-labeled
+current editor text to the active terminal or creates a `Code Review Agent`
+terminal. A configured `agentCommand` is started only when a new terminal is
+created and the workspace is trusted.
+
+Other commands are setup/reconfiguration, whole-workspace pending/reviewed
+initialization, refresh, and log display. The manifest also exposes
+`maxFileSizeBytes` and `openFilesInReviewView`. The extension supports local
+files in Restricted Mode with limited functionality, targets VS Code
+`^1.127.0`, requires a local Git executable, and does not support virtual
+workspaces.
 
 ## Verification
 
-### Automated checks
-
-Prerequisites: Node.js, npm, Git, and VS Code.
+Use `pnpm` for project commands:
 
 ```bash
-npm ci
-npm test
-npm run package:vsix
-unzip -l code-review-tracker-0.4.0.vsix
+pnpm install
+pnpm test
 ```
 
-For diagnosis, the aggregate command is split into `check-types`, `lint`, `test:unit`, and `test:integration`. The unit suite covers exact physical lines, LF/CRLF and final-newline identity, Git hunk parsing and no-index execution, addition/deletion classification, marker allocation, baseline-line identity, derived file-status validation, v4 topology validation, old-schema rejection, and gzip corruption/limit checks.
+The aggregate test runs type checking, linting, unit tests, the JSX/browser
+test, and Extension Host integration suites. Individual checks are available
+as `pnpm run check-types`, `pnpm run lint`, `pnpm run test:unit`,
+`pnpm run test:browser`, and `pnpm run test:integration`.
 
-### Extension Host smoke test
+The integration contract verifies persisted metadata, gzip snapshots, cleanup,
+external writes, save/open/command/folder paths, dynamic ignore changes, and
+Git-index immutability. The disabled and restart suites verify opt-out and
+startup behavior. Unit/browser tests cover Git identity and diff handling,
+ignore matching, reviewer caching, duplicate transfer, marker placement, and
+parser-valid JSX output.
 
-Run the extension in an Extension Development Host, open a local filesystem workspace with Git installed, and verify:
-
-1. Dismiss initialization, reload, and confirm the prompt returns without tracker changes.
-2. Choose **Start Reviewed** and confirm JSON plus gzip snapshots appear.
-3. Edit and save a file with additions, deletions, blank lines, and a replacement.
-4. Open **Code Review: Open Review Diff**. Confirm the replacement is an independent left deletion and right addition.
-5. Review a right-side selection and a left-side selection. Confirm unchanged selections are ignored.
-6. Leave an editor dirty and confirm diff opening/review mutations require a save.
-7. Modify a tracked file through an agent, host filesystem write, or Git operation that changes workspace files while neither its editor nor review diff is open; confirm its metadata updates automatically and opening it shows the new line decorations. Repeat with another tracked file whose editor and review diff are open, without manually saving the editor, and confirm the same update occurs.
-8. Change and save the file while an old diff is open; confirm old actions are rejected as stale.
-9. Review every addition/deletion and confirm automatic promotion closes the diff.
-10. Delete the source and confirm its JSON, gzip, summary, and sidebar row disappear after the next startup.
-11. Repeat with **Start Pending** and confirm every physical current line, including blanks, is an addition.
-
-### Package smoke test
-
-```bash
-code --install-extension ./code-review-tracker-0.4.0.vsix --force
-code --list-extensions --show-versions
-```
-
-Confirm the installed entry is `local.code-review-tracker@0.4.0`, then repeat the saved-only native-diff workflow in a clean VS Code window.
+For a manual smoke check, verify setup persistence, Start Reviewed and Start
+Pending, saved and external-file reconciliation, dirty-editor rejection, stale
+diff rejection, automatic promotion, source deletion cleanup, and both positive
+and negative metadata/snapshot results for eligible, ignored, and disabled
+paths.
