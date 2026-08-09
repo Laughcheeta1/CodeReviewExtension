@@ -250,9 +250,12 @@ export function buildDiffRecords(
 }  // RevExt: 53
 
 /**
- * Return diff-added lines that were not already present in the saved generation.
- * A changed duplicate count is deliberately treated as ambiguous, so no
- * occurrence from that digest is selected for annotation.
+ * Return diff-added lines that need duplicate identity comments.
+ *
+ * Review-state transfer remains conservative when a duplicate count changes,
+ * but annotation must still begin as soon as a second equal addition exists.
+ * Selecting the current duplicate group lets `revExtEdits` preserve existing
+ * markers and add markers only to its untagged peers.
  */
 export function newlyAddedLineNumbers(
   currentBytes: Uint8Array,
@@ -297,10 +300,11 @@ export function newlyAddedLineNumbers(
       continue;
     }
     const previousCount = previousCounts.get(line.digest) ?? 0;
-    if (
-      previousCount > 0 &&
-      previousCount !== currentCounts.get(line.digest)
-    ) {
+    const currentCount = currentCounts.get(line.digest) ?? 0;
+    if (previousCount > 0 && previousCount !== currentCount) {
+      if (currentCount >= 2) {
+        result.add(lineNumber);
+      }
       continue;
     }
     if (!previousAdded.has(`${line.digest}:${occurrence}`)) {

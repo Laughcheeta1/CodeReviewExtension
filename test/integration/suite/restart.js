@@ -120,6 +120,8 @@ async function run() {
       "created-after-activation.txt",
       "created-by-host-filesystem.txt",
       "marker-save-regression.ts",
+      "fully-reviewed-duplicate.ts",
+      "watcher-first-duplicate.ts",
       "opened-after-activation.txt",
       "open-fallback.txt",
       "diff-fallback.txt",

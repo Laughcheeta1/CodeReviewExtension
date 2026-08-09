@@ -217,6 +217,10 @@
     {
       "kind": "file",
       "path": "test/browser/complex-jsx-render.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-1.md"
     }
   ]
 }

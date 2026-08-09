@@ -225,10 +225,14 @@ follows:
 - `inReview` and `reviewed` transfer together when identity is unambiguous;
   new or ambiguous records are pending.
 
-Save reconciliation may add identity comments to new duplicate additions. The
-internal save is marked so it does not recursively reconcile itself; the
-review decisions are bridged across the marker-induced digest change before
-the final record is committed.
+Save reconciliation may add identity comments to new duplicate additions. If
+the duplicate count changes, review transfer remains conservative, but the
+current duplicate group is still selected so a newly duplicated line and its
+untagged peers receive distinct markers. If a file watcher commits the saved
+bytes before the save callback, the save path rescans the current added lines
+and repairs any untagged duplicate peers. The internal save is marked so it
+does not recursively reconcile itself; review decisions are bridged across
+the marker-induced digest change before the final record is committed.
 
 Per-source operations—save/external reconciliation, diff preparation, baseline
 reads, decisions, deletion, and promotion—are serialized by `ReviewService`.

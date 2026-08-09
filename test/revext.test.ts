@@ -502,7 +502,7 @@ test("only annotates newly added duplicate lines", () => {
   );
 });
 
-test("finds added lines not present in the previous generation", () => {
+test("annotates duplicate additions when a peer is added later", () => {
   const baseline = new Uint8Array();
   const previousBytes = sourceBytes(["repeat", "repeat"]);
   const previous = buildDiffRecords(
@@ -525,7 +525,47 @@ test("finds added lines not present in the previous generation", () => {
       new Set([1, 2, 3]),
       previous,
     ),
+    new Set([1, 2, 3]),
+  );
+  assert.deepEqual(
+    newlyAddedLineNumbers(
+      sourceBytes(["repeat"]),
+      new Set([1]),
+      previous,
+    ),
     new Set(),
+  );
+});
+
+test("selects both equal additions when the first one was already persisted", () => {
+  const baseline = new Uint8Array();
+  const previousBytes = sourceBytes(["repeat"]);
+  const previous = buildDiffRecords(
+    baseline,
+    previousBytes,
+    [{ oldStart: 0, oldCount: 0, newStart: 1, newCount: 1 }],
+  );
+
+  const selected = newlyAddedLineNumbers(
+    sourceBytes(["repeat", "repeat"]),
+    new Set([1, 2]),
+    previous,
+  );
+  const annotation = revExtEdits(
+    ["repeat", "repeat"],
+    new Set([1, 2]),
+    "typescript",
+    1,
+    selected,
+  );
+
+  assert.deepEqual(selected, new Set([1, 2]));
+  assert.deepEqual(
+    annotation.edits,
+    [
+      { line: 1, suffix: "  // RevExt: 1" },
+      { line: 2, suffix: "  // RevExt: 2" },
+    ],
   );
 });
 

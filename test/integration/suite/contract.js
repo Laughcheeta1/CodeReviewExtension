@@ -438,6 +438,176 @@ async function run() {
     assert.equal(afterMarkerSave.file.currentLines.length, 4);
     expectedPaths.add(markerSaveRegression);
 
+    /*
+     * A fully reviewed file is promoted to a clean baseline before the user
+     * adds two identical lines. The duplicate text intentionally already
+     * exists in that baseline, so this covers the real new-addition case
+     * rather than merely adding a second pair of pending duplicates.
+     */
+    const fullyReviewedDuplicate = "fully-reviewed-duplicate.ts";
+    await writeSource(folder, fullyReviewedDuplicate, "repeat\nanchor\n");
+    await waitForMetadata(folder, fullyReviewedDuplicate);
+    await markFile(
+      folder,
+      fullyReviewedDuplicate,
+      "codeReviewTracker.markFileReviewed",
+    );
+    const reviewedDuplicateBaseline = await assertStatus(
+      folder,
+      fullyReviewedDuplicate,
+      "reviewed",
+    );
+    assert.equal(
+      reviewedDuplicateBaseline.file.baseline.digest,
+      reviewedDuplicateBaseline.file.current.digest,
+      "the duplicate-line regression must begin from a promoted baseline",
+    );
+    const fullyReviewedDocument = await openSource(
+      folder,
+      fullyReviewedDuplicate,
+    );
+    const firstDuplicateEdit = new vscode.WorkspaceEdit();
+    firstDuplicateEdit.insert(
+      sourceUri(folder, fullyReviewedDuplicate),
+      new vscode.Position(fullyReviewedDocument.lineCount - 1, 0),
+      "repeat\n",
+    );
+    assert.equal(await vscode.workspace.applyEdit(firstDuplicateEdit), true);
+    assert.equal(await fullyReviewedDocument.save(), true);
+    await waitUntil(
+      "first duplicate addition before its peer",
+      async () => {
+        const value = await assertMetadataPresent(
+          folder,
+          fullyReviewedDuplicate,
+        );
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        if (added.length !== 1) {
+          return false;
+        }
+        assert.equal(
+          (new TextDecoder().decode(
+            await vscode.workspace.fs.readFile(
+              sourceUri(folder, fullyReviewedDuplicate),
+            ),
+          ).match(/RevExt:/g) ?? []).length,
+          0,
+          "a unique first addition should not need a RevExt marker",
+        );
+        return value;
+      },
+    );
+    const secondDuplicateEdit = new vscode.WorkspaceEdit();
+    secondDuplicateEdit.insert(
+      sourceUri(folder, fullyReviewedDuplicate),
+      new vscode.Position(fullyReviewedDocument.lineCount - 1, 0),
+      "repeat\n",
+    );
+    assert.equal(await vscode.workspace.applyEdit(secondDuplicateEdit), true);
+    assert.equal(await fullyReviewedDocument.save(), true);
+    const afterFullyReviewedDuplicate = await waitUntil(
+      "RevExt comments for duplicate additions to a fully reviewed file",
+      async () => {
+        const value = await assertMetadataPresent(
+          folder,
+          fullyReviewedDuplicate,
+        );
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        if (added.length !== 2) {
+          return false;
+        }
+        assert.deepEqual(
+          added.map((line) => line.reviewStatus),
+          ["pending", "pending"],
+        );
+        return value;
+      },
+    );
+    assert.equal(afterFullyReviewedDuplicate.file.fileStatus, "pending");
+    const fullyReviewedDuplicateSource = new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(
+        sourceUri(folder, fullyReviewedDuplicate),
+      ),
+    );
+    assert.equal(
+      (fullyReviewedDuplicateSource.match(/RevExt:/g) ?? []).length,
+      2,
+      "a fully reviewed baseline must annotate both identical new lines",
+    );
+    const fullyReviewedDuplicateLines =
+      fullyReviewedDuplicateSource.split(/\r?\n/);
+    assert.doesNotMatch(fullyReviewedDuplicateLines[0] ?? "", /RevExt:/);
+    assert.doesNotMatch(fullyReviewedDuplicateLines[1] ?? "", /RevExt:/);
+    assert.match(fullyReviewedDuplicateLines[2] ?? "", /RevExt:/);
+    assert.match(fullyReviewedDuplicateLines[3] ?? "", /RevExt:/);
+    expectedPaths.add(fullyReviewedDuplicate);
+
+    /*
+     * The file watcher can reconcile a saved external change before the save
+     * callback gets the document event. A later save must repair that
+     * persisted-but-untagged duplicate state instead of treating it as a
+     * reason to skip marker creation.
+     */
+    const watcherFirstDuplicate = "watcher-first-duplicate.ts";
+    await writeSource(folder, watcherFirstDuplicate, "repeat\nanchor\n");
+    await waitForMetadata(folder, watcherFirstDuplicate);
+    await markFile(
+      folder,
+      watcherFirstDuplicate,
+      "codeReviewTracker.markFileReviewed",
+    );
+    await assertStatus(folder, watcherFirstDuplicate, "reviewed");
+    const watcherFirstDocument = await openSource(
+      folder,
+      watcherFirstDuplicate,
+    );
+    const watcherFirstEdit = new vscode.WorkspaceEdit();
+    watcherFirstEdit.insert(
+      sourceUri(folder, watcherFirstDuplicate),
+      new vscode.Position(watcherFirstDocument.lineCount - 1, 0),
+      "repeat\nrepeat\n",
+    );
+    assert.equal(await vscode.workspace.applyEdit(watcherFirstEdit), true);
+    assert.equal(watcherFirstDocument.isDirty, true);
+    await writeExternalSource(
+      folder,
+      watcherFirstDuplicate,
+      "repeat\nanchor\nrepeat\nrepeat\n",
+    );
+    await waitUntil(
+      "watcher reconciliation before save marker repair",
+      async () => {
+        const value = await assertMetadataPresent(
+          folder,
+          watcherFirstDuplicate,
+        );
+        return value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        ).length === 2
+          ? value
+          : false;
+      },
+    );
+    assert.equal(await watcherFirstDocument.save(), true);
+    await waitUntil(
+      "save marker repair after watcher reconciliation",
+      async () => {
+        const source = new TextDecoder().decode(
+          await vscode.workspace.fs.readFile(
+            sourceUri(folder, watcherFirstDuplicate),
+          ),
+        );
+        return (source.match(/RevExt:/g) ?? []).length === 2
+          ? source
+          : false;
+      },
+    );
+    expectedPaths.add(watcherFirstDuplicate);
+
     // Repeat the same positive/negative pair through a real host filesystem
     // write. This proves that the extension's VS Code file watcher, rather
     // than only vscode.workspace.fs, discovers files created externally.
