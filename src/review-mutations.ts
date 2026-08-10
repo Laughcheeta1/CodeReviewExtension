@@ -101,10 +101,14 @@ export async function requireFresh(
   if (file === undefined) {
     throw new Error("This file has not been initialized for review.");
   }
+  // The baseline URI's current digest identifies the saved generation that
+  // was open when the native diff was created. The modified side is live, so
+  // a later saved edit legitimately advances that digest while the baseline
+  // remains authoritative. Recompute above supplies the latest saved record;
+  // line-level callers must still match their selection against that record.
   if (
     identity !== undefined &&
-    (identity.baselineDigest !== file.baseline.digest ||
-      identity.currentDigest !== file.current.digest)
+    identity.baselineDigest !== file.baseline.digest
   ) {
     throw new Error(
       "This review diff is stale. Reopen Code Review: Open Review Diff.",

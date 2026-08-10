@@ -191,6 +191,8 @@ async function createWorkspace({ initialized }) {
     externalIgnored: "external-ignored.txt",
     dynamicIgnored: "dynamic-ignored.txt",
     dynamicFolderFile: "dynamic-folder/source.txt",
+    liveLeftDiff: "live-left-diff.txt",
+    externalRevExt: "external-agent-duplicate.ts",
     deletedBeforeRestart: "deleted-before-restart.txt",
     protectedDependency: "node_modules/protected.js",
   };
@@ -211,6 +213,8 @@ async function createWorkspace({ initialized }) {
     [files.forceAddedSecret, "force added secret\n"],
     [files.dynamicIgnored, "dynamic ignored\n"],
     [files.dynamicFolderFile, "dynamic folder\n"],
+    [files.liveLeftDiff, "before\nremove me\nafter\n"],
+    [files.externalRevExt, "anchor\n"],
     [files.deletedBeforeRestart, "deleted before restart\n"],
     [files.protectedDependency, "protected dependency\n"],
   ]);

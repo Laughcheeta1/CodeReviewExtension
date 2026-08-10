@@ -27,6 +27,7 @@ import {
 } from "./source-io";
 import {
   annotatePendingDocument as annotatePendingSource,
+  recomputeExternalSource as recomputeExternalSourceWithAnnotations,
   recomputeSavedDocument as recomputeSavedSource,
   type RevExtAnnotationContext,
 } from "./revext-annotation";
@@ -490,7 +491,7 @@ export class ReviewService implements vscode.Disposable {
     }
     try {
       const changed = await this.withSource(uri, () =>
-        this.recompute(uri, true, true),
+        recomputeExternalSourceWithAnnotations(this.annotationContext(), uri),
       );
       if (changed) {
         this.changedEmitter.fire(uri);

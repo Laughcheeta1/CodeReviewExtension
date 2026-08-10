@@ -243,14 +243,19 @@ follows:
 - `inReview` and `reviewed` transfer together when identity is unambiguous;
   new or ambiguous records are pending.
 
-Save reconciliation may add identity comments to new duplicate additions. If
-the duplicate count changes, review transfer remains conservative, but the
-current duplicate group is still selected so a newly duplicated line and its
-untagged peers receive distinct markers. If a file watcher commits the saved
-bytes before the save callback, the save path rescans the current added lines
-and repairs any untagged duplicate peers. The internal save is marked so it
-does not recursively reconcile itself; review decisions are bridged across
-the marker-induced digest change before the final record is committed.
+Saved-file and clean external-file reconciliation may add identity comments to
+new duplicate additions. If the duplicate count changes, review transfer
+remains conservative, but the current duplicate group is still selected so a
+newly duplicated line and its untagged peers receive distinct markers. A clean
+external write is annotated from the stable host bytes and then rescanned so
+the persisted digest includes the marker suffixes. If a file watcher commits
+saved bytes before the save callback, the save path rescans the current added
+lines and repairs any untagged duplicate peers. Dirty editor buffers remain a
+separate boundary: external reconciliation persists the host bytes without
+rewriting the dirty document, and the later save path repairs markers. Internal
+saves are marked so they do not recursively reconcile themselves; review
+decisions are bridged across the marker-induced digest change before the final
+record is committed.
 
 Per-source operations—save/external reconciliation, diff preparation, baseline
 reads, decisions, deletion, and promotion—are serialized by `ReviewService`.
@@ -263,10 +268,16 @@ ordinary diff preparation may skip a read when mtime and size match. Save and
 external-file reconciliation stable-read the source, and explicit review
 mutations force a digest check. Diff preparation rejects dirty source editors;
 the baseline URI carries baseline/current digests and is checked when the
-baseline provider or a review action consumes it. A same-size, same-mtime
-rewrite can still be missed while opening or displaying a diff because those
-paths use the stat shortcut; a later review mutation uses the forced check and
-rejects the stale action.
+baseline provider or a review action consumes it. The baseline digest is a
+strict authority check. The current digest identifies the saved generation
+that was open when the native diff was created, but the modified side is live:
+after a later saved edit, the provider and review action use the latest saved
+record while retaining the same immutable baseline. A left-side action is
+applied only if its selected baseline line still exists in that latest
+deleted-line set. A changed baseline still rejects the action as stale. A
+same-size, same-mtime rewrite can still be missed while opening or displaying
+a diff because those paths use the stat shortcut; a later review mutation uses
+the forced check and resolves the latest saved generation.
 
 ## RevExt duplicate markers
 
@@ -295,7 +306,11 @@ rendered JSX child.
 The `code-review-baseline:` content provider exposes a digest-addressed,
 read-only baseline. The native VS Code diff editor shows that baseline on the
 left and the saved file URI on the right. Left selections map to deleted lines;
-right selections map to added lines. Selections containing only unchanged lines
+right selections map to added lines. The native modified side remains live
+after a saved edit, and the extension resolves left-side decorations and
+actions against the latest saved record without changing the baseline. If a
+previously deleted line is no longer deleted, the action becomes a no-op rather
+than applying to an unrelated line. Selections containing only unchanged lines
 do nothing.
 
 The Code Review sidebar groups files by pending/in-review/reviewed status and
@@ -351,7 +366,8 @@ ignore matching, reviewer caching, duplicate transfer, marker placement, and
 parser-valid JSX output.
 
 For a manual smoke check, verify setup persistence, Start Reviewed and Start
-Pending, saved and external-file reconciliation, dirty-editor rejection, stale
-diff rejection, automatic promotion, source deletion cleanup, and both positive
-and negative metadata/snapshot results for eligible, ignored, and disabled
-paths.
+Pending, saved and external-file reconciliation, editing and saving the right
+side of an open diff followed by a left-side review action, dirty-editor
+rejection, stale baseline rejection, automatic promotion, source deletion
+cleanup, and both positive and negative metadata/snapshot results for eligible,
+ignored, and disabled paths.

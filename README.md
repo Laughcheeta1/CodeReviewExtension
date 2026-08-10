@@ -21,6 +21,7 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 
 - Git additions are reviewed on the right.
 - Git deletions are reviewed on the left.
+- After a saved edit on the right, the open diff resolves decorations and left-side actions against the latest saved generation while keeping the same baseline. If a deleted line is restored, its old left-side action becomes a safe no-op.
 - A replacement remains one deletion plus one addition; the extension does not guess that they form a “modified” line.
 - Use the line commands for selections. In the Explorer, right-click a tracked file to mark all of its reviewable changes as pending, in review, or reviewed.
 - To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>.

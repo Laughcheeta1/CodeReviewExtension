@@ -139,6 +139,8 @@ async function run() {
       "file-command-fallback.txt",
       "line-command-eligible.txt",
       "line-command-fallback.txt",
+      "live-left-diff.txt",
+      "external-agent-duplicate.ts",
       "mixed-folder/allowed.txt",
       "mixed-folder/nested/deep-allowed.txt",
       "outside-folder-command.txt",

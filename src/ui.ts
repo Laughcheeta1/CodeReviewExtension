@@ -110,9 +110,11 @@ export class ReviewDecorations implements vscode.Disposable {
       } else if (
         file !== undefined &&
         identity !== undefined &&
-        identity.baselineDigest === file.baseline.digest &&
-        identity.currentDigest === file.current.digest
+        identity.baselineDigest === file.baseline.digest
       ) {
+        // The current digest in an already-open diff can lag after a saved
+        // edit. The latest file record is authoritative while the baseline
+        // digest keeps this decoration bound to the correct left pane.
         for (const line of file.deletedLines) {
           options[line.reviewStatus].push(  // RevExt: 61
             decoration(  // RevExt: 63

@@ -23,7 +23,7 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.18";
+const EXTENSION_VERSION = "0.5.20";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(

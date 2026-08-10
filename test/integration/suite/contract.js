@@ -98,6 +98,36 @@ async function openSource(folder, relativePath) {
   return document;
 }
 
+async function waitForReviewDiff(folder, relativePath) {
+  const modified = sourceUri(folder, relativePath).toString();
+  return waitUntil(`review diff for ${relativePath}`, () => {
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (
+          tab.input instanceof vscode.TabInputTextDiff &&
+          tab.input.modified.toString() === modified &&
+          tab.input.original.scheme === "code-review-baseline"
+        ) {
+          return tab;
+        }
+      }
+    }
+    return false;
+  });
+}
+
+async function focusReviewDiffSide(tab, uri) {
+  const existing = vscode.window.visibleTextEditors.find(
+    (editor) => editor.document.uri.toString() === uri.toString(),
+  );
+  const document =
+    existing?.document ?? (await vscode.workspace.openTextDocument(uri));
+  return vscode.window.showTextDocument(document, {
+    viewColumn: tab.group.viewColumn,
+    preserveFocus: false,
+  });
+}
+
 async function closeAllTabs() {
   const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
   if (tabs.length > 0) {
@@ -275,6 +305,8 @@ async function run() {
     fallbackFolderFile: "fallback-folder/source.txt",
     dynamicIgnored: "dynamic-ignored.txt",
     dynamicFolderFile: "dynamic-folder/source.txt",
+    liveLeftDiff: "live-left-diff.txt",
+    externalRevExt: "external-agent-duplicate.ts",
     deletedBeforeRestart: "deleted-before-restart.txt",
     protectedDependency: "node_modules/protected.js",
   };
@@ -310,6 +342,8 @@ async function run() {
     files.ignoredAllowed,
     files.allowedSecret,
     files.nestedRootOnly,
+    files.liveLeftDiff,
+    files.externalRevExt,
     files.deletedBeforeRestart,
   ]);
 
@@ -330,6 +364,7 @@ async function run() {
       files.ignoredAllowed,
       files.allowedSecret,
       files.nestedRootOnly,
+      files.liveLeftDiff,
       files.deletedBeforeRestart,
     ]) {
       await waitForMetadata(folder, relativePath, { timeoutMs: 8_000 });
@@ -352,6 +387,304 @@ async function run() {
       "startup baseline",
     );
     await assertNoUnknownTrackerEntries(folder);
+
+    /*
+     * An open diff keeps the original baseline URI, including the current
+     * digest from the generation that was opened. The modified side must be
+     * able to advance through multiple current-file edits without making a surviving
+     * deleted baseline line unreviewable. A deleted line that is restored
+     * before the action must instead become a safe no-op.
+    */
+    const liveLeftDiff = files.liveLeftDiff;
+    await waitForMetadata(folder, liveLeftDiff);
+    await markFile(
+      folder,
+      liveLeftDiff,
+      "codeReviewTracker.markFileReviewed",
+    );
+    const liveLeftReviewed = await assertStatus(
+      folder,
+      liveLeftDiff,
+      "reviewed",
+    );
+    assert.equal(
+      liveLeftReviewed.file.baseline.digest,
+      liveLeftReviewed.file.current.digest,
+      "the live-diff fixture must begin from a reviewed baseline",
+    );
+    await writeExternalSource(folder, liveLeftDiff, "before\nafter\n");
+    await vscode.commands.executeCommand("codeReviewTracker.refresh");
+    await waitUntil("initial deleted line for live diff", async () => {
+      const value = await assertMetadataPresent(folder, liveLeftDiff);
+      return value.file.deletedLines.length === 1 &&
+        value.file.deletedLines[0]?.baselineLine === 2
+        ? value
+        : false;
+    });
+    await closeAllTabs();
+    await vscode.commands.executeCommand(
+      "codeReviewTracker.openReviewDiff",
+      sourceUri(folder, liveLeftDiff),
+    );
+    const liveLeftTab = await waitForReviewDiff(folder, liveLeftDiff);
+    assert.ok(liveLeftTab.input instanceof vscode.TabInputTextDiff);
+    const originalBaselineUri = liveLeftTab.input.original;
+    const originalDiffCurrentDigest = new URLSearchParams(
+      originalBaselineUri.query,
+    ).get("current");
+    assert.ok(originalDiffCurrentDigest, "the diff must carry its opened digest");
+
+    await writeExternalSource(
+      folder,
+      liveLeftDiff,
+      "new top\nbefore\nafter\n",
+    );
+    await vscode.commands.executeCommand("codeReviewTracker.refresh");
+    await writeExternalSource(
+      folder,
+      liveLeftDiff,
+      "new top\nbefore\nnew bottom\nafter\n",
+    );
+    await vscode.commands.executeCommand("codeReviewTracker.refresh");
+    const liveLeftAfterEdits = await waitUntil(
+      "latest current generation for live diff",
+      async () => {
+        const value = await assertMetadataPresent(folder, liveLeftDiff);
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        return added.length === 2 &&
+          value.file.deletedLines.length === 1 &&
+          value.file.deletedLines[0]?.baselineLine === 2
+          ? value
+          : false;
+      },
+    );
+    assert.notEqual(
+      originalDiffCurrentDigest,
+      liveLeftAfterEdits.file.current.digest,
+      "the test must exercise a diff whose opened current digest is stale",
+    );
+
+    const leftEditor = await focusReviewDiffSide(
+      liveLeftTab,
+      originalBaselineUri,
+    );
+    leftEditor.selection = new vscode.Selection(1, 0, 1, 0);
+    for (const [command, status] of [
+      ["codeReviewTracker.markInReview", "inReview"],
+      ["codeReviewTracker.markPending", "pending"],
+      ["codeReviewTracker.markReviewed", "reviewed"],
+    ]) {
+      await vscode.commands.executeCommand(command);
+      await waitUntil(
+        `left-side ${status} action after current edits`,
+        async () => {
+          const value = await assertMetadataPresent(folder, liveLeftDiff);
+          return value.file.deletedLines.length === 1 &&
+            value.file.deletedLines[0]?.baselineLine === 2 &&
+            value.file.deletedLines[0]?.reviewStatus === status
+            ? value
+            : false;
+        },
+      );
+    }
+    const reviewedDeletedLine = await assertMetadataPresent(
+      folder,
+      liveLeftDiff,
+    );
+    assert.equal(
+      reviewedDeletedLine.file.baseline.digest,
+      liveLeftAfterEdits.file.baseline.digest,
+      "reviewing the left side must not replace the immutable baseline",
+    );
+    assert.deepEqual(
+      reviewedDeletedLine.file.currentLines
+        .filter((line) => line.changeType === "added")
+        .map((line) => line.reviewStatus),
+      ["pending", "pending"],
+    );
+
+    await writeExternalSource(
+      folder,
+      liveLeftDiff,
+      "new top\nbefore\nremove me\nnew bottom\nafter\n",
+    );
+    await vscode.commands.executeCommand("codeReviewTracker.refresh");
+    const restoredCurrent = await waitUntil(
+      "deleted line removal from the latest diff",
+      async () => {
+        const value = await assertMetadataPresent(folder, liveLeftDiff);
+        return value.file.deletedLines.length === 0 ? value : false;
+      },
+    );
+    const staleLeftEditor = await focusReviewDiffSide(
+      liveLeftTab,
+      originalBaselineUri,
+    );
+    staleLeftEditor.selection = new vscode.Selection(1, 0, 1, 0);
+    await vscode.commands.executeCommand("codeReviewTracker.markReviewed");
+    const afterRemovedTarget = await assertMetadataPresent(
+      folder,
+      liveLeftDiff,
+    );
+    assert.equal(
+      afterRemovedTarget.file.current.digest,
+      restoredCurrent.file.current.digest,
+      "a disappeared deleted line action must not create another generation",
+    );
+    assert.deepEqual(
+      afterRemovedTarget.file.deletedLines,
+      [],
+      "a restored baseline line must not remain reviewable through the old diff",
+    );
+    expectedPaths.add(liveLeftDiff);
+    await closeAllTabs();
+
+    /*
+     * A coding agent can rewrite a source through the host filesystem while
+     * no source editor is visible. The external watcher must both persist the
+     * Git diff and add RevExt identities; no TextDocument.save() is used for
+     * either host write below. The second write happens while the native diff
+     * is open so the live review view is covered too.
+     */
+    const externalRevExt = files.externalRevExt;
+    await waitForMetadata(folder, externalRevExt);
+    await markFile(
+      folder,
+      externalRevExt,
+      "codeReviewTracker.markFileReviewed",
+    );
+    const externalRevExtBaseline = await assertStatus(
+      folder,
+      externalRevExt,
+      "reviewed",
+    );
+    assert.equal(
+      externalRevExtBaseline.file.baseline.digest,
+      externalRevExtBaseline.file.current.digest,
+      "the external RevExt fixture must begin from a promoted reviewed baseline",
+    );
+    await closeAllTabs();
+    assert.equal(
+      vscode.window.visibleTextEditors.some(
+        (editor) =>
+          editor.document.uri.toString() ===
+          sourceUri(folder, externalRevExt).toString(),
+      ),
+      false,
+      "the external RevExt write must begin without a visible source editor",
+    );
+
+    await writeExternalSource(
+      folder,
+      externalRevExt,
+      "anchor\nrepeat\nrepeat\n",
+    );
+    const firstExternalRevExt = await waitUntil(
+      "RevExt comments after an external duplicate write",
+      async () => {
+        const value = await assertMetadataPresent(folder, externalRevExt);
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        if (added.length !== 2) {
+          return false;
+        }
+        assert.deepEqual(
+          added.map((line) => ({
+            line: line.line,
+            reviewStatus: line.reviewStatus,
+          })),
+          [
+            { line: 2, reviewStatus: "pending" },
+            { line: 3, reviewStatus: "pending" },
+          ],
+        );
+        const source = new TextDecoder().decode(
+          await readPhysicalFile(
+            join(folder.uri.fsPath, externalRevExt),
+          ),
+        );
+        const lines = source.split(/\r?\n/);
+        assert.equal(
+          (source.match(/\/\/ RevExt:/g) ?? []).length,
+          2,
+          "external duplicate additions must receive exactly two RevExt comments",
+        );
+        assert.doesNotMatch(lines[0] ?? "", /RevExt:/);
+        assert.match(lines[1] ?? "", /RevExt:/);
+        assert.match(lines[2] ?? "", /RevExt:/);
+        assert.equal(value.file.fileStatus, "pending");
+        assert.equal(value.file.hunks.length, 1);
+        assert.equal(value.file.hunks[0]?.newStart, 2);
+        assert.equal(value.file.hunks[0]?.newCount, 2);
+        return value;
+      },
+    );
+    assert.notEqual(
+      firstExternalRevExt.file.current.digest,
+      firstExternalRevExt.file.baseline.digest,
+      "the external duplicate write must remain a real review diff",
+    );
+
+    await closeAllTabs();
+    await vscode.commands.executeCommand(
+      "codeReviewTracker.openReviewDiff",
+      sourceUri(folder, externalRevExt),
+    );
+    const externalRevExtTab = await waitForReviewDiff(folder, externalRevExt);
+    assert.ok(externalRevExtTab.input instanceof vscode.TabInputTextDiff);
+    assert.equal(
+      externalRevExtTab.input.modified.toString(),
+      sourceUri(folder, externalRevExt).toString(),
+    );
+    assert.equal(externalRevExtTab.input.original.scheme, "code-review-baseline");
+
+    await writeExternalSource(
+      folder,
+      externalRevExt,
+      "anchor\nrepeat\nrepeat\nrepeat\n",
+    );
+    await waitUntil(
+      "RevExt comments after an external duplicate write in an open diff",
+      async () => {
+        const value = await assertMetadataPresent(folder, externalRevExt);
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        if (added.length !== 3) {
+          return false;
+        }
+        const source = new TextDecoder().decode(
+          await readPhysicalFile(
+            join(folder.uri.fsPath, externalRevExt),
+          ),
+        );
+        const lines = source.split(/\r?\n/);
+        assert.equal(
+          (source.match(/\/\/ RevExt:/g) ?? []).length,
+          3,
+          "open-diff external additions must preserve and extend RevExt comments",
+        );
+        assert.doesNotMatch(lines[0] ?? "", /RevExt:/);
+        assert.match(lines[1] ?? "", /RevExt:/);
+        assert.match(lines[2] ?? "", /RevExt:/);
+        assert.match(lines[3] ?? "", /RevExt:/);
+        assert.deepEqual(
+          added.map((line) => line.reviewStatus),
+          ["pending", "pending", "pending"],
+        );
+        return value;
+      },
+    );
+    assert.equal(
+      externalRevExtTab.input.modified.toString(),
+      sourceUri(folder, externalRevExt).toString(),
+      "the native diff must remain available after the external annotated write",
+    );
+    expectedPaths.add(externalRevExt);
+    await closeAllTabs();
 
     /*
      * Creation watcher contract. A file created after activation must be
