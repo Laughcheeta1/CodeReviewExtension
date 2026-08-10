@@ -26,6 +26,13 @@ async function run() {
   await extension.activate();
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, "the integration workspace must be available");
+  assert.equal(
+    vscode.workspace
+      .getConfiguration("codeReviewTracker")
+      .get("ignoreEmptyLineDeletions", false),
+    true,
+    "restart must preserve the enabled empty-line deletion policy",
+  );
 
   const forbidden = [
     "ignored-root.txt",
@@ -122,6 +129,9 @@ async function run() {
       "marker-save-regression.ts",
       "fully-reviewed-duplicate.ts",
       "watcher-first-duplicate.ts",
+      "saved-empty-line-deletion.txt",
+      "external-empty-line-deletion.txt",
+      "mixed-empty-line-deletion.txt",
       "opened-after-activation.txt",
       "open-fallback.txt",
       "diff-fallback.txt",
@@ -135,6 +145,19 @@ async function run() {
       "fallback-folder/source.txt",
       "discovered-before-restart.txt",
     ], "restart");
+    for (const relativePath of [
+      "saved-empty-line-deletion.txt",
+      "external-empty-line-deletion.txt",
+    ]) {
+      const value = await assertMetadataPresent(folder, relativePath);
+      assert.equal(
+        value.file.baseline.digest,
+        value.file.current.digest,
+        `restart must preserve automatic acceptance for ${relativePath}`,
+      );
+      assert.deepEqual(value.file.deletedLines, []);
+      assert.deepEqual(value.file.hunks, []);
+    }
     await assertNoUnknownTrackerEntries(folder);
 
     /*

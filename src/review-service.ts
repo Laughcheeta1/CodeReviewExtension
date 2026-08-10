@@ -33,6 +33,7 @@ import {
 import {
   applyReview as applyReviewMutation,
   initializePendingFile as initializePendingFileMutation,
+  promote as promoteMutation,
   requireFresh as requireFreshMutation,
   type BaselineIdentity,
   type ReviewMutationContext,
@@ -349,6 +350,44 @@ export class ReviewService implements vscode.Disposable {
       this.changedEmitter.fire(undefined);  // RevExt: 129
     }  // RevExt: 22
   }  // RevExt: 83
+  async refreshReviewPolicy(): Promise<void> {
+    let changed = false;
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const store = this.stores.get(folder.uri.toString());
+      if (
+        store === undefined ||
+        store.initializationState !== "initialized"
+      ) {
+        continue;
+      }
+      const eligible = await this.refreshEligiblePaths(folder);
+      if (eligible === undefined) {
+        continue;
+      }
+      for (const path of eligible) {
+        if (!store.tracksPath(path)) {
+          continue;
+        }
+        const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+        try {
+          if (
+            await this.withSource(uri, () =>
+              this.recompute(uri, true, false, undefined, undefined, true),
+            )
+          ) {
+            changed = true;
+          }
+        } catch (error) {
+          this.log.warn(
+            `Could not refresh review policy for ${path}: ${String(error)}`,
+          );
+        }
+      }
+    }
+    if (changed) {
+      this.changedEmitter.fire(undefined);
+    }
+  }
   async cleanupMissingSources(folder: vscode.WorkspaceFolder): Promise<void> {
     const store = this.stores.get(folder.uri.toString());
     if (store === undefined) {
@@ -776,6 +815,7 @@ export class ReviewService implements vscode.Disposable {
     createMissing = false,
     prepared?: PreparedSource,
     previous?: FileRecord,
+    rebuildPolicy = false,
   ): Promise<boolean> {  // RevExt: 293
     // Re-check the current ignore-rule snapshot at the final recomputation
     // boundary. All callers also perform an eligibility check, but this guard
@@ -833,7 +873,9 @@ export class ReviewService implements vscode.Disposable {
     const { bytes, source } =
       prepared ?? (await readStableSource(uri, this.maxSize(), initialStat));
     const digest = digestBytes(bytes);
-    if (digest === existing.current.digest) {
+    const policyNeedsRebuild =
+      rebuildPolicy && existing.baseline.digest !== existing.current.digest;
+    if (digest === existing.current.digest && !policyNeedsRebuild) {
       if (  // RevExt: 338
         source.modifiedAt === existing.current.modifiedAt &&
         source.size === existing.current.size
@@ -859,11 +901,18 @@ export class ReviewService implements vscode.Disposable {
         bytes,
         this.relativePath(uri) ?? uri.fsPath,
       ));
-    const diff = buildDiffRecords(baseline, bytes, rawHunks, existing);
+    const ignoreEmptyLineDeletions = this.ignoreEmptyLineDeletions(uri);
+    const diff = buildDiffRecords(
+      baseline,
+      bytes,
+      rawHunks,
+      existing,
+      { ignoreEmptyLineDeletions },
+    );
     if (!(await this.isEligibleSource(uri))) {
       return false;
     }
-    await store.commit(path, {
+    const nextFile: FileRecord = {
       ...existing,
       ...diff,  // RevExt: 349
       current: {  // RevExt: 351
@@ -873,7 +922,16 @@ export class ReviewService implements vscode.Disposable {
         generatedAt: now(),
       },  // RevExt: 357
       updatedAt: now(),
-    });  // RevExt: 272
+    };
+    if (
+      ignoreEmptyLineDeletions &&
+      existing.baseline.digest !== digest &&
+      diff.hunks.length === 0
+    ) {
+      await promoteMutation(this.mutationContext(), uri, nextFile);
+      return true;
+    }
+    await store.commit(path, nextFile);  // RevExt: 272
     return true;  // RevExt: 360
   }  // RevExt: 95
   private async recomputeSavedDocument(
@@ -1080,6 +1138,11 @@ export class ReviewService implements vscode.Disposable {
       .getConfiguration("codeReviewTracker")
       .get<number>("maxFileSizeBytes", 1048576);
   }  // RevExt: 107
+  private ignoreEmptyLineDeletions(uri: vscode.Uri): boolean {
+    return vscode.workspace
+      .getConfiguration("codeReviewTracker", uri)
+      .get<boolean>("ignoreEmptyLineDeletions", false);
+  }
   private async withSource<T>(
     uri: vscode.Uri,  // RevExt: 319
     operation: () => Promise<T>,

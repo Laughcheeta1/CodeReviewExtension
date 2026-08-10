@@ -141,7 +141,12 @@ git diff --no-index --no-ext-diff --no-textconv --no-color --text \
 Exit code 0 means unchanged, 1 is a valid diff, and all other results fail.
 Only zero-context hunk headers are persisted. `buildDiffRecords` rebuilds
 unchanged spans, current additions, and deleted baseline lines from those
-hunks; it never pairs old and new lines as a modification.
+hunks; it never pairs old and new lines as a modification. When
+`codeReviewTracker.ignoreEmptyLineDeletions` is enabled, a deleted baseline
+line containing only its LF/CRLF terminator is omitted from the reviewable
+records. Effective hunk ranges are split around those omitted lines so their
+old-side ranges still exactly cover the persisted deleted records; whitespace-
+only lines remain reviewable.
 
 ## Persisted state
 
@@ -168,6 +173,11 @@ workspace-relative path, and a `FileRecord` containing:
 - `deletedLines`: baseline line, digest, occurrence, `changeType: "deleted"`,
   review status, and optional reviewer;
 - `hunks`: old/new start and count ranges.
+
+With empty-line deletion filtering enabled, `hunks` describe only effective
+reviewable changes. The exact baseline snapshot and current digest remain the
+authorities; the option changes which deletion records are reviewable, not the
+bytes used for identity or the native diff content.
 
 `ReviewStatus` is `pending`, `inReview`, or `reviewed`. Unchanged lines are
 automatically reviewed and have no reviewer attribution. Only added and
@@ -209,8 +219,16 @@ The common recomputation pipeline is:
    the fast path;
 3. stable-read the saved source and calculate its exact digest;
 4. if the digest changed, load and verify the baseline snapshot, run Git, and
-   rebuild the line records;
+   rebuild the line records, applying the configured empty-line deletion
+   policy;
 5. atomically commit the new generation only after the final eligibility check.
+
+When `ignoreEmptyLineDeletions` is enabled and the effective diff contains no
+reviewable changes, the current bytes are automatically promoted to the next
+baseline. This removes the accepted blank deletion from both metadata and the
+snapshot history. In a mixed diff, the exact old baseline remains until the
+remaining additions or non-empty deletions are reviewed; only the empty
+deletion is omitted from review metadata.
 
 New additions and deletions start `pending`. Existing decisions transfer as
 follows:
@@ -291,8 +309,10 @@ to the agent terminal.
 When every added and deleted line is reviewed, promotion stable-reads the
 current file, removes `RevExt` markers, writes the current bytes as the next
 baseline, clears the diff/deleted records, and closes obsolete native diff
-tabs. Marking a clean tracked file pending creates an empty-baseline generation
-for that file without changing other files.
+tabs. Empty-line deletion filtering uses the same promotion boundary when a
+file has no remaining effective changes. Marking a clean tracked file pending
+creates an empty-baseline generation for that file without changing other
+files.
 
 Reviewer resolution is cached per workspace and follows this order: cached
 identity, local Git identity, configured `reviewerName`/`reviewerEmail`, then
@@ -303,8 +323,9 @@ created and the workspace is trusted.
 
 Other commands are setup/reconfiguration, whole-workspace pending/reviewed
 initialization, refresh, and log display. The manifest also exposes
-`maxFileSizeBytes` and `openFilesInReviewView`. The extension supports local
-files in Restricted Mode with limited functionality, targets VS Code
+`maxFileSizeBytes`, `ignoreEmptyLineDeletions`, and `openFilesInReviewView`.
+Changing the empty-line setting forces a serialized policy reconciliation for
+existing tracked sources. The extension supports local files in Restricted Mode with limited functionality, targets VS Code
 `^1.127.0`, requires a local Git executable, and does not support virtual
 workspaces.
 

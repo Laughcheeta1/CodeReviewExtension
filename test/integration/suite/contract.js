@@ -608,6 +608,167 @@ async function run() {
     );
     expectedPaths.add(watcherFirstDuplicate);
 
+    /*
+     * Empty-line deletion policy. The default must preserve the existing
+     * review behavior, while enabling the setting must remove a pending blank
+     * deletion and promote the accepted current bytes to the baseline.
+     */
+    const reviewConfiguration = vscode.workspace.getConfiguration(
+      "codeReviewTracker",
+    );
+    assert.equal(
+      reviewConfiguration.get("ignoreEmptyLineDeletions", false),
+      false,
+      "empty-line deletion filtering must be opt-in",
+    );
+    const savedEmptyLine = "saved-empty-line-deletion.txt";
+    await writeSource(folder, savedEmptyLine, "before\n\nafter\n");
+    await waitForMetadata(folder, savedEmptyLine);
+    await markFile(
+      folder,
+      savedEmptyLine,
+      "codeReviewTracker.markFileReviewed",
+    );
+    const savedEmptyLineDocument = await openSource(folder, savedEmptyLine);
+    const savedEmptyLineEdit = new vscode.WorkspaceEdit();
+    savedEmptyLineEdit.delete(
+      sourceUri(folder, savedEmptyLine),
+      savedEmptyLineDocument.lineAt(1).rangeIncludingLineBreak,
+    );
+    assert.equal(await vscode.workspace.applyEdit(savedEmptyLineEdit), true);
+    assert.equal(await savedEmptyLineDocument.save(), true);
+    const defaultDeletion = await waitUntil(
+      "default empty-line deletion review record",
+      async () => {
+        const value = await assertMetadataPresent(folder, savedEmptyLine);
+        return value.file.deletedLines.length === 1 ? value : false;
+      },
+    );
+    assert.equal(defaultDeletion.file.fileStatus, "pending");
+
+    await reviewConfiguration.update(
+      "ignoreEmptyLineDeletions",
+      true,
+      vscode.ConfigurationTarget.Global,
+    );
+    const acceptedSavedEmptyLine = await waitUntil(
+      "configured empty-line deletion acceptance",
+      async () => {
+        const value = await assertMetadataPresent(folder, savedEmptyLine);
+        if (
+          value.file.baseline.digest !== value.file.current.digest ||
+          value.file.deletedLines.length !== 0 ||
+          value.file.hunks.length !== 0 ||
+          value.file.fileStatus !== "reviewed"
+        ) {
+          return false;
+        }
+        return value;
+      },
+    );
+    assert.equal(
+      acceptedSavedEmptyLine.file.baseline.size,
+      (await vscode.workspace.fs.readFile(
+        sourceUri(folder, savedEmptyLine),
+      )).byteLength,
+      "automatic acceptance must snapshot the current bytes",
+    );
+    expectedPaths.add(savedEmptyLine);
+
+    /* The same policy must work through the watcher without an open source. */
+    const externalEmptyLine = "external-empty-line-deletion.txt";
+    await writeSource(folder, externalEmptyLine, "before\n\nafter\n");
+    await waitForMetadata(folder, externalEmptyLine);
+    await markFile(
+      folder,
+      externalEmptyLine,
+      "codeReviewTracker.markFileReviewed",
+    );
+    await writeExternalSource(folder, externalEmptyLine, "before\nafter\n");
+    const acceptedExternalEmptyLine = await waitUntil(
+      "external empty-line deletion acceptance",
+      async () => {
+        const value = await assertMetadataPresent(folder, externalEmptyLine);
+        return value.file.baseline.digest === value.file.current.digest &&
+          value.file.deletedLines.length === 0 &&
+          value.file.hunks.length === 0
+          ? value
+          : false;
+      },
+    );
+    assert.equal(acceptedExternalEmptyLine.file.fileStatus, "reviewed");
+    expectedPaths.add(externalEmptyLine);
+
+    /* Mixed changes keep real deletions reviewable while hiding only blanks. */
+    const mixedEmptyLine = "mixed-empty-line-deletion.txt";
+    await writeSource(folder, mixedEmptyLine, "before\n\nremoved\nafter\n");
+    await waitForMetadata(folder, mixedEmptyLine);
+    await markFile(
+      folder,
+      mixedEmptyLine,
+      "codeReviewTracker.markFileReviewed",
+    );
+    await writeExternalSource(folder, mixedEmptyLine, "before\nadded\nafter\n");
+    const filteredMixed = await waitUntil(
+      "mixed empty-line deletion filtering",
+      async () => {
+        const value = await assertMetadataPresent(folder, mixedEmptyLine);
+        const deleted = value.file.deletedLines.map(
+          (line) => line.baselineLine,
+        );
+        const added = value.file.currentLines
+          .filter((line) => line.changeType === "added")
+          .map((line) => line.line);
+        return deleted.length === 1 &&
+          deleted[0] === 3 &&
+          added.length === 1 &&
+          added[0] === 2
+          ? value
+          : false;
+      },
+    );
+    assert.equal(filteredMixed.file.fileStatus, "pending");
+    assert.equal(
+      filteredMixed.file.hunks.some(
+        (hunk) => hunk.oldStart <= 2 && 2 < hunk.oldStart + hunk.oldCount,
+      ),
+      false,
+      "effective hunks must not cover the ignored blank deletion",
+    );
+
+    await reviewConfiguration.update(
+      "ignoreEmptyLineDeletions",
+      false,
+      vscode.ConfigurationTarget.Global,
+    );
+    const restoredMixed = await waitUntil(
+      "empty-line deletion policy disable refresh",
+      async () => {
+        const value = await assertMetadataPresent(folder, mixedEmptyLine);
+        return value.file.deletedLines.length === 2 ? value : false;
+      },
+    );
+    assert.deepEqual(
+      restoredMixed.file.deletedLines.map((line) => line.baselineLine),
+      [2, 3],
+    );
+    await reviewConfiguration.update(
+      "ignoreEmptyLineDeletions",
+      true,
+      vscode.ConfigurationTarget.Global,
+    );
+    await waitUntil(
+      "empty-line deletion policy re-enable refresh",
+      async () => {
+        const value = await assertMetadataPresent(folder, mixedEmptyLine);
+        return value.file.deletedLines.length === 1 &&
+          value.file.deletedLines[0]?.baselineLine === 3
+          ? value
+          : false;
+      },
+    );
+    expectedPaths.add(mixedEmptyLine);
+
     // Repeat the same positive/negative pair through a real host filesystem
     // write. This proves that the extension's VS Code file watcher, rather
     // than only vscode.workspace.fs, discovers files created externally.

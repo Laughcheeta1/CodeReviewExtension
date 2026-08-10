@@ -81,6 +81,10 @@ export interface RawGitHunk {
   readonly newStart: number;  // RevExt: 80
   readonly newCount: number;  // RevExt: 82
 }  // RevExt: 48
+// RevExt: 137
+export interface DiffOptions {
+  readonly ignoreEmptyLineDeletions?: boolean;
+}  // RevExt: 138
 // RevExt: 13
 export const digestBytes = (bytes: Uint8Array): string =>
   createHash("sha256").update(bytes).digest("hex");
@@ -105,6 +109,15 @@ export function physicalLines(bytes: Uint8Array): readonly PhysicalLine[] {
   }  // RevExt: 94
   return result;  // RevExt: 104
 }  // RevExt: 49
+// RevExt: 139
+/** Return whether a physical line contains only its LF/CRLF terminator. */
+export function isEmptyPhysicalLine(bytes: Uint8Array): boolean {
+  if (bytes.at(-1) !== 0x0a) {
+    return false;
+  }
+  return bytes.length === 1 ||
+    (bytes.length === 2 && bytes[0] === 0x0d);
+}  // RevExt: 140
 // RevExt: 15
 export function reviewableLines(
   file: Pick<FileRecord, "currentLines" | "deletedLines">,  // RevExt: 107
@@ -149,6 +162,7 @@ export function buildDiffRecords(
   currentBytes: Uint8Array,
   rawHunks: readonly RawGitHunk[],
   previous?: FileRecord,
+  options: DiffOptions = {},
 ): Pick<FileRecord, "currentLines" | "deletedLines" | "hunks"> {
   const baseline = physicalLines(baselineBytes);
   const current = physicalLines(currentBytes);
@@ -167,7 +181,7 @@ export function buildDiffRecords(
   const nextAdditionCounts = changedDigestCounts(current, rawHunks);
   const currentLines: CurrentLineRecord[] = [];
   const deletedLines: DeletedLineRecord[] = [];
-  const hunks: DiffHunk[] = [];
+  const ignoredDeletedLines = new Set<number>();
   let oldCursor = 1;
   let newCursor = 1;
 // RevExt: 19
@@ -216,6 +230,13 @@ export function buildDiffRecords(
 // RevExt: 22
     for (let index = 0; index < oldLines.length; index += 1) {
       const oldNumber = raw.oldStart + index;
+      if (
+        options.ignoreEmptyLineDeletions === true &&
+        isEmptyPhysicalLine(oldLines[index]!.bytes)
+      ) {
+        ignoredDeletedLines.add(oldNumber);
+        continue;
+      }
       const digest = baselineLineDigest(oldLines[index]!.bytes, oldNumber);
       const occurrence = nextOccurrence(deletionOccurrences, digest);
       const transferred = previousDeleted.get(`${digest}:${oldNumber}`);
@@ -228,7 +249,6 @@ export function buildDiffRecords(
         lastReviewer: transferred?.lastReviewer,  // RevExt: 127
       });  // RevExt: 129
     }  // RevExt: 88
-    hunks.push(raw);
     oldCursor = oldIndex + raw.oldCount + 1;
     newCursor = newIndex + raw.newCount + 1;
   }  // RevExt: 97
@@ -246,7 +266,14 @@ export function buildDiffRecords(
   }  // RevExt: 98
 // RevExt: 24
   currentLines.sort((a, b) => a.line - b.line);
-  return { currentLines, deletedLines, hunks };
+  return {
+    currentLines,
+    deletedLines,
+    hunks:
+      options.ignoreEmptyLineDeletions === true
+        ? effectiveHunks(rawHunks, ignoredDeletedLines)
+        : rawHunks,
+  };
 }  // RevExt: 53
 
 /**
@@ -447,6 +474,54 @@ function changedDigestCounts(
   }  // RevExt: 102
   return result;  // RevExt: 106
 }  // RevExt: 58
+// RevExt: 141
+function effectiveHunks(
+  rawHunks: readonly RawGitHunk[],
+  ignoredDeletedLines: ReadonlySet<number>,
+): readonly DiffHunk[] {
+  if (ignoredDeletedLines.size === 0) {
+    return rawHunks;
+  }
+  const result: DiffHunk[] = [];
+  for (const hunk of rawHunks) {
+    const oldRuns = contiguousRanges(
+      Array.from(
+        { length: hunk.oldCount },
+        (_, index) => hunk.oldStart + index,
+      ).filter((line) => !ignoredDeletedLines.has(line)),
+    );
+    if (oldRuns.length === 0) {
+      if (hunk.newCount > 0) {
+        result.push({ ...hunk, oldCount: 0 });
+      }
+      continue;
+    }
+    oldRuns.forEach((run, index) => {
+      result.push({
+        oldStart: run.start,
+        oldCount: run.count,
+        newStart: hunk.newStart,
+        newCount: index === 0 ? hunk.newCount : 0,
+      });
+    });
+  }
+  return result;
+}  // RevExt: 142
+
+function contiguousRanges(
+  lines: readonly number[],
+): readonly { start: number; count: number }[] {
+  const result: { start: number; count: number }[] = [];
+  for (const line of lines) {
+    const previous = result.at(-1);
+    if (previous !== undefined && previous.start + previous.count === line) {
+      previous.count += 1;
+    } else {
+      result.push({ start: line, count: 1 });
+    }
+  }
+  return result;
+}  // RevExt: 143
 // RevExt: 30
 function transferAddition(
   previous: ReadonlyMap<string, readonly CurrentLineRecord[]>,

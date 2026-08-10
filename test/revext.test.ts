@@ -6,6 +6,7 @@ import ts from "typescript";
 import {
   buildDiffRecords,
   digestBytes,
+  isEmptyPhysicalLine,
   newlyAddedLineNumbers,
   updateAddedLineDigests,
   type FileRecord,
@@ -34,6 +35,64 @@ function applyEdits(
 function sourceBytes(lines: readonly string[]): Uint8Array {
   return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
+
+test("recognizes only physical lines containing an LF or CRLF terminator", () => {
+  assert.equal(isEmptyPhysicalLine(new TextEncoder().encode("\n")), true);
+  assert.equal(isEmptyPhysicalLine(new TextEncoder().encode("\r\n")), true);
+  assert.equal(isEmptyPhysicalLine(new TextEncoder().encode(" \t\n")), false);
+  assert.equal(isEmptyPhysicalLine(new TextEncoder().encode("")), false);
+});
+
+test("can omit empty-line deletions while preserving the metadata invariant", () => {
+  const baseline = new TextEncoder().encode("before\n\nremoved\nafter\n");
+  const current = new TextEncoder().encode("before\nadded\nafter\n");
+  const rawHunks = [
+    { oldStart: 2, oldCount: 2, newStart: 2, newCount: 1 },
+  ];
+
+  const unchanged = buildDiffRecords(baseline, current, rawHunks);
+  assert.deepEqual(
+    unchanged.deletedLines.map((line) => line.baselineLine),
+    [2, 3],
+  );
+  assert.deepEqual(unchanged.hunks, rawHunks);
+
+  const filtered = buildDiffRecords(
+    baseline,
+    current,
+    rawHunks,
+    undefined,
+    { ignoreEmptyLineDeletions: true },
+  );
+  assert.deepEqual(
+    filtered.deletedLines.map((line) => line.baselineLine),
+    [3],
+  );
+  assert.deepEqual(
+    filtered.currentLines
+      .filter((line) => line.changeType === "added")
+      .map((line) => line.line),
+    [2],
+  );
+  assert.deepEqual(filtered.hunks, [
+    { oldStart: 3, oldCount: 1, newStart: 2, newCount: 1 },
+  ]);
+});
+
+test("filters CRLF empty-line deletions but keeps whitespace-only lines", () => {
+  const baseline = new TextEncoder().encode("before\r\n\r\n \t\r\nafter\r\n");
+  const current = new TextEncoder().encode("before\r\n \t\r\nafter\r\n");
+  const filtered = buildDiffRecords(
+    baseline,
+    current,
+    [{ oldStart: 2, oldCount: 1, newStart: 2, newCount: 0 }],
+    undefined,
+    { ignoreEmptyLineDeletions: true },
+  );
+
+  assert.deepEqual(filtered.deletedLines, []);
+  assert.deepEqual(filtered.hunks, []);
+});
 
 function transpileJsx(lines: readonly string[], fileName: string): string {
   const result = ts.transpileModule(lines.join("\n"), {

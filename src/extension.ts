@@ -23,7 +23,7 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.17";
+const EXTENSION_VERSION = "0.5.18";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
@@ -107,6 +107,20 @@ export async function activate(
         service.reconcileSavedDocument(document),
       ),
     ),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        !event.affectsConfiguration(
+          "codeReviewTracker.ignoreEmptyLineDeletions",
+        )
+      ) {
+        return;
+      }
+      runLogged(
+        log,
+        "Review policy refresh",
+        service.refreshReviewPolicy(),
+      );
+    }),
     service.onDidPromote((source) =>
       runLogged(
         log,

@@ -26,7 +26,10 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 - To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>.
 - **Mark File Pending** also works for a clean tracked file: it makes every physical line in that file pending without changing review metadata for other files.
 - Deleting a source file hides it for the rest of the current VS Code session but preserves its review metadata. On the next startup, metadata and snapshots for files that still do not exist are removed.
-- Lines that contain only a line ending are ignored; whitespace-only lines still count. LF, CRLF, and missing-final-newline identity are preserved.
+- By default, deleting a line containing only its line ending is reviewable;
+  enable `codeReviewTracker.ignoreEmptyLineDeletions` to accept those
+  deletions automatically. Whitespace-only lines still count. LF, CRLF, and
+  missing-final-newline identity are preserved.
 - The default shortcuts are <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> for pending review, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> for in review, and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> for reviewed. Rebind them in **Preferences: Open Keyboard Shortcuts**.
 - Unsaved editors cannot be reviewed. Save first so disk content remains authoritative.
 - Only duplicate added lines receive a temporary `RevExt` end-of-line comment. The complete tagged line becomes its identity, so later insertions do not disturb the review state of its duplicate peers. JavaScript and TypeScript lines use `// RevExt: N`; JSX child lines use `{/* RevExt: N */}` so the marker cannot render in the frontend. The comments are removed when the file is promoted.

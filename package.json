@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -211,6 +211,12 @@
           "minimum": 1024,
           "scope": "window",
           "description": "Largest file the extension will read for line review tracking."
+        },
+        "codeReviewTracker.ignoreEmptyLineDeletions": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Automatically accept deletions of lines containing only their line ending."
         },
         "codeReviewTracker.openFilesInReviewView": {
           "type": "boolean",
