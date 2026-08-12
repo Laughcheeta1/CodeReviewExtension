@@ -22,6 +22,9 @@ export interface BaselineIdentity {
 export interface ReviewMutationContext {
   readonly git: GitService;
   readonly internalSaves: Set<string>;
+  readonly openDocumentForInternalUse: (
+    uri: vscode.Uri,
+  ) => Promise<vscode.TextDocument>;
   readonly changedEmitter: vscode.EventEmitter<vscode.Uri | undefined>;
   readonly promotedEmitter: vscode.EventEmitter<vscode.Uri>;
   readonly relativePath: (uri: vscode.Uri) => string | undefined;
@@ -201,7 +204,7 @@ export async function promote(
     await context.recompute(source, true);
     return;
   }
-  const document = await vscode.workspace.openTextDocument(source);
+  const document = await context.openDocumentForInternalUse(source);
   const removals = revExtRemovals(
     Array.from(
       { length: document.lineCount },

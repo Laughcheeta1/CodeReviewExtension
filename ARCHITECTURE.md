@@ -71,6 +71,11 @@ eligible sources. The explicit **Refresh** command performs a forced workspace
 reconciliation. An external change is reconciled even when the file has no
 open editor or review diff.
 
+Document loads performed internally for language detection or marker
+maintenance do not make the source visible or open its review diff. When the
+user later makes that source visible, the normal automatic review-view setting
+applies to that manual open.
+
 Deletion events only hide a source from the current session. Startup checks the
 filesystem and permanently removes the source's metadata and snapshot when it
 is still missing. The tracker never writes metadata for its own storage files.
@@ -312,6 +317,11 @@ actions against the latest saved record without changing the baseline. If a
 previously deleted line is no longer deleted, the action becomes a no-op rather
 than applying to an unrelated line. Selections containing only unchanged lines
 do nothing.
+
+When `codeReviewTracker.openFilesInReviewView` is enabled, a user-visible file
+open opens the source in the native review view. Extension-owned document loads
+used for reconciliation, marker placement, or promotion are kept invisible and
+do not trigger that automatic review-view action.
 
 The Code Review sidebar groups files by pending/in-review/reviewed status and
 shows reviewed/total changed-line counts. Gutter decorations and hover text

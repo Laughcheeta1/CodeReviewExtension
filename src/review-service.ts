@@ -60,6 +60,7 @@ export class ReviewService implements vscode.Disposable {
   private readonly ensureTails = new Map<string, Promise<void>>();
   private readonly initializingFolders = new Set<string>();
   private readonly internalSaves = new Set<string>();
+  private readonly internalDocumentLoads = new Set<string>();
   private readonly changedEmitter = new vscode.EventEmitter<
     vscode.Uri | undefined
   >();
@@ -100,6 +101,7 @@ export class ReviewService implements vscode.Disposable {
   }  // RevExt: 443
 // RevExt: 3
   dispose(): void {
+    this.internalDocumentLoads.clear();
     this.changedEmitter.dispose();
     this.promotedEmitter.dispose();
   }  // RevExt: 75
@@ -194,6 +196,40 @@ export class ReviewService implements vscode.Disposable {
       }
     }
   }  // RevExt: 82
+  async openDocumentForInternalUse(
+    uri: vscode.Uri,
+  ): Promise<vscode.TextDocument> {
+    const key = uri.toString();
+    const existing = vscode.workspace.textDocuments.find(
+      (document) => document.uri.toString() === key,
+    );
+    if (existing !== undefined) {
+      if (
+        !vscode.window.visibleTextEditors.some(
+          (editor) => editor.document.uri.toString() === key,
+        )
+      ) {
+        this.internalDocumentLoads.add(key);
+      }
+      return existing;
+    }
+    this.internalDocumentLoads.add(key);
+    try {
+      return await vscode.workspace.openTextDocument(uri);
+    } catch (error) {
+      this.internalDocumentLoads.delete(key);
+      throw error;
+    }
+  }
+  isInternalDocumentLoad(uri: vscode.Uri): boolean {
+    return this.internalDocumentLoads.has(uri.toString());
+  }
+  consumeInternalDocumentLoad(uri: vscode.Uri): boolean {
+    return this.internalDocumentLoads.delete(uri.toString());
+  }
+  forgetInternalDocumentLoad(uri: vscode.Uri): void {
+    this.internalDocumentLoads.delete(uri.toString());
+  }
   async initializeOpenedDocument(document: vscode.TextDocument): Promise<void> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (folder === undefined) {
@@ -947,6 +983,8 @@ export class ReviewService implements vscode.Disposable {
     return {
       git: this.git,
       internalSaves: this.internalSaves,
+      openDocumentForInternalUse: (uri) =>
+        this.openDocumentForInternalUse(uri),
       maxSize: () => this.maxSize(),
       isEligibleSource: (uri) => this.isEligibleSource(uri),
       relativePath: (uri) => this.relativePath(uri),
@@ -1031,6 +1069,8 @@ export class ReviewService implements vscode.Disposable {
     return {
       git: this.git,
       internalSaves: this.internalSaves,
+      openDocumentForInternalUse: (uri) =>
+        this.openDocumentForInternalUse(uri),
       changedEmitter: this.changedEmitter,
       promotedEmitter: this.promotedEmitter,
       relativePath: (uri) => this.relativePath(uri),

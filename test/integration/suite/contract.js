@@ -99,21 +99,44 @@ async function openSource(folder, relativePath) {
 }
 
 async function waitForReviewDiff(folder, relativePath) {
+  return waitUntil(`review diff for ${relativePath}`, () =>
+    findReviewDiff(folder, relativePath) ?? false,
+  );
+}
+
+function findReviewDiff(folder, relativePath) {
   const modified = sourceUri(folder, relativePath).toString();
-  return waitUntil(`review diff for ${relativePath}`, () => {
-    for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
-        if (
-          tab.input instanceof vscode.TabInputTextDiff &&
-          tab.input.modified.toString() === modified &&
-          tab.input.original.scheme === "code-review-baseline"
-        ) {
-          return tab;
-        }
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (
+        tab.input instanceof vscode.TabInputTextDiff &&
+        tab.input.modified.toString() === modified &&
+        tab.input.original.scheme === "code-review-baseline"
+      ) {
+        return tab;
       }
     }
-    return false;
-  });
+  }
+  return undefined;
+}
+
+async function assertNoReviewDiffDuring(
+  folder,
+  relativePath,
+  context,
+) {
+  const deadline = Date.now() + 1_000;
+  while (true) {
+    assert.equal(
+      findReviewDiff(folder, relativePath),
+      undefined,
+      `${context} unexpectedly opened a review diff`,
+    );
+    if (Date.now() >= deadline) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 async function focusReviewDiffSide(tab, uri) {
@@ -549,6 +572,11 @@ async function run() {
      * is open so the live review view is covered too.
      */
     const externalRevExt = files.externalRevExt;
+    await reviewerConfiguration.update(
+      "openFilesInReviewView",
+      true,
+      vscode.ConfigurationTarget.Global,
+    );
     await waitForMetadata(folder, externalRevExt);
     await markFile(
       folder,
@@ -627,7 +655,28 @@ async function run() {
       firstExternalRevExt.file.baseline.digest,
       "the external duplicate write must remain a real review diff",
     );
+    await assertNoReviewDiffDuring(
+      folder,
+      externalRevExt,
+      "an external agent write",
+    );
+    assert.ok(
+      vscode.workspace.textDocuments.some(
+        (document) =>
+          document.uri.toString() === sourceUri(folder, externalRevExt).toString(),
+      ),
+      "the external reconciliation should load the source without showing it",
+    );
 
+    await closeAllTabs();
+    await openSource(folder, externalRevExt);
+    const manuallyOpenedExternalRevExtTab = await waitForReviewDiff(
+      folder,
+      externalRevExt,
+    );
+    assert.ok(
+      manuallyOpenedExternalRevExtTab.input instanceof vscode.TabInputTextDiff,
+    );
     await closeAllTabs();
     await vscode.commands.executeCommand(
       "codeReviewTracker.openReviewDiff",
@@ -640,7 +689,6 @@ async function run() {
       sourceUri(folder, externalRevExt).toString(),
     );
     assert.equal(externalRevExtTab.input.original.scheme, "code-review-baseline");
-
     await writeExternalSource(
       folder,
       externalRevExt,
@@ -682,6 +730,44 @@ async function run() {
       externalRevExtTab.input.modified.toString(),
       sourceUri(folder, externalRevExt).toString(),
       "the native diff must remain available after the external annotated write",
+    );
+    await closeAllTabs();
+    await reviewerConfiguration.update(
+      "openFilesInReviewView",
+      false,
+      vscode.ConfigurationTarget.Global,
+    );
+    await writeExternalSource(
+      folder,
+      externalRevExt,
+      "anchor\nrepeat\nrepeat\nrepeat\nrepeat\n",
+    );
+    await waitUntil(
+      "RevExt metadata after disabling automatic review views",
+      async () => {
+        const value = await assertMetadataPresent(folder, externalRevExt);
+        return value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        ).length === 4
+          ? value
+          : false;
+      },
+    );
+    await assertNoReviewDiffDuring(
+      folder,
+      externalRevExt,
+      "an external write with review views disabled",
+    );
+    await openSource(folder, externalRevExt);
+    await assertNoReviewDiffDuring(
+      folder,
+      externalRevExt,
+      "a manual open with review views disabled",
+    );
+    await reviewerConfiguration.update(
+      "openFilesInReviewView",
+      true,
+      vscode.ConfigurationTarget.Global,
     );
     expectedPaths.add(externalRevExt);
     await closeAllTabs();

@@ -18,6 +18,9 @@ import {
 export interface RevExtAnnotationContext {
   readonly git: GitService;
   readonly internalSaves: Set<string>;
+  readonly openDocumentForInternalUse: (
+    uri: vscode.Uri,
+  ) => Promise<vscode.TextDocument>;
   readonly maxSize: () => number;
   readonly isEligibleSource: (uri: vscode.Uri) => Promise<boolean>;
   readonly relativePath: (uri: vscode.Uri) => string | undefined;
@@ -58,7 +61,7 @@ export async function recomputeExternalSource(
     context.relativePath(uri) ?? uri.fsPath,
   );
   const addedLines = addedLineNumbers(hunks);
-  const document = await sourceDocument(uri);
+  const document = await context.openDocumentForInternalUse(uri);
   if (document.isDirty) {
     return context.recompute(uri, true, true, {
       ...prepared,
@@ -222,7 +225,7 @@ export async function annotatePendingDocument(
   context: RevExtAnnotationContext,
   uri: vscode.Uri,
 ): Promise<number> {
-  const document = await vscode.workspace.openTextDocument(uri);
+  const document = await context.openDocumentForInternalUse(uri);
   if (document.isDirty) {
     throw new Error("Save the file before starting pending review.");
   }
@@ -336,11 +339,4 @@ function applyByteEdits(
   }
   result.set(bytes.subarray(sourceOffset), resultOffset);
   return result;
-}
-
-async function sourceDocument(uri: vscode.Uri): Promise<vscode.TextDocument> {
-  const existing = vscode.workspace.textDocuments.find(
-    (document) => document.uri.toString() === uri.toString(),
-  );
-  return existing ?? vscode.workspace.openTextDocument(uri);
 }

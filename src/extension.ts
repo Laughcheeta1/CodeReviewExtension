@@ -23,7 +23,28 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.20";
+const EXTENSION_VERSION = "0.5.21";
+
+function isReviewDiffDocument(uri: vscode.Uri): boolean {
+  return vscode.window.tabGroups.all.some((group) =>
+    group.tabs.some(
+      (tab) =>
+        tab.input instanceof vscode.TabInputTextDiff &&
+        tab.input.original.scheme === "code-review-baseline" &&
+        tab.input.modified.toString() === uri.toString(),
+    ),
+  );
+}
+
+function isNormalTextDocumentTab(uri: vscode.Uri): boolean {
+  return vscode.window.tabGroups.all.some((group) =>
+    group.tabs.some(
+      (tab) =>
+        tab.input instanceof vscode.TabInputText &&
+        tab.input.uri.toString() === uri.toString(),
+    ),
+  );
+}
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
@@ -93,12 +114,18 @@ export async function activate(
     ),
     vscode.window.registerTreeDataProvider("codeReviewTracker.files", tree),
     vscode.window.registerFileDecorationProvider(fileDecorations),
-    vscode.workspace.onDidOpenTextDocument((document) =>
+    vscode.workspace.onDidOpenTextDocument((document) => {
+      if (service.isInternalDocumentLoad(document.uri)) {
+        return;
+      }
       runLogged(
         log,
         "Document loading",
         openDocumentInReviewView(service, document),
-      ),
+      );
+    }),
+    vscode.workspace.onDidCloseTextDocument((document) =>
+      service.forgetInternalDocumentLoad(document.uri),
     ),
     vscode.workspace.onDidSaveTextDocument((document) =>
       runLogged(
@@ -128,7 +155,26 @@ export async function activate(
         closePromotedDiffTabs(source),
       ),
     ),
-    vscode.window.onDidChangeVisibleTextEditors(() => decorations.refresh()),
+    vscode.window.onDidChangeVisibleTextEditors(() => {
+      decorations.refresh();
+      setTimeout(() => {
+        for (const editor of vscode.window.visibleTextEditors) {
+          if (
+            editor.document.uri.scheme !== "file" ||
+            isReviewDiffDocument(editor.document.uri) ||
+            !isNormalTextDocumentTab(editor.document.uri) ||
+            !service.consumeInternalDocumentLoad(editor.document.uri)
+          ) {
+            continue;
+          }
+          runLogged(
+            log,
+            "Manually opened document",
+            openDocumentInReviewView(service, editor.document),
+          );
+        }
+      }, 0);
+    }),
     vscode.commands.registerCommand("codeReviewTracker.markPending", () =>
       markActive(service, reviewerResolver, "pending"),
     ),
