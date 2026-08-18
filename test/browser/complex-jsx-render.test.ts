@@ -129,7 +129,7 @@ async function renderFixture(browser: string, fixture: Fixture): Promise<void> {
     assert.match(rendered, /Revenue engine/, fixture.fileName);
     assert.match(rendered, /data-team="all"/, fixture.fileName);
     const renderedMarkup = rendered.split("<script>", 1)[0] ?? rendered;
-    assert.doesNotMatch(renderedMarkup, /RevExt:/, fixture.fileName);
+    assert.match(renderedMarkup, /RevExt:/, fixture.fileName);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

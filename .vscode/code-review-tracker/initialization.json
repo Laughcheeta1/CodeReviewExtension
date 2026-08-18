@@ -221,6 +221,30 @@
     {
       "kind": "file",
       "path": "TASK-1.md"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-4.md"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-2.md"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-3.md"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-5.md"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-6.md"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-7.md"
     }
   ]
 }

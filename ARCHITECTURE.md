@@ -293,18 +293,17 @@ and preserved while duplicate peers are annotated. Promotion removes generated
 markers from added lines before saving the next clean baseline.
 
 - Normal line-comment languages receive a `//`, `#`, `--`, `%`, or equivalent
-  `RevExt: N` suffix according to the language map.
-- JavaScript/TypeScript React documents are scanned with a small stateful
-  lexer. JavaScript contexts use line comments; JSX child contexts use
-  `{/* RevExt: N */}`, which is a non-rendering JSX expression comment.
-- JSX tag attributes, unfinished tags, strings, comments, regular expressions,
-  and other unsafe/ambiguous insertion points are skipped to preserve source
-  validity. The affected duplicate remains protected by conservative
-  digest/occurrence transfer.
+  `RevExt: N` suffix according to the language map. JavaScript/TypeScript React
+  documents use the same direct `// RevExt: N` suffix on every eligible
+  duplicate added line; there is no JSX-context placement lexer.
+- JSX expression markers (`{/* RevExt: N */}`) emitted by older versions remain
+  readable only for identity matching and promotion cleanup. New annotations
+  never emit that dialect.
 
-The marker is an implementation aid, not review content: it is transparent in
-the editor decoration layer, is removed on promotion, and does not become a
-rendered JSX child.
+The marker is an implementation aid, not review content. In JSX/TSX, a direct
+line comment inside JSX children can be interpreted as JSX text and appear in
+the rendered output until promotion removes it. The persisted digest includes
+the marker while it exists, and the editor decoration layer hides it.
 
 ## Native diff UI and commands
 
@@ -372,8 +371,8 @@ The integration contract verifies persisted metadata, gzip snapshots, cleanup,
 external writes, save/open/command/folder paths, dynamic ignore changes, and
 Git-index immutability. The disabled and restart suites verify opt-out and
 startup behavior. Unit/browser tests cover Git identity and diff handling,
-ignore matching, reviewer caching, duplicate transfer, marker placement, and
-parser-valid JSX output.
+ignore matching, reviewer caching, duplicate transfer, direct marker placement,
+legacy JSX-marker cleanup, and the resulting JSX output.
 
 For a manual smoke check, verify setup persistence, Start Reviewed and Start
 Pending, saved and external-file reconciliation, editing and saving the right

@@ -1,0 +1,622 @@
+{
+  "schemaVersion": 4,
+  "path": "TASK-2.md",
+  "file": {
+    "baseline": {
+      "file": "2e7d2af2fa81303f886d4e41d2f90c004b23cd549f7f02aa29b946c8c42d5902.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.gz",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "codec": "gzip",
+      "size": 0,
+      "createdAt": "2026-08-12T06:03:42.440Z"
+    },
+    "current": {
+      "digest": "d25adb4c2acab7fba976d30259ee5a5cbbbddbe409afe331993fda6df28c1e0c",
+      "modifiedAt": 1786231728433,
+      "size": 4636,
+      "gitAlgorithm": "myers",
+      "generatedAt": "2026-08-12T06:03:42.440Z"
+    },
+    "fileStatus": "pending",
+    "nextRevExtId": 1,
+    "currentLines": [
+      {
+        "line": 1,
+        "digest": "c72de1e2e0303bc605026a8b91d0d1a894c481a85615096b90802867c718ac12",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 2,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 3,
+        "digest": "88ce357d56c15d34058ec48cf031f9a7641482976c1ae303a67cf57c5f31057d",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 4,
+        "digest": "8123181138dcecccc049a20c14964e9a90e838958fca26315bd23f3f6e531b35",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 5,
+        "digest": "854d7588ff0819bf03568cc1884c1bdd2154a5a3f5aa355cc1f2ce2b1d8ce622",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 6,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 2
+      },
+      {
+        "line": 7,
+        "digest": "1f22e832b042b46bcfaaf26b8d1f7abf696443eb1272afa4a8fe5e949b60808b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 8,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 3
+      },
+      {
+        "line": 9,
+        "digest": "f22dbf1c60b9f28ea04ac5f8f1c312e458a110dded7aed7a39a8590a87c14650",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 10,
+        "digest": "6a74fea7231569126bdebabb92775f5c8bcf77fd1eacb4e3342f79a06617dd3c",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 11,
+        "digest": "e5a5fadac7b03bcc3c3e679c188ce7af9e8b6302d51b234e6349afb14414656a",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 12,
+        "digest": "505a462179f74f6020c8b89442eb5124d2e8ce6b599ac8d26d3e7aa7f3a80625",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 13,
+        "digest": "16d35f171317aa1bc467001352ccb7615180056fd0933f356fba3968d4171985",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 14,
+        "digest": "4bad8d098207da985c2131f4c9dfbd9a4c9d004697c836b126dc8fd811d86372",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 15,
+        "digest": "1683c6b1d0b41cc6dd9c9d11583896596dc55cf0010115733d836b2bcedd0fdf",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 16,
+        "digest": "ce61f409c188c103a26045c8d578c8918578b3b82ed63e946b96064c02eaccfc",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 17,
+        "digest": "b2ba2abef1449c553b402a975a538f51b87ea59c143ed45294e037dd217af9b7",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 18,
+        "digest": "16e5d54be3b650731bc05ed16cd9475cd439d0bb6daaa39a2c0ddf1df0cc2ff6",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 19,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 4
+      },
+      {
+        "line": 20,
+        "digest": "36a4768de0da3c0c27a05baba5fb5e46c4eb3ed6d02aa09c6eea1b7899c3c834",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 21,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 5
+      },
+      {
+        "line": 22,
+        "digest": "23403b4d2c03c6443c0a9f8a3ef4f2ac4e3af807c26547c76718a8b12bc06d29",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 23,
+        "digest": "f7df77c1ebfac4aacc09d1a80379b91a556f3dabc5af9430d528a27ee197ca8f",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 24,
+        "digest": "ccd9596d79d203b40ea422a285b088531e4c8cfc4c88d81d67afaf8fd5a097ee",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 25,
+        "digest": "6fd3d8364c217d83cb6d1ae80aeaf9386f5771cfa0107b79ca7a5c37dba8a59a",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 26,
+        "digest": "fc6ac2df2c4ef7c6652a7662b7b10907b811ff178fc46d89b2069acb29535522",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 27,
+        "digest": "402f111724f5b0de862b88d8cd1b198890b019894bf27b42a5b211af7d19c373",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 28,
+        "digest": "6add68952877721a981a28ce2e0c0d24d2a7c2543ef9495988c2ae245de880da",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 29,
+        "digest": "c2c241d8d4fa58594f74ab4dd4fc9faab763a0e3de84944f07763f4a45ee4969",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 30,
+        "digest": "5e76afda31d53fd2bf37cc952639acd177f7b76b35e6cc1af823df7f82791831",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 31,
+        "digest": "3f474014e255d0582d669dcea3a537a90c4223e11d87a7060969fe70d4fd3cfd",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 32,
+        "digest": "fae8aef29d7042685fa4f2fa2683513afdd7919c14c87b4a9e242bbbd69cbec5",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 33,
+        "digest": "efafd94d6d5010a2ae640506ab78f7b2623aee6b916b29760a811b30444a6115",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 34,
+        "digest": "00435ea062ec10c0563ed0e68839d7b86b7a370742280aacd731a023f3d20e54",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 35,
+        "digest": "d991f18fdcba2d788d8a494f20dc9fa8387ebd2d8cb2a038c55b7250cd21cf06",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 36,
+        "digest": "f405634ad71e98ca0503225edb6cedcbce63a762ebfa9adf9876982ee1529053",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 37,
+        "digest": "4b3c08d45f7b2ae425a35da016a0dbb2f67805d1c0cf3082dcbe50628d734d62",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 38,
+        "digest": "18cbdc1e50c092bdf6c3a8ff6d1dd4d444f34eaaa4f8de93e6e6df86e4e7c093",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 39,
+        "digest": "db21d6f1e9711be0dc0a51ddf16664472e8e0e60e00976dda59eeaec1e51cb35",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 40,
+        "digest": "ec9239ccc3f21c3e8bd68f62dc57e7e9941d90705d03a235ac67a4f80d44ab12",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 41,
+        "digest": "79dc422cea02508a332a63d0625798a8d79bda587ce891dcfe42d4fa836bfeac",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 42,
+        "digest": "c624960bc626f094f866d7792a608515f087d9133ce436f1fd61b1a22bc629ea",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 43,
+        "digest": "134c424f66b91bc2fb2991d1b8e22761f7fcf300a05ca42a980c557bc8f52577",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 44,
+        "digest": "0ee96e519b50f0b03ef9de075d281f079d10f2d4b19633b0e9d72abe9601cd83",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 45,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 6
+      },
+      {
+        "line": 46,
+        "digest": "14b7bdbf18200d4c99a4700e8e6d220df41bfb7e07c735227470f7411902af44",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 47,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 7
+      },
+      {
+        "line": 48,
+        "digest": "4ede6665fad6418d765720580b86c50c5a252b17250e49507d8fd404da9b5123",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 49,
+        "digest": "7213f47f4b372688fee13c210f9cecee2d9d269514eb1ccfbc07757e91683156",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 50,
+        "digest": "8b3cbe1694b6b82ce8ed0308277b0d6ba9f058b475de321cc951d8bfe70fb2ed",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 51,
+        "digest": "29e963117d80a0edb4bcee27d5ed18bc28cd03497a2234a295315ce6811214db",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 52,
+        "digest": "17d0db836ab30df49c3b570202c331cdba0fb6be2d469bbad5fea15af1c395e6",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 53,
+        "digest": "147527b3bbddddcc2a79ae99da69552b3b9e07a206affce52ca610afe932f9b6",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 54,
+        "digest": "ef71a325eb2ccb8e819efcd557102c5317298a37be171db26cec3e62a0ae9b6f",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 55,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 8
+      },
+      {
+        "line": 56,
+        "digest": "770516662a6aa8106529459aa99dd5447ba7d9b98c6ac3a97b28fd6322c7aa6d",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 57,
+        "digest": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 9
+      },
+      {
+        "line": 58,
+        "digest": "9fa5e5d78e9839c912654991091a2b457d6ce091a600b3dc3902a86812bf5e71",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 59,
+        "digest": "39e11a1df95b638d9834a7268166b033ae63f25224a5a5d1237a9f3593eaf9af",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 60,
+        "digest": "670f500479fc5e6b20e6e62fa83d2f3ca167633d74ffd7e70f2c8d25981bf82d",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 61,
+        "digest": "eb1577c676b0c3917a4cfd31dad1915ff0eff7d1871ba45f10b10a9fea3f3cfd",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 62,
+        "digest": "98d93dbf4a116ae6d8109273f4dd6515b6b6291753b90618bbafda21163f52c4",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 63,
+        "digest": "484d33d83ae998141157a4d5a2b571d617565f3cc42c7c34010121c21635fee2",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 64,
+        "digest": "b85a6f46f9185330e054eec194aec9bc3088615b8f65271298fc00bb1d611917",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 65,
+        "digest": "f348995e0258a580de2cd5f441d33f95444717823bb6abb044c24cda2780e2be",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 66,
+        "digest": "8e6cc5a432f51ea981000303fba8d56abd9a1955e2cf5c6b9d297f4b69c2dfd2",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 67,
+        "digest": "b54064a4108c3f47274449a162667ebe706851d116304ab43ad12dc27ebf6598",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 68,
+        "digest": "180850463a7a88f9fde33e1e2bcd5307df6ca0901dfb0ff2c505fed863d47b9d",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 69,
+        "digest": "6038eab7c4ebd4b150a7b417a18674290f34e027ac0039b1d2004e691c12c65e",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 70,
+        "digest": "ce9ec8d4c2694b7552b710e4a46ac0c8c0dd4cc6832aee471d82bcdd8adc0180",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 71,
+        "digest": "a68732bbd3327ab323e2c2fddf417ee02ac9437bb90580409b24e35844db584f",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 72,
+        "digest": "fa5acce8307995d9d9b9f8eeb53fc1d635e25cf35a9a915d3a61a449f91f90cc",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 73,
+        "digest": "14909b227208d09892cbc669fd4ee53c75e4d030a88c92a0d7dd073dce6c7983",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 74,
+        "digest": "80c0118fc1669fba6091472011fa5eb371f9736f584c90a5f9b4f8eefffc67b6",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 75,
+        "digest": "76c476312ebdc284001cece9b6c8cc7725ed5f61ffb5bb88c806635850ef97bc",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 76,
+        "digest": "5d011fc46549f3fcf342b4f39f0de99b3dfcbe4a4f6600d3a110e974b70bf301",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 77,
+        "digest": "1731287353139f828a4e5ad83dd14a326eb516c2ca405c35323e771b2b8eb9df",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 78,
+        "digest": "d366fc60b1a67eadd73333fde6ee2e96f362dd38d0e0c43672bcfabcab3616eb",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 79,
+        "digest": "4d78bbc8f0a86cfbb6f729e865212c8ff25db833e1f2de5f07f2b2383f885e8f",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 80,
+        "digest": "60e778b8a596c640266092a6ae3e9a66088ba6b2de4f76ad57b8c00e8b80a5a1",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 81,
+        "digest": "f151cb476e9253ff3f01ae1ac8b09ef7c49b56db39d55f04d6281063ede44802",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 82,
+        "digest": "59ca5fdeff9391528ec4b08a40471a605abc28d2729c9ce19e0ff1ed762af177",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 83,
+        "digest": "452c8d8937b1d91a1e1ae35b0a8177b66f01183f10795c507c4dcb1124c6cf3c",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      },
+      {
+        "line": 84,
+        "digest": "85539d3394e94a329495c2faf1b37a50e033c706337222bdaa1511ceda407039",
+        "changeType": "added",
+        "reviewStatus": "pending",
+        "occurrence": 1
+      }
+    ],
+    "deletedLines": [],
+    "hunks": [
+      {
+        "oldStart": 0,
+        "oldCount": 0,
+        "newStart": 1,
+        "newCount": 84
+      }
+    ],
+    "updatedAt": "2026-08-12T06:03:42.440Z"
+  }
+}
