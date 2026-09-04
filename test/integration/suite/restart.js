@@ -141,6 +141,8 @@ async function run() {
       "line-command-fallback.txt",
       "live-left-diff.txt",
       "external-agent-duplicate.ts",
+      "disabled-revext.tsx",
+      "disabled-pending-revext.tsx",
       "mixed-folder/allowed.txt",
       "mixed-folder/nested/deep-allowed.txt",
       "outside-folder-command.txt",

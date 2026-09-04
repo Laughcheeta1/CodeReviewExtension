@@ -23,6 +23,7 @@ export interface RevExtAnnotationContext {
   ) => Promise<vscode.TextDocument>;
   readonly maxSize: () => number;
   readonly isEligibleSource: (uri: vscode.Uri) => Promise<boolean>;
+  readonly isRevExtDisabled: (uri: vscode.Uri) => boolean;
   readonly relativePath: (uri: vscode.Uri) => string | undefined;
   readonly storeFor: (uri: vscode.Uri) => PersistentStore | undefined;
   readonly recompute: (
@@ -46,6 +47,9 @@ export async function recomputeExternalSource(
   const store = context.storeFor(uri);
   if (path === undefined || store === undefined) {
     return false;
+  }
+  if (context.isRevExtDisabled(uri)) {
+    return context.recompute(uri, true, true);
   }
   const existing = await store.load(path);
   if (existing === undefined) {
@@ -138,6 +142,9 @@ export async function recomputeSavedDocument(
   if (path === undefined || store === undefined) {
     return false;
   }
+  if (context.isRevExtDisabled(document.uri)) {
+    return context.recompute(document.uri, true, true);
+  }
   const existing = await store.load(path);
   if (existing === undefined) {
     return context.recompute(document.uri, true, true);
@@ -225,6 +232,9 @@ export async function annotatePendingDocument(
   context: RevExtAnnotationContext,
   uri: vscode.Uri,
 ): Promise<number> {
+  if (context.isRevExtDisabled(uri)) {
+    return 1;
+  }
   const document = await context.openDocumentForInternalUse(uri);
   if (document.isDirty) {
     throw new Error("Save the file before starting pending review.");

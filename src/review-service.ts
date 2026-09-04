@@ -46,6 +46,10 @@ import {
   type ReviewActionContext,
 } from "./review-actions";
 import { errorMessage } from "./extension-utils";
+import {
+  isRevExtDisabled as isRevExtDisabledForSource,
+  REVEXT_DISABLED_EXTENSIONS_SETTING,
+} from "./revext-config";
 // RevExt: 436
 const BASELINE_SCHEME = "code-review-baseline";
 export class ReviewService implements vscode.Disposable {
@@ -987,6 +991,7 @@ export class ReviewService implements vscode.Disposable {
         this.openDocumentForInternalUse(uri),
       maxSize: () => this.maxSize(),
       isEligibleSource: (uri) => this.isEligibleSource(uri),
+      isRevExtDisabled: (uri) => this.isRevExtDisabled(uri),
       relativePath: (uri) => this.relativePath(uri),
       storeFor: (uri) => this.storeFor(uri),
       recompute: (
@@ -1183,6 +1188,12 @@ export class ReviewService implements vscode.Disposable {
     return vscode.workspace
       .getConfiguration("codeReviewTracker", uri)
       .get<boolean>("ignoreEmptyLineDeletions", false);
+  }
+  private isRevExtDisabled(uri: vscode.Uri): boolean {
+    const disabledExtensions = vscode.workspace
+      .getConfiguration("codeReviewTracker", uri)
+      .get<string[]>(REVEXT_DISABLED_EXTENSIONS_SETTING, []);
+    return isRevExtDisabledForSource(uri, disabledExtensions);
   }
   private async withSource<T>(
     uri: vscode.Uri,  // RevExt: 319

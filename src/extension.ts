@@ -23,7 +23,7 @@ import {
 import { eligibleWorkspacePaths } from "./workspace-discovery";
 import { errorMessage, runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.22";
+const EXTENSION_VERSION = "0.5.23";
 
 function isReviewDiffDocument(uri: vscode.Uri): boolean {
   return vscode.window.tabGroups.all.some((group) =>

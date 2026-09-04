@@ -41,8 +41,9 @@ new line; there is no synthetic `modified` record.
   workspace files and apply nested workspace `.gitignore` rules.
 - `review-actions.ts` and `review-mutations.ts` apply line/file/folder
   decisions and promote a fully reviewed file.
-- `revext.ts`, `revext-syntax.ts`, and `revext-annotation.ts` preserve
-  duplicate-added-line identity with temporary source comments.
+- `revext.ts`, `revext-syntax.ts`, `revext-config.ts`, and
+  `revext-annotation.ts` preserve duplicate-added-line identity with temporary
+  source comments and apply the configured extension exclusions.
 - `review-commands.ts`, `initialization-setup.ts`, and `ui.ts` provide setup,
   commands, the native diff provider, sidebar, decorations, and terminal
   integration.
@@ -305,6 +306,13 @@ line comment inside JSX children can be interpreted as JSX text and appear in
 the rendered output until promotion removes it. The persisted digest includes
 the marker while it exists, and the editor decoration layer hides it.
 
+The `codeReviewTracker.revExtDisabledExtensions` window setting is a
+case-insensitive list of final file extensions, with or without a leading dot.
+For a matching source, saved-file, external-file, and pending initialization
+paths skip automatic RevExt generation while keeping review metadata and
+state active. Promotion remains responsible for removing any existing
+generated markers.
+
 ## Native diff UI and commands
 
 The `code-review-baseline:` content provider exposes a digest-addressed,
@@ -327,6 +335,8 @@ shows reviewed/total changed-line counts. Gutter decorations and hover text
 show line state and the last reviewer in both panes. Explorer context actions
 mark files or folders pending, in review, or reviewed; editor actions mark the
 active selection, open the review diff, or send the selection to a terminal.
+Folder status actions show determinate notification progress over eligible
+files and report successful status changes out of the total candidates.
 The default line shortcuts are Ctrl+Alt+J/K/L, and Ctrl+Alt+P sends a selection
 to the agent terminal.
 
@@ -347,9 +357,9 @@ created and the workspace is trusted.
 
 Other commands are setup/reconfiguration, whole-workspace pending/reviewed
 initialization, refresh, and log display. The manifest also exposes
-`maxFileSizeBytes`, `ignoreEmptyLineDeletions`, and `openFilesInReviewView`.
-Changing the empty-line setting forces a serialized policy reconciliation for
-existing tracked sources. The extension supports local files in Restricted Mode with limited functionality, targets VS Code
+`maxFileSizeBytes`, `ignoreEmptyLineDeletions`, `openFilesInReviewView`, and
+`revExtDisabledExtensions`. Changing the empty-line setting forces a
+serialized policy reconciliation for existing tracked sources. The extension supports local files in Restricted Mode with limited functionality, targets VS Code
 `^1.127.0`, requires a local Git executable, and does not support virtual
 workspaces.
 

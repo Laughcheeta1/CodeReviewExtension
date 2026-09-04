@@ -7,9 +7,11 @@ import {
 } from "./domain";
 import { PersistentStore } from "./store";
 import {
+  progressIncrement,
   selectedLines,
 } from "./review-service-utils";
 import type { BaselineIdentity } from "./review-mutations";
+import { folderProgressMessage } from "./review-progress";
 
 export interface ReviewActionContext {
   readonly parseBaselineUri: (uri: vscode.Uri) => BaselineIdentity | undefined;
@@ -137,12 +139,33 @@ export async function markFolder(
   }
   await store.includeTrackingTarget({ kind: "folder", path: folderPath });
   const paths = candidates.filter((path) => store.tracksPath(path)).sort();
-  let marked = 0;
-  for (const path of paths) {
-    const source = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-    if (await markFile(context, source, status, reviewer)) {
-      marked += 1;
-    }
+  if (paths.length === 0) {
+    return 0;
   }
-  return marked;
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Code Review: marking folder ${status}`,
+    },
+    async (progress) => {
+      let marked = 0;
+      progress.report({
+        message: folderProgressMessage(marked, paths.length, status),
+      });
+      for (const path of paths) {
+        try {
+          const source = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+          if (await markFile(context, source, status, reviewer)) {
+            marked += 1;
+          }
+        } finally {
+          progress.report({
+            increment: progressIncrement(paths.length),
+            message: folderProgressMessage(marked, paths.length, status),
+          });
+        }
+      }
+      return marked;
+    },
+  );
 }

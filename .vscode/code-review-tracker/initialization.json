@@ -245,6 +245,26 @@
     {
       "kind": "file",
       "path": "TASK-7.md"
+    },
+    {
+      "kind": "file",
+      "path": "test/revext-config.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "TASK-8.md"
+    },
+    {
+      "kind": "file",
+      "path": "test/review-progress.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/revext-config.ts"
+    },
+    {
+      "kind": "file",
+      "path": "src/review-progress.ts"
     }
   ]
 }

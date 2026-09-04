@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.5.22",
+  "version": "0.5.23",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -223,6 +223,15 @@
           "default": true,
           "scope": "window",
           "description": "Open tracked files in the review view by default. The baseline on the left is read-only; the current file on the right remains editable."
+        },
+        "codeReviewTracker.revExtDisabledExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "window",
+          "description": "File extensions for which RevExt identity comments are disabled. Extensions are case-insensitive and may include a leading dot, for example .html or md."
         }
       }
     },

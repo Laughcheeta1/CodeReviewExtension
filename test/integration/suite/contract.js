@@ -773,6 +773,119 @@ async function run() {
     await closeAllTabs();
 
     /*
+     * RevExt can be disabled by final file extension without disabling review
+     * metadata. Use an upper-case extension with a leading dot to exercise the
+     * documented normalization, then cover external, saved, and pending-file
+     * annotation paths while checking the physical source bytes.
+     */
+    await reviewerConfiguration.update(
+      "revExtDisabledExtensions",
+      [".TSX"],
+      vscode.ConfigurationTarget.Global,
+    );
+    const disabledRevExt = "disabled-revext.tsx";
+    await writeSource(folder, disabledRevExt, "anchor\n");
+    await waitForMetadata(folder, disabledRevExt);
+    await markFile(
+      folder,
+      disabledRevExt,
+      "codeReviewTracker.markFileReviewed",
+    );
+    await writeExternalSource(
+      folder,
+      disabledRevExt,
+      "anchor\nrepeat\nrepeat\n",
+    );
+    await waitUntil(
+      "disabled RevExt external reconciliation",
+      async () => {
+        const value = await assertMetadataPresent(folder, disabledRevExt);
+        const added = value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        );
+        if (added.length !== 2) {
+          return false;
+        }
+        const source = new TextDecoder().decode(
+          await readPhysicalFile(join(folder.uri.fsPath, disabledRevExt)),
+        );
+        assert.equal(
+          (source.match(/RevExt:/g) ?? []).length,
+          0,
+          "disabled extensions must not receive external RevExt comments",
+        );
+        assert.equal(value.file.fileStatus, "pending");
+        return value;
+      },
+    );
+
+    await closeAllTabs();
+    const disabledRevExtDocument = await openSource(folder, disabledRevExt);
+    const disabledRevExtEdit = new vscode.WorkspaceEdit();
+    disabledRevExtEdit.insert(
+      sourceUri(folder, disabledRevExt),
+      new vscode.Position(disabledRevExtDocument.lineCount - 1, 0),
+      "repeat\nrepeat\n",
+    );
+    assert.equal(await vscode.workspace.applyEdit(disabledRevExtEdit), true);
+    assert.equal(await disabledRevExtDocument.save(), true);
+    await waitUntil(
+      "disabled RevExt saved reconciliation",
+      async () => {
+        const value = await assertMetadataPresent(folder, disabledRevExt);
+        const source = new TextDecoder().decode(
+          await readPhysicalFile(join(folder.uri.fsPath, disabledRevExt)),
+        );
+        return value.file.currentLines.filter(
+          (line) => line.changeType === "added",
+        ).length === 4 && (source.match(/RevExt:/g) ?? []).length === 0
+          ? value
+          : false;
+      },
+    );
+
+    const disabledPendingRevExt = "disabled-pending-revext.tsx";
+    await writeSource(folder, disabledPendingRevExt, "repeat\nrepeat\n");
+    await waitForMetadata(folder, disabledPendingRevExt);
+    await markFile(
+      folder,
+      disabledPendingRevExt,
+      "codeReviewTracker.markFilePending",
+    );
+    const disabledPendingRecord = await waitUntil(
+      "disabled RevExt pending initialization",
+      async () => {
+        const value = await assertMetadataPresent(folder, disabledPendingRevExt);
+        return value.file.fileStatus === "pending" &&
+          value.file.baseline.size === 0
+          ? value
+          : false;
+      },
+    );
+    assert.equal(
+      disabledPendingRecord.file.currentLines.length,
+      2,
+      "pending initialization must still create review lines when RevExt is disabled",
+    );
+    const disabledPendingSource = new TextDecoder().decode(
+      await readPhysicalFile(
+        join(folder.uri.fsPath, disabledPendingRevExt),
+      ),
+    );
+    assert.equal(
+      (disabledPendingSource.match(/RevExt:/g) ?? []).length,
+      0,
+      "disabled extensions must not receive pending-initialization comments",
+    );
+    expectedPaths.add(disabledRevExt);
+    expectedPaths.add(disabledPendingRevExt);
+    await reviewerConfiguration.update(
+      "revExtDisabledExtensions",
+      [],
+      vscode.ConfigurationTarget.Global,
+    );
+
+    /*
      * Creation watcher contract. A file created after activation must be
      * initialized without any Git-index operation. The paired ignored file is
      * created in the same event window and must produce neither metadata nor a
