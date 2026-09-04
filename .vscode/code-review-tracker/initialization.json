@@ -265,6 +265,38 @@
     {
       "kind": "file",
       "path": "src/review-progress.ts"
+    },
+    {
+      "kind": "file",
+      "path": "OVERVIEW.md"
+    },
+    {
+      "kind": "file",
+      "path": "test/domain.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/storage-format.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/tracking.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/revext-syntax.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/reviewer-cache.test.ts"
+    },
+    {
+      "kind": "file",
+      "path": "test/vscode-loader.mjs"
+    },
+    {
+      "kind": "file",
+      "path": "test/review-service-utils.test.ts"
     }
   ]
 }
