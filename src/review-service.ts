@@ -77,6 +77,7 @@ export class ReviewService implements vscode.Disposable {
     private readonly log: vscode.LogOutputChannel,
     private readonly git: GitService,
     private readonly ignoreRules: GitIgnoreService,
+    private readonly storageUri: vscode.Uri | undefined,
   ) {
     this.eligibility = new EligibilityTracker(
       this.stores,
@@ -86,9 +87,15 @@ export class ReviewService implements vscode.Disposable {
     );
   }
 
+  /** Workspace-specific extension storage directory for tests and diagnostics. */
+  storeDirectory(folder: vscode.WorkspaceFolder): vscode.Uri | undefined {
+    const store = this.stores.get(folder.uri.toString());
+    return store?.storeDirectoryUri;
+  }
+
   async initialize(): Promise<void> {
     await Promise.all((vscode.workspace.workspaceFolders ?? []).map(async (folder) => {
-      const store = new PersistentStore(folder, this.log);
+      const store = new PersistentStore(folder, this.log, this.storageUri);
       await store.initialize();
       this.stores.set(folder.uri.toString(), store);
     }));

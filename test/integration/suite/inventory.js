@@ -19,6 +19,28 @@ const INITIALIZATION_FILE = "initialization.json";
 const SNAPSHOTS_DIRECTORY = "snapshots";
 const gunzipAsync = promisify(gunzip);
 
+function folderHash(folderUri) {
+  return createHash("sha256").update(folderUri).digest("hex");
+}
+
+function extensionStorageBase() {
+  const value = globalThis.__codeReviewTrackerStorageUri;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function extensionTrackerUri(folder) {
+  const base = extensionStorageBase();
+  if (base === undefined) {
+    return undefined;
+  }
+  try {
+    const baseUri = vscode.Uri.parse(base);
+    return vscode.Uri.joinPath(baseUri, folderHash(folder.uri.toString()));
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Convert a workspace-relative path to the exact POSIX form used by the
  * extension's storage hashes.  Callers should pass a workspace-relative path;
@@ -36,6 +58,15 @@ function pathHash(relativePath) {
 
 /** Return the tracker directory for a workspace folder. */
 function trackerUri(folder) {
+  const extensionUri = extensionTrackerUri(folder);
+  if (extensionUri !== undefined) {
+    return extensionUri;
+  }
+  return vscode.Uri.joinPath(folder.uri, ...TRACKER_PARTS);
+}
+
+/** Return the legacy repository tracker directory (for repo-untouched assertions). */
+function legacyTrackerUri(folder) {
   return vscode.Uri.joinPath(folder.uri, ...TRACKER_PARTS);
 }
 
@@ -156,7 +187,15 @@ async function readInventory(folder) {
     }
 
     const uri = vscode.Uri.joinPath(root, name);
-    const bytes = await vscode.workspace.fs.readFile(uri);
+    let bytes;
+    try {
+      bytes = await vscode.workspace.fs.readFile(uri);
+    } catch (error) {
+      if (isFileNotFound(error)) {
+        continue;
+      }
+      throw error;
+    }
     const value = JSON.parse(new TextDecoder().decode(bytes));
     assert.equal(
       value?.schemaVersion,
@@ -653,7 +692,9 @@ function watchForbiddenPaths(folder, paths) {
 
 module.exports = {
   pathHash,
+  folderHash,
   trackerUri,
+  legacyTrackerUri,
   metadataUri,
   initializationUri,
   snapshotsUri,

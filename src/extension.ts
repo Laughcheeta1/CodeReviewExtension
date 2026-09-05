@@ -17,12 +17,20 @@ import {
 } from "./ui";
 import { runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.25";
+const EXTENSION_VERSION = "0.5.26";
+
+export type ExtensionApi = {
+  readonly service: ReviewService;
+  readonly getStoreDirectory: (
+    folder: vscode.WorkspaceFolder,
+  ) => vscode.Uri | undefined;
+  readonly storageUri: vscode.Uri | undefined;
+};
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(
   context: vscode.ExtensionContext,
-): Promise<void> {
+): Promise<ExtensionApi | void> {
   const log = vscode.window.createOutputChannel("Code Review Tracker", {
     log: true,
   });
@@ -40,7 +48,14 @@ export async function activate(
   );
   const ignoreRules = new GitIgnoreService();
 
-  const service = new ReviewService(log, git, ignoreRules);
+  const service = new ReviewService(
+    log,
+    git,
+    ignoreRules,
+    context.storageUri,
+  );
+  (globalThis as unknown as Record<string, unknown>).__codeReviewTrackerStorageUri =
+    context.storageUri?.toString();
   await service.initialize();
   context.subscriptions.push(service);
 
@@ -78,4 +93,10 @@ export async function activate(
   log.info(
     `Code Review Tracker ${EXTENSION_VERSION} activated.`,
   );
+  return {
+    service,
+    storageUri: context.storageUri,
+    getStoreDirectory: (folder: vscode.WorkspaceFolder) =>
+      service.storeDirectory(folder),
+  };
 }

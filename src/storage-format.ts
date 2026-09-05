@@ -7,6 +7,7 @@
  */
 export type { FileSummary, StoredFile } from "./storage-format/record";
 export {
+  folderHash,
   pathHash,
   snapshotFileName,
   storageFileName,

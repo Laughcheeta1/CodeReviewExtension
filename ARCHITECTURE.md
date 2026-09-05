@@ -170,15 +170,28 @@ only lines remain reviewable.
 
 ## Persisted state
 
-The current layout is:
+All review state is persisted in VS Code workspace-specific extension storage
+via `ExtensionContext.storageUri`. The repository contains no active review
+metadata or snapshots; `.vscode/code-review-tracker/` remains gitignored for
+backward compatibility but is no longer written. A one-time migration copies
+valid legacy files from `.vscode/code-review-tracker/` into the new location
+when extension storage is empty and leaves the legacy files untouched
+otherwise; new and legacy state are never mixed.
+
+The current layout beneath the workspace storage root is:
 
 ```text
-.vscode/code-review-tracker/
+<storageUri>/<sha256(folderUri)>/
   initialization.json
   <sha256(relative-path)>.json
   snapshots/
     <sha256(relative-path)>.<baseline-digest>.gz
 ```
+
+When multiple workspace folders are open, each folder is isolated in its own
+deterministic sub-directory `<sha256(folderUri)>` beneath the shared
+`storageUri`; `ReviewService` derives the per-folder directory from
+`storageUri` passed at activation and never uses `globalStorageUri`.
 
 Each metadata file is a `StoredFile` with `schemaVersion: 4`, the normalized
 workspace-relative path, and a `FileRecord` containing:

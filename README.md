@@ -39,19 +39,19 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 
 When every addition and deletion is reviewed, the saved file is automatically promoted to the next baseline and its obsolete diff tab closes.
 
-Code received from someone else starts auto-reviewed: newly discovered lines blamed on another Git user start `reviewed`, while your own, uncommitted, or unknown-attribution lines start `pending`. The `.vscode/code-review-tracker/` directory stays gitignored so review state is never committed.
+Code received from someone else starts auto-reviewed: newly discovered lines blamed on another Git user start `reviewed`, while your own, uncommitted, or unknown-attribution lines start `pending`. The `.vscode/code-review-tracker/` path remains gitignored for backward compatibility so legacy review state is never committed, but the extension now persists review state in VS Code workspace-specific extension storage via `ExtensionContext.storageUri` instead of inside the repository.
 
-Shared state lives under:
+Shared state lives under VS Code workspace storage:
 
 ```text
-.vscode/code-review-tracker/
+<storageUri>/<sha256(folderUri)>/
   initialization.json
   <path-hash>.json
   snapshots/
     <path-hash>.<baseline-digest>.gz
 ```
 
-Version 0.4.0 does not migrate older metadata. The tracker directory is reset only after an initialization choice is made.
+When extension storage is empty, a one-time migration copies valid legacy files from `.vscode/code-review-tracker/` without mixing new and old state; otherwise legacy files are left untouched. The tracker directory is reset only after an initialization choice is made.
 
 At startup, stored filesystem mtime and size avoid unnecessary reads and Git diffs. Before review actions, the exact saved-file digest is still verified so this optimization cannot authorize stale review state. The rationale is documented in the architecture guide.
 
