@@ -11,6 +11,7 @@ import type {
   FileRecord,
   PhysicalLine,
   RawGitHunk,
+  ReviewStatus,
 } from "./types";
 
 
@@ -63,6 +64,8 @@ export function buildDiffRecords(
     const oldLines = baseline.slice(oldIndex, oldIndex + raw.oldCount);
     const newLines = current.slice(newIndex, newIndex + raw.newCount);
 
+    let replacementAddedStatus: ReviewStatus | undefined;
+    const isSimpleReplacement = raw.oldCount === 1 && raw.newCount === 1;
     for (let index = 0; index < newLines.length; index += 1) {
       const newNumber = raw.newStart + index;
       const occurrence = nextOccurrence(
@@ -75,11 +78,18 @@ export function buildDiffRecords(
         newLines[index]!.digest,
         occurrence,
       );
+      const reviewStatus =
+        transferred?.reviewStatus ??
+        options.initialStatusForAddition?.(newNumber) ??
+        "pending";
+      if (isSimpleReplacement) {
+        replacementAddedStatus = reviewStatus;
+      }
       currentLines.push({
         line: newNumber,
         digest: newLines[index]!.digest,
         changeType: "added",
-        reviewStatus: transferred?.reviewStatus ?? "pending",
+        reviewStatus,
         occurrence,
         lastReviewer: transferred?.lastReviewer,
       });
@@ -97,12 +107,20 @@ export function buildDiffRecords(
       const digest = baselineLineDigest(oldLines[index]!.bytes, oldNumber);
       const occurrence = nextOccurrence(deletionOccurrences, digest);
       const transferred = previousDeleted.get(`${digest}:${oldNumber}`);
+      // A pure deletion has no current-file side to blame, so it stays
+      // pending. Only an unambiguous one-to-one replacement inherits the
+      // added side's initial classification; larger hunks stay
+      // conservative because no safe line pairing exists.
+      const reviewStatus =
+        transferred?.reviewStatus ??
+        (isSimpleReplacement ? replacementAddedStatus : undefined) ??
+        "pending";
       deletedLines.push({
         baselineLine: oldNumber,
         digest,
         occurrence,
         changeType: "deleted",
-        reviewStatus: transferred?.reviewStatus ?? "pending",
+        reviewStatus,
         lastReviewer: transferred?.lastReviewer,
       });
     }

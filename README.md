@@ -39,6 +39,8 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 
 When every addition and deletion is reviewed, the saved file is automatically promoted to the next baseline and its obsolete diff tab closes.
 
+Code received from someone else starts auto-reviewed: newly discovered lines blamed on another Git user start `reviewed`, while your own, uncommitted, or unknown-attribution lines start `pending`. The `.vscode/code-review-tracker/` directory stays gitignored so review state is never committed.
+
 Shared state lives under:
 
 ```text

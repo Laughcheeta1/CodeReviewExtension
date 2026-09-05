@@ -34,6 +34,12 @@ export {
 } from "./domain/status";
 export { buildDiffRecords } from "./domain/diff";
 export {
+  initialStatusCallback,
+  initialStatusForBlameLine,
+  isCurrentUserLine,
+  isUncommittedBlameLine,
+} from "./domain/blame";
+export {
   newlyAddedLineNumbers,
   updateAddedLineDigests,
 } from "./domain/transfer";

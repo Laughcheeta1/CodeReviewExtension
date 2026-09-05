@@ -19,6 +19,18 @@ decisions.
 - Workspace `.gitignore` files are read and evaluated by the extension. Git's
   global excludes, repository `.git/info/exclude`, and Git ignore configuration
   are deliberately not consulted.
+- The snapshot diff determines what changed. Stored metadata determines the
+  status of already-known lines. Git `blame` determines only the initial status
+  of newly discovered current-line additions: a new line by the current user
+  starts `pending`, by another user starts `reviewed`, and unknown attribution
+  starts `pending`. A pure deletion has no current-file side to blame and stays
+  `pending` for now.
+- Blame attribution stays conservative: uncommitted/zero-commit lines count as
+  current-user `pending`, an unambiguous 1-1 replacement inherits its added-side
+  classification on the deleted side while larger hunks stay `pending`, blame
+  failures fall back to `pending` without changing stored metadata, and each
+  reconciliation blames the current file at most once (batched per-file
+  lookup).
 
 Review state is meaningful only for the exact baseline and current digests in
 the record. A replacement is represented as one deleted old line and one added
@@ -32,8 +44,10 @@ new line; there is no synthetic `modified` record.
 - `review-service.ts` is the orchestration boundary. It owns workspace stores,
   eligibility checks, reconciliation, per-source serialization, stale checks,
   and the events consumed by the UI.
-- `domain.ts`, `source-io.ts`, and `git.ts` implement byte/line identity,
-  stable reads, record construction, and local Git hunk calculation.
+- `domain.ts`, `domain/blame.ts`, `source-io.ts`, and `git.ts` implement
+  byte/line identity, stable reads, record construction, local Git hunk
+  calculation, and per-file `blame --line-porcelain` attribution with its
+  initial-status callback.
 - `store.ts`, `store-io.ts`, `snapshot.ts`, `storage-format.ts`, and
   `tracking.ts` implement persisted configuration, v4 metadata, gzip
   snapshots, validation, atomic writes, cleanup, and the small detail cache.
@@ -226,7 +240,7 @@ The common recomputation pipeline is:
 3. stable-read the saved source and calculate its exact digest;
 4. if the digest changed, load and verify the baseline snapshot, run Git, and
    rebuild the line records, applying the configured empty-line deletion
-   policy;
+   policy and the blame-based initial-status callback for new additions;
 5. atomically commit the new generation only after the final eligibility check.
 
 When `ignoreEmptyLineDeletions` is enabled and the effective diff contains no
@@ -236,8 +250,9 @@ snapshot history. In a mixed diff, the exact old baseline remains until the
 remaining additions or non-empty deletions are reviewed; only the empty
 deletion is omitted from review metadata.
 
-New additions and deletions start `pending`. Existing decisions transfer as
-follows:
+New additions start `pending` unless the blame callback classifies a genuinely
+new line as other-user `reviewed`. Pure deletions start `pending` for now.
+Existing decisions transfer as follows:
 
 - A deletion matches the previous deleted record by baseline digest and exact
   baseline line number. If the old line is restored, it is rebuilt as an
@@ -248,6 +263,9 @@ follows:
   cannot prove which duplicate was removed.
 - `inReview` and `reviewed` transfer together when identity is unambiguous;
   new or ambiguous records are pending.
+- The blame callback (`DiffOptions.initialStatusForAddition`) is passed to
+  `buildDiffRecords` only for new additions. It never overwrites a transferred
+  stored decision.
 
 Saved-file and clean external-file reconciliation may add identity comments to
 new duplicate additions. If the duplicate count changes, review transfer

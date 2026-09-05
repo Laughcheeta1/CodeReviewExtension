@@ -17,7 +17,7 @@ import {
 } from "./ui";
 import { runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.24";
+const EXTENSION_VERSION = "0.5.25";
 
 /** Activate the tracker and wire its services to VS Code lifecycle events. */
 export async function activate(

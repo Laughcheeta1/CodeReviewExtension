@@ -7,6 +7,15 @@ import type { RawGitHunk, Reviewer } from "./domain";
 
 const execute = promisify(execFile);
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+const BLAME_HEADER =
+  /^([0-9a-f]{5,40}|0{5,40}) (\d+) (\d+) (\d+)$/;
+
+export interface GitBlameLine {
+  readonly line: number;
+  readonly authorName?: string | undefined;
+  readonly authorEmail?: string | undefined;
+  readonly commit: string;
+}
 
 export class GitService {
   constructor(private readonly executable = "git") {}
@@ -39,6 +48,39 @@ export class GitService {
       return result.stdout.trim();
     } catch {
       return "";
+    }
+  }
+
+  /**
+   * Blame the current file once and return per-line authorship.
+   *
+   * Uses `--line-porcelain` so authorship does not depend on display
+   * formatting. Callers must treat failures as unknown attribution and
+   * fall back to a conservative pending state.
+   */
+  public async blame(
+    repository: string,
+    relativePath: string,
+  ): Promise<ReadonlyMap<number, GitBlameLine>> {
+    const args = [
+      "-C",
+      repository,
+      "blame",
+      "--line-porcelain",
+      "--",
+      relativePath,
+    ];
+    try {
+      const result = await execute(this.executable, args, {
+        maxBuffer: 32 * 1024 * 1024,
+      });
+      return parseBlamePorcelain(result.stdout);
+    } catch (error) {
+      const failure = error as Error & {
+        code?: number | string;
+        stdout?: string;
+      };
+      throw new Error(`Git blame failed: ${failure.message}`);
     }
   }
 
@@ -127,6 +169,75 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
     left.byteLength === right.byteLength &&
     left.every((value, index) => value === right[index])
   );
+}
+
+/**
+ * Parse `git blame --line-porcelain` output into per-line authorship.
+ *
+ * Each porcelain block starts with `<commit> <orig> <final> <count>`,
+ * followed by `author` / `author-mail` metadata and exactly `count`
+ * TAB-prefixed content lines. The map is keyed by final (current-file)
+ * one-based line numbers so callers can classify snapshot-diff additions.
+ */
+export function parseBlamePorcelain(
+  output: string,
+): ReadonlyMap<number, GitBlameLine> {
+  const result = new Map<number, GitBlameLine>();
+  const lines = output.split("\n");
+  let index = 0;
+  while (index < lines.length) {
+    const header = BLAME_HEADER.exec(lines[index] ?? "");
+    if (header === null) {
+      index += 1;
+      continue;
+    }
+    const commit = header[1] ?? "";
+    const finalLine = Number(header[3] ?? "0");
+    const count = Number(header[4] ?? "0");
+    let authorName: string | undefined;
+    let authorEmail: string | undefined;
+    index += 1;
+    while (index < lines.length) {
+      const current = lines[index] ?? "";
+      if (current.startsWith("\t")) {
+        break;
+      }
+      if (current.startsWith("author ")) {
+        const value = current.slice("author ".length).trim();
+        if (value.length > 0) {
+          authorName = value;
+        }
+      } else if (current.startsWith("author-mail ")) {
+        const value = current.slice("author-mail ".length).trim();
+        const stripped = value.startsWith("<") && value.endsWith(">")
+          ? value.slice(1, -1).trim()
+          : value;
+        if (stripped.length > 0) {
+          authorEmail = stripped;
+        }
+      } else if (current.startsWith("filename ")) {
+        // Filenames can contain spaces; no parsing is required here.
+      }
+      index += 1;
+    }
+    for (let offset = 0; offset < count; offset += 1) {
+      const lineNumber = finalLine + offset;
+      const content = lines[index] ?? "";
+      if (!content.startsWith("\t") && offset < count) {
+        // A malformed block ends parsing for this group; the caller
+        // treats missing lines as unknown attribution.
+        break;
+      }
+      result.set(lineNumber, {
+        line: lineNumber,
+        authorName,
+        authorEmail,
+        commit,
+      });
+      index += 1;
+    }
+  }
+  return result;
 }
 
 

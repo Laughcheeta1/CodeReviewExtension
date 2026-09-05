@@ -387,6 +387,7 @@ export class ReviewService implements vscode.Disposable {
     return recomputeSource(
       {
         git: this.git,
+        log: this.log,
         isEligibleSource: (candidate) => this.isEligibleSource(candidate),
         relativePath: (candidate) => this.relativePath(candidate),
         storeFor: (candidate) => this.storeFor(candidate),

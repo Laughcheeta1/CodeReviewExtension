@@ -83,5 +83,16 @@ export interface RawGitHunk {
 
 export interface DiffOptions {
   readonly ignoreEmptyLineDeletions?: boolean;
+  /**
+   * Initial status for a genuinely new added current line.
+   *
+   * The callback is consulted only when no stored review decision
+   * transfers. Stored metadata remains authoritative; blame-derived
+   * values never overwrite an already-known record. When omitted, new
+   * lines stay pending.
+   */
+  readonly initialStatusForAddition?:
+    | ((currentLine: number) => ReviewStatus)
+    | undefined;
 }
 

@@ -2,7 +2,10 @@ import * as vscode from "vscode";
 import {
   buildDiffRecords,
   digestBytes,
+  initialStatusCallback,
   type FileRecord,
+  type RawGitHunk,
+  type ReviewStatus,
 } from "../domain";
 import type { GitService } from "../git";
 import {
@@ -20,6 +23,7 @@ import type { PersistentStore } from "../store";
 
 export interface RecomputeDeps {
   readonly git: GitService;
+  readonly log: vscode.LogOutputChannel;
   isEligibleSource(uri: vscode.Uri): Promise<boolean>;
   relativePath(uri: vscode.Uri): string | undefined;
   storeFor(uri: vscode.Uri): PersistentStore | undefined;
@@ -123,12 +127,18 @@ export async function recomputeSource(
       deps.relativePath(uri) ?? uri.fsPath,
     ));
   const ignoreEmptyLineDeletions = deps.ignoreEmptyLineDeletions(uri);
+  const initialStatusForAddition = await resolveInitialStatusForAdditions(
+    deps,
+    uri,
+    path,
+    rawHunks,
+  );
   const diff = buildDiffRecords(
     baseline,
     bytes,
     rawHunks,
     existing,
-    { ignoreEmptyLineDeletions },
+    { ignoreEmptyLineDeletions, initialStatusForAddition },
   );
   if (!(await deps.isEligibleSource(uri))) {
     return false;
@@ -154,4 +164,51 @@ export async function recomputeSource(
   }
   await store.commit(path, nextFile);
   return true;
+}
+
+/**
+ * Resolve the blame-based initial status for genuinely new additions.
+ *
+ * The snapshot diff remains the authority for what changed. This helper
+ * blames the current file once (never once per line) and returns a
+ * line-number callback for `buildDiffRecords`. Any failure, missing
+ * identity, or file without additions yields undefined so new lines stay
+ * conservatively pending and existing records are preserved.
+ */
+async function resolveInitialStatusForAdditions(
+  deps: RecomputeDeps,
+  uri: vscode.Uri,
+  relativePath: string,
+  rawHunks: readonly RawGitHunk[],
+): Promise<((currentLine: number) => ReviewStatus) | undefined> {
+  let hasAdditions = false;
+  for (const hunk of rawHunks) {
+    if (hunk.newCount > 0) {
+      hasAdditions = true;
+      break;
+    }
+  }
+  if (!hasAdditions) {
+    return undefined;
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(uri);
+  const repository = folder?.uri.fsPath;
+  if (repository === undefined) {
+    return undefined;
+  }
+  try {
+    const [blame, currentUser] = await Promise.all([
+      deps.git.blame(repository, relativePath),
+      deps.git.reviewer(repository),
+    ]);
+    if (currentUser === undefined) {
+      return undefined;
+    }
+    return initialStatusCallback(blame, currentUser);
+  } catch (error) {
+    deps.log.warn(
+      `Git blame classification failed for ${relativePath}; new changes stay pending: ${String(error)}`,
+    );
+    return undefined;
+  }
 }
