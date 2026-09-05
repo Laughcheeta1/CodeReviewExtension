@@ -1,9 +1,7 @@
 import * as vscode from "vscode";
+import { errorMessage } from "./errors";
 
-/** Convert an unknown command/lifecycle failure into a user-readable message. */
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+export { errorMessage };
 
 /** Run a background extension operation without creating an unhandled rejection. */
 export function runLogged(

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { digestBytes, type FileRecord } from "./domain";
+import { isFileNotFound } from "./errors";
 import { decodeSnapshot, encodeSnapshot } from "./snapshot";
 import {
   storageFileName,
@@ -127,10 +128,4 @@ export class StoreFileSystem {
       }
     }
   }
-}
-
-function isFileNotFound(error: unknown): boolean {
-  return (
-    error instanceof vscode.FileSystemError && error.code === "FileNotFound"
-  );
 }

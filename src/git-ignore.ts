@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { serialized } from "./concurrency";
 import {
   createWorkspaceIgnoreMatcher,
   ignoredPathsFromMatcher,
@@ -21,13 +22,12 @@ export class GitIgnoreService {
   >();
   private readonly unavailableWorkspaces = new Set<string>();
   private readonly failuresByWorkspace = new Map<string, unknown>();
-  private readonly refreshes = new Map<string, Promise<void>>();
+  private readonly refreshes = new Map<string, Promise<unknown>>();
 
   /** Refresh the rule snapshot at a workspace lifecycle boundary. */
   public async refresh(folder: vscode.WorkspaceFolder): Promise<void> {
     const key = folder.uri.toString();
-    const previous = this.refreshes.get(key) ?? Promise.resolve();
-    const current = previous.catch(() => undefined).then(async () => {
+    await serialized(this.refreshes, key, async () => {
       try {
         const files = await this.readIgnoreFiles(folder);
         this.matchersByWorkspace.set(key, createWorkspaceIgnoreMatcher(files));
@@ -39,14 +39,6 @@ export class GitIgnoreService {
         throw error;
       }
     });
-    this.refreshes.set(key, current);
-    try {
-      await current;
-    } finally {
-      if (this.refreshes.get(key) === current) {
-        this.refreshes.delete(key);
-      }
-    }
   }
 
   public async ignoredPaths(
