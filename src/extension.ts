@@ -17,8 +17,6 @@ import {
 } from "./ui";
 import { runLogged } from "./extension-utils";
 
-const EXTENSION_VERSION = "0.5.26";
-
 export type ExtensionApi = {
   readonly service: ReviewService;
   readonly getStoreDirectory: (
@@ -90,8 +88,10 @@ export async function activate(
     promptForInitialization(service, ignoreRules),
   );
   decorations.refresh();
+  const extensionVersion =
+    (context.extension.packageJSON as { version?: string }).version;
   log.info(
-    `Code Review Tracker ${EXTENSION_VERSION} activated.`,
+    `Code Review Tracker ${extensionVersion ?? "unknown"} activated.`,
   );
   return {
     service,

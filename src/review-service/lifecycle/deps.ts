@@ -55,5 +55,39 @@ export interface LifecycleDeps {
   tryBeginInitialization(folder: vscode.WorkspaceFolder): boolean;
   endInitialization(folder: vscode.WorkspaceFolder): void;
   drainSources(): Promise<void>;
+  drainFolder(folder: vscode.WorkspaceFolder): Promise<void>;
+  notifyChanged(uri?: vscode.Uri): void;
+}
+
+// Narrow structural interfaces aligned to actual responsibilities —
+// `LifecycleDeps` structurally satisfies each. Reading cleanup deps should
+// not imply access to annotation/promotion capabilities.
+export interface InitializationDeps {
+  readonly log: vscode.LogOutputChannel;
+  readonly git: GitService;
+  storeForFolder(folder: vscode.WorkspaceFolder): PersistentStore | undefined;
+  relativePath(uri: vscode.Uri): string | undefined;
+  isEligibleSource(uri: vscode.Uri): Promise<boolean>;
+  maxSize(): number;
+  isRevExtDisabled(uri: vscode.Uri): boolean;
+  withSource<T>(uri: vscode.Uri, operation: () => Promise<T>): Promise<T>;
+  recompute(uri: vscode.Uri, forceDigest: boolean, createMissing?: boolean, prepared?: PreparedSource, previous?: FileRecord, rebuildPolicy?: boolean): Promise<boolean>;
+  annotatePendingDocument(uri: vscode.Uri): Promise<number>;
+  tryBeginInitialization(folder: vscode.WorkspaceFolder): boolean;
+  endInitialization(folder: vscode.WorkspaceFolder): void;
+  drainFolder(folder: vscode.WorkspaceFolder): Promise<void>;
+}
+
+export interface ReconciliationDeps {
+  readonly log: vscode.LogOutputChannel;
+  storeForFolder(folder: vscode.WorkspaceFolder): PersistentStore | undefined;
+  withSource<T>(uri: vscode.Uri, operation: () => Promise<T>): Promise<T>;
+  recompute(uri: vscode.Uri, forceDigest: boolean, createMissing?: boolean): Promise<boolean>;
+  recomputeSavedDocument(document: vscode.TextDocument): Promise<boolean>;
+}
+
+export interface CleanupDeps {
+  readonly log: vscode.LogOutputChannel;
+  storeForFolder(folder: vscode.WorkspaceFolder): PersistentStore | undefined;
   notifyChanged(uri?: vscode.Uri): void;
 }

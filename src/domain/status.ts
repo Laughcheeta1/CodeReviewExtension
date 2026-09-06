@@ -17,17 +17,50 @@ export function reviewableLines(
   ];
 }
 
+export interface ReviewStats {
+  readonly total: number;
+  readonly reviewed: number;
+  readonly hasNonPending: boolean;
+}
+
+export function reviewStats(
+  file: Pick<FileRecord, "currentLines" | "deletedLines">,
+): ReviewStats {
+  let total = 0;
+  let reviewed = 0;
+  let hasNonPending = false;
+  for (const line of file.currentLines) {
+    if (line.changeType === "unchanged") {
+      continue;
+    }
+    total += 1;
+    if (line.reviewStatus === "reviewed") {
+      reviewed += 1;
+    }
+    if (line.reviewStatus !== "pending") {
+      hasNonPending = true;
+    }
+  }
+  for (const line of file.deletedLines) {
+    total += 1;
+    if (line.reviewStatus === "reviewed") {
+      reviewed += 1;
+    }
+    if (line.reviewStatus !== "pending") {
+      hasNonPending = true;
+    }
+  }
+  return { total, reviewed, hasNonPending };
+}
+
 export function fileStatus(
   file: Pick<FileRecord, "currentLines" | "deletedLines">,
 ): ReviewStatus {
-  const changed = reviewableLines(file);
-  if (
-    changed.length === 0 ||
-    changed.every((line) => line.reviewStatus === "reviewed")
-  ) {
+  const stats = reviewStats(file);
+  if (stats.total === 0 || stats.reviewed === stats.total) {
     return "reviewed";
   }
-  if (changed.some((line) => line.reviewStatus !== "pending")) {
+  if (stats.hasNonPending) {
     return "inReview";
   }
   return "pending";
@@ -39,10 +72,10 @@ export function reviewCounts(
   reviewed: number;
   total: number;
 } {
-  const changed = reviewableLines(file);
+  const stats = reviewStats(file);
   return {
-    reviewed: changed.filter((line) => line.reviewStatus === "reviewed").length,
-    total: changed.length,
+    reviewed: stats.reviewed,
+    total: stats.total,
   };
 }
 

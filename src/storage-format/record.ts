@@ -1,6 +1,5 @@
 import {
-  fileStatus,
-  reviewCounts,
+  reviewStats,
   type FileRecord,
   type ReviewStatus,
   type SourceSnapshot,
@@ -56,9 +55,19 @@ export function storedFile(path: string, file: FileRecord): StoredFile {
   };
 }
 export function summarize(file: FileRecord): FileSummary {
+  const stats = reviewStats(file);
+  let status: ReviewStatus;
+  if (stats.total === 0 || stats.reviewed === stats.total) {
+    status = "reviewed";
+  } else if (stats.hasNonPending) {
+    status = "inReview";
+  } else {
+    status = "pending";
+  }
   return {
-    status: fileStatus(file),
-    ...reviewCounts(file),
+    status,
+    reviewed: stats.reviewed,
+    total: stats.total,
     source: {
       modifiedAt: file.current.modifiedAt,
       size: file.current.size,

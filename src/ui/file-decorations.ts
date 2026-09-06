@@ -2,6 +2,9 @@ import * as vscode from "vscode";
 import type { ReviewService } from "../review-service";
 import { statusIcon, statusText } from "./formatting";
 
+const reviewedColor = new vscode.ThemeColor("testing.iconPassed");
+const queuedColor = new vscode.ThemeColor("testing.iconQueued");
+
 export class ReviewFileDecorations
   implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<
@@ -21,9 +24,9 @@ export class ReviewFileDecorations
     }
     const color =
       status === "reviewed"
-        ? new vscode.ThemeColor("testing.iconPassed")
+        ? reviewedColor
         : status === "inReview"
-          ? new vscode.ThemeColor("testing.iconQueued")
+          ? queuedColor
           : undefined;
     const item = new vscode.FileDecoration(
       statusIcon[status],

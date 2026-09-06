@@ -22,8 +22,35 @@ export class ReviewTree
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined>();
   readonly onDidChangeTreeData = this.emitter.event;
   private readonly subscription: vscode.Disposable;
+  private cachedSummary: readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[] | undefined;
+  private cachedGrouped: Map<ReviewStatus, readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]> | undefined;
   constructor(private readonly service: ReviewService) {
-    this.subscription = service.onDidChange(() => this.emitter.fire(undefined));
+    this.subscription = service.onDidChange(() => {
+      this.cachedSummary = undefined;
+      this.cachedGrouped = undefined;
+      this.emitter.fire(undefined);
+    });
+  }
+
+  private ensureGrouped(): Map<ReviewStatus, readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]> {
+    if (this.cachedGrouped !== undefined && this.cachedSummary !== undefined) {
+      return this.cachedGrouped;
+    }
+    const summary = this.service.summary();
+    this.cachedSummary = summary;
+    const grouped = new Map<ReviewStatus, { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]>();
+    for (const status of ["pending", "inReview", "reviewed"] as const) {
+      grouped.set(status, []);
+    }
+    for (const file of summary) {
+      grouped.get(file.status)?.push(file);
+    }
+    for (const status of ["pending", "inReview", "reviewed"] as const) {
+      grouped.get(status)?.sort((a, b) => a.path.localeCompare(b.path));
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    this.cachedGrouped = grouped as unknown as Map<ReviewStatus, readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]>;
+    return this.cachedGrouped;
   }
   getTreeItem(node: TreeNode): vscode.TreeItem {
     if (node.kind === "group") {
@@ -61,18 +88,15 @@ export class ReviewTree
     if (node.kind === "file") {
       return [];
     }
-    return this.service
-      .summary()
-      .filter((file) => file.status === node.status)
-      .sort((a, b) => a.path.localeCompare(b.path))
-      .map((file) => ({
-        kind: "file",
-        uri: file.uri,
-        label: file.path,
-        status: file.status,
-        reviewed: file.reviewed,
-        total: file.total,
-      }));
+    const grouped = this.ensureGrouped();
+    return (grouped.get(node.status) ?? []).map((file) => ({
+      kind: "file",
+      uri: file.uri,
+      label: file.path,
+      status: file.status,
+      reviewed: file.reviewed,
+      total: file.total,
+    }));
   }
   dispose(): void {
     this.subscription.dispose();

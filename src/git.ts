@@ -132,22 +132,16 @@ export class GitService {
         after,
       ];
       try {
-        const result = await execute(this.executable, args, {
+        await execute(this.executable, args, {
           maxBuffer: 32 * 1024 * 1024,
         });
-        if (contentChanged) {
-          throw new Error("Git reported no diff for different file content");
-        }
-        return this.parseGitHunks(result.stdout);
+        throw new Error("Git reported no diff for different file content");
       } catch (error) {
         const failure = error as Error & {
           code?: number | string;
           stdout?: string;
         };
         if (failure.code === 1 && typeof failure.stdout === "string") {
-          if (!contentChanged) {
-            throw new Error("Git reported changes for identical file content");
-          }
           const hunks = this.parseGitHunks(failure.stdout);
           if (hunks.length === 0) {
             throw new Error(

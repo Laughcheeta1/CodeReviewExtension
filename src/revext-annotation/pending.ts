@@ -14,12 +14,15 @@ export async function annotatePendingDocument(
   if (document.isDirty) {
     throw new Error("Save the file before starting pending review.");
   }
+  const lineTexts: string[] = [];
+  const lineNumbers = new Set<number>();
+  for (let index = 0; index < document.lineCount; index += 1) {
+    lineTexts.push(document.lineAt(index).text);
+    lineNumbers.add(index + 1);
+  }
   const annotation = revExtEdits(
-    Array.from(
-      { length: document.lineCount },
-      (_, index) => document.lineAt(index).text,
-    ),
-    new Set(Array.from({ length: document.lineCount }, (_, index) => index + 1)),
+    lineTexts,
+    lineNumbers,
     document.languageId,
     1,
   );

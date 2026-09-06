@@ -1,6 +1,6 @@
 import type * as vscode from "vscode";
 import {
-  reviewableLines,
+  reviewStats,
   setReviewer,
   type FileRecord,
   type Reviewer,
@@ -24,11 +24,11 @@ export async function commitReview(
     throw new Error("Ignored files cannot be tracked for review.");
   }
   await store.commit(path, file);
-  const changes = reviewableLines(file);
+  const stats = reviewStats(file);
   if (
     file.baseline.digest !== file.current.digest &&
-    changes.length > 0 &&
-    changes.every((line) => line.reviewStatus === "reviewed")
+    stats.total > 0 &&
+    stats.reviewed === stats.total
   ) {
     await promote(context, source, file);
     return;
@@ -47,19 +47,21 @@ export async function applyReview(
 ): Promise<boolean> {
   const at = now();
   const lastReviewer = setReviewer(status, reviewer, at);
-  const currentLines = file.currentLines.map((line) =>
-    matchesCurrent(line)
-      ? { ...line, reviewStatus: status, lastReviewer }
-      : line,
-  );
-  const deletedLines = file.deletedLines.map((line) =>
-    matchesDeleted(line)
-      ? { ...line, reviewStatus: status, lastReviewer }
-      : line,
-  );
-  const changed =
-    currentLines.some((line, index) => line !== file.currentLines[index]) ||
-    deletedLines.some((line, index) => line !== file.deletedLines[index]);
+  let changed = false;
+  const currentLines = file.currentLines.map((line) => {
+    if (!matchesCurrent(line)) {
+      return line;
+    }
+    changed = true;
+    return { ...line, reviewStatus: status, lastReviewer };
+  });
+  const deletedLines = file.deletedLines.map((line) => {
+    if (!matchesDeleted(line)) {
+      return line;
+    }
+    changed = true;
+    return { ...line, reviewStatus: status, lastReviewer };
+  });
   if (!changed) {
     return false;
   }

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ReviewStatus } from "../domain";
 import { revExtMarkerStart } from "../revext";
+import { supportsRevExt } from "../revext-syntax";
 import type { ReviewService } from "../review-service";
 import { gutterIcon, lineDecoration } from "./formatting";
 
@@ -14,6 +15,7 @@ export class ReviewDecorations implements vscode.Disposable {
   private refreshScheduled = false;
   private refreshEverything = false;
   private readonly pendingDocuments = new Set<string>();
+  private readonly revExtCache = new WeakMap<vscode.TextDocument, { version: number; languageId: string; decorations: readonly vscode.DecorationOptions[] }>();
   constructor(private readonly service: ReviewService) {
     this.types = {
       pending: vscode.window.createTextEditorDecorationType({
@@ -64,7 +66,7 @@ export class ReviewDecorations implements vscode.Disposable {
       ) {
         continue;
       }
-      editor.setDecorations(this.revExtType, revExtDecorations(editor.document));
+      editor.setDecorations(this.revExtType, this.cachedRevExtDecorations(editor.document));
       const identity = this.service.parseBaselineUri(editor.document.uri);
       const source = identity?.source ?? editor.document.uri;
       if (identity === undefined && this.service.isTrackable(editor.document)) {
@@ -77,9 +79,10 @@ export class ReviewDecorations implements vscode.Disposable {
         reviewed: [],
       };
       if (file !== undefined && identity === undefined) {
-        for (const line of file.currentLines.filter(
-          (line) => line.changeType !== "unchanged",
-        )) {
+        for (const line of file.currentLines) {
+          if (line.changeType === "unchanged") {
+            continue;
+          }
           if (line.line > editor.document.lineCount) {
             continue;
           }
@@ -116,6 +119,29 @@ export class ReviewDecorations implements vscode.Disposable {
       }
     }
   }
+  private cachedRevExtDecorations(document: vscode.TextDocument): readonly vscode.DecorationOptions[] {
+    if (!supportsRevExt(document.languageId)) {
+      return [];
+    }
+    const cached = this.revExtCache.get(document);
+    if (cached !== undefined && cached.version === document.version && cached.languageId === document.languageId) {
+      return cached.decorations;
+    }
+    const result: vscode.DecorationOptions[] = [];
+    for (let line = 0; line < document.lineCount; line += 1) {
+      const text = document.lineAt(line).text;
+      const start = revExtMarkerStart(text, document.languageId);
+      if (start === undefined) {
+        continue;
+      }
+      result.push({
+        range: new vscode.Range(line, start, line, text.length),
+      });
+    }
+    this.revExtCache.set(document, { version: document.version, languageId: document.languageId, decorations: result });
+    return result;
+  }
+
   dispose(): void {
     this.changeSubscription.dispose();
     this.documentSubscription.dispose();
@@ -126,6 +152,8 @@ export class ReviewDecorations implements vscode.Disposable {
   }
 }
 
+// Keep for compatibility; cached path is used on hot path
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function revExtDecorations(
   document: vscode.TextDocument,
 ): readonly vscode.DecorationOptions[] {

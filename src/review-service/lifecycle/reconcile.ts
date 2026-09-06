@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { forEachConcurrent } from "../../concurrency";
 import {
   isExcludedPath,
   isFileNotFound,
@@ -33,49 +34,34 @@ export async function reconcileExternalChanges(
       let completed = 0;
       progress.report({ message: `0/${paths.size}` });
       const pathList = [...paths];
-      let nextIndex = 0;
-      const worker = async (): Promise<void> => {
-        while (true) {
-          const index = nextIndex;
-          nextIndex += 1;
-          const path = pathList[index];
-          if (path === undefined) {
-            return;
+      await forEachConcurrent(pathList, 4, async (path) => {
+        const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+        try {
+          if (
+            await deps.withSource(uri, () =>
+              deps.recompute(uri, force, true),
+            )
+          ) {
+            changed += 1;
           }
-          const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-          try {
-            if (
-              await deps.withSource(uri, () =>
-                deps.recompute(uri, force, true),
-              )
-            ) {
-              changed += 1;
+        } catch (error) {
+          if (!isFileNotFound(error)) {
+            deps.log.warn(
+              `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
+            );
+          } else {
+            if (eligible !== undefined && deps.untrackPath(folder, path)) {
+              hidden += 1;
             }
-          } catch (error) {
-            if (!isFileNotFound(error)) {
-              deps.log.warn(
-                `Review recomputation failed for ${path}; existing state was preserved: ${String(error)}`,
-              );
-            } else {
-              if (eligible !== undefined && deps.untrackPath(folder, path)) {
-                hidden += 1;
-              }
-            }
-          } finally {
-            completed += 1;
-            progress.report({
-              increment: progressIncrement(paths.size),
-              message: `${completed}/${paths.size}`,
-            });
           }
+        } finally {
+          completed += 1;
+          progress.report({
+            increment: progressIncrement(paths.size),
+            message: `${completed}/${paths.size}`,
+          });
         }
-      };
-      await Promise.all(
-        Array.from(
-          { length: Math.min(4, pathList.length) },
-          () => worker(),
-        ),
-      );
+      });
     },
   );
   if (changed > 0 || hidden > 0) {

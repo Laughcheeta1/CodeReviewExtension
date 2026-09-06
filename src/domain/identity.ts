@@ -5,10 +5,13 @@ import type { PhysicalLine } from "./types";
 export const digestBytes = (bytes: Uint8Array): string =>
   createHash("sha256").update(bytes).digest("hex");
 
+const utf8FatalDecoder = new TextDecoder("utf-8", { fatal: true });
+const baselineLineNumberEncoder = new TextEncoder();
+const nulByte = new Uint8Array([0]);
+
 /** Splits exact bytes into editor-visible physical lines while retaining LF/CRLF identity. */
 export function physicalLines(bytes: Uint8Array): readonly PhysicalLine[] {
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  decoder.decode(bytes);
+  utf8FatalDecoder.decode(bytes);
   const result: PhysicalLine[] = [];
   let start = 0;
   for (let index = 0; index < bytes.length; index += 1) {
@@ -40,11 +43,9 @@ export function baselineLineDigest(
   line: Uint8Array,
   lineNumber: number,
 ): string {
-  return digestBytes(
-    new Uint8Array([
-      ...line,
-      0,
-      ...new TextEncoder().encode(String(lineNumber)),
-    ]),
-  );
+  return createHash("sha256")
+    .update(line)
+    .update(nulByte)
+    .update(baselineLineNumberEncoder.encode(String(lineNumber)))
+    .digest("hex");
 }

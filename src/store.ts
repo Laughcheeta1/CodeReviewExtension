@@ -1,6 +1,11 @@
 import * as vscode from "vscode";
 import { fileStatus, type FileRecord } from "./domain";
-import { coalesced, serialized } from "./concurrency";
+import {
+  coalesced,
+  forEachConcurrent,
+  serialized,
+  STORE_CONCURRENCY_LIMIT,
+} from "./concurrency";
 import {
   folderHash,
   parseStoredFile,
@@ -11,14 +16,29 @@ import {
 import { decodeSnapshot } from "./snapshot";
 import { isFileNotFound } from "./errors";
 import {
+  compileTrackingMatcher,
   parseInitializationConfiguration,
-  tracksPath,
+  tracksPathCompiled,
+  type CompiledTrackingMatcher,
   type InitializationConfiguration,
   type TrackingTarget,
 } from "./tracking";
 import { StoreFileSystem } from "./store-io";
+import { maybeMigrateLegacy } from "./store-migration";
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const CACHE_LIMIT = 8;
+
+function decodeStoredFile(bytes: Uint8Array): ReturnType<typeof parseStoredFile> {
+  return parseStoredFile(JSON.parse(decoder.decode(bytes)));
+}
+
+function parseAndValidateStoredFile(bytes: Uint8Array, expectedPath: string): FileRecord {
+  const parsed = decodeStoredFile(bytes);
+  if (parsed === undefined || parsed.path !== expectedPath) {
+    throw new Error("Invalid v4 per-file review metadata");
+  }
+  return parsed.file;
+}
 const INITIALIZATION_FILE = "initialization.json";
 
 function legacyDirectoryUri(folder: vscode.WorkspaceFolder): vscode.Uri {
@@ -42,7 +62,14 @@ export class PersistentStore {
   private readonly legacySnapshotsUri: vscode.Uri;
   private readonly legacyUri: vscode.Uri;
   private readonly legacyBackupUri: vscode.Uri;
+  private readonly directoryUriString: string;
+  private readonly directoryPrefix: string;
+  private readonly legacyDirectoryString: string;
+  private readonly legacyDirectoryPrefix: string;
+  private readonly legacyUriString: string;
+  private readonly legacyBackupUriString: string;
   private initializationConfiguration: InitializationConfiguration | undefined;
+  private compiledMatcher: CompiledTrackingMatcher = compileTrackingMatcher(undefined);
   constructor(
     private readonly folder: vscode.WorkspaceFolder,
     private readonly log: vscode.LogOutputChannel,
@@ -80,6 +107,12 @@ export class PersistentStore {
       ".vscode",
       "code-review-tracker.v1.migrated.json",
     );
+    this.directoryUriString = this.directoryUri.toString();
+    this.directoryPrefix = `${this.directoryUriString}/`;
+    this.legacyDirectoryString = this.legacyDirectoryUri.toString();
+    this.legacyDirectoryPrefix = `${this.legacyDirectoryString}/`;
+    this.legacyUriString = this.legacyUri.toString();
+    this.legacyBackupUriString = this.legacyBackupUri.toString();
   }
 
   /** Exposed for tests and the activation API; the directory is workspace-specific. */
@@ -105,18 +138,20 @@ export class PersistentStore {
         state: "initialized",
         targets: [{ kind: "folder", path: "" }],
       };
+      this.syncCompiledMatcher();
     }
     if (safeToClean) {
       await this.cleanupSnapshots();
     }
   }
   tracksPath(path: string): boolean {
-    return tracksPath(path, this.initializationConfiguration);
+    return tracksPathCompiled(path, this.compiledMatcher);
   }
   async disableTracking(): Promise<void> {
     const configuration = { schemaVersion: 1, state: "disabled" } as const;
     await this.fileSystem.writeInitialization(configuration);
     this.initializationConfiguration = configuration;
+    this.compiledMatcher = compileTrackingMatcher(configuration);
   }
   async enableTracking(targets: readonly TrackingTarget[]): Promise<void> {
     const configuration = {
@@ -126,6 +161,7 @@ export class PersistentStore {
     } as const;
     await this.fileSystem.writeInitialization(configuration);
     this.initializationConfiguration = configuration;
+    this.compiledMatcher = compileTrackingMatcher(configuration);
   }
   async includeTrackingTarget(target: TrackingTarget): Promise<boolean> {
     return this.includeTrackingTargets([target]);
@@ -140,9 +176,17 @@ export class PersistentStore {
     ) {
       return false;
     }
-    const additions = candidates.filter(
-      (candidate) => !this.tracksPath(candidate.path),
-    );
+    const seen = new Set<string>();
+    const additions: TrackingTarget[] = [];
+    for (const candidate of candidates) {
+      if (seen.has(candidate.path)) {
+        continue;
+      }
+      seen.add(candidate.path);
+      if (!this.tracksPath(candidate.path)) {
+        additions.push(candidate);
+      }
+    }
     if (additions.length === 0) {
       return false;
     }
@@ -155,12 +199,12 @@ export class PersistentStore {
   owns(uri: vscode.Uri): boolean {
     const value = uri.toString();
     return (
-      value.startsWith(`${this.directoryUri.toString()}/`) ||
-      value === this.directoryUri.toString() ||
-      value.startsWith(`${this.legacyDirectoryUri.toString()}/`) ||
-      value === this.legacyDirectoryUri.toString() ||
-      value === this.legacyUri.toString() ||
-      value === this.legacyBackupUri.toString()
+      value.startsWith(this.directoryPrefix) ||
+      value === this.directoryUriString ||
+      value.startsWith(this.legacyDirectoryPrefix) ||
+      value === this.legacyDirectoryString ||
+      value === this.legacyUriString ||
+      value === this.legacyBackupUriString
     );
   }
   peek(path: string): FileRecord | undefined {
@@ -185,13 +229,10 @@ export class PersistentStore {
   private async loadUncached(path: string): Promise<FileRecord | undefined> {
     try {
       const bytes = await vscode.workspace.fs.readFile(this.fileSystem.fileUri(path));
-      const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
-      if (parsed === undefined || parsed.path !== path) {
-        throw new Error("Invalid v4 per-file review metadata");
-      }
-      this.summaries.set(path, summarize(parsed.file));
-      this.touch(path, parsed.file);
-      return parsed.file;
+      const file = parseAndValidateStoredFile(bytes, path);
+      this.summaries.set(path, summarize(file));
+      this.touch(path, file);
+      return file;
     } catch (error) {
       if (isFileNotFound(error)) {
         this.touch(path, undefined);
@@ -248,7 +289,7 @@ export class PersistentStore {
         );
       }
       try {
-      await vscode.workspace.fs.delete(this.fileSystem.fileUri(path), {
+        await vscode.workspace.fs.delete(this.fileSystem.fileUri(path), {
           useTrash: false,
         });
       } catch (error) {
@@ -295,138 +336,18 @@ export class PersistentStore {
     }
   }
   private async maybeMigrateLegacy(): Promise<void> {
-    try {
-      const entries = await vscode.workspace.fs.readDirectory(this.directoryUri);
-      const hasData = entries.some(([name, type]) => {
-        if (name === INITIALIZATION_FILE) {
-          return true;
-        }
-        if (
-          (type & vscode.FileType.File) !== 0 &&
-          name.endsWith(".json") &&
-          !name.includes(".tmp-")
-        ) {
-          return true;
-        }
-        return false;
-      });
-      if (hasData) {
-        return;
-      }
-    } catch (error) {
-      if (!isFileNotFound(error)) {
-        this.log.warn(
-          `Unable to inspect extension storage before migration: ${String(error)}`,
-        );
-        return;
-      }
-    }
+    await maybeMigrateLegacy({
+      directoryUri: this.directoryUri,
+      initializationUri: this.initializationUri,
+      legacyDirectoryUri: this.legacyDirectoryUri,
+      legacySnapshotsUri: this.legacySnapshotsUri,
+      fileSystem: this.fileSystem,
+      log: this.log,
+    });
+  }
 
-    let legacyEntries: readonly [string, vscode.FileType][];
-    try {
-      legacyEntries = await vscode.workspace.fs.readDirectory(
-        this.legacyDirectoryUri,
-      );
-    } catch (error) {
-      if (isFileNotFound(error)) {
-        return;
-      }
-      this.log.warn(`Unable to inspect legacy review storage: ${String(error)}`);
-      return;
-    }
-
-    const legacyInitUri = vscode.Uri.joinPath(
-      this.legacyDirectoryUri,
-      INITIALIZATION_FILE,
-    );
-    let migratedInit = false;
-    try {
-      const bytes = await vscode.workspace.fs.readFile(legacyInitUri);
-      const configuration = parseInitializationConfiguration(
-        JSON.parse(decoder.decode(bytes)),
-      );
-      if (configuration !== undefined) {
-        await this.fileSystem.writeInitialization(configuration);
-        this.log.info(
-          `Migrated legacy initialization from ${this.legacyDirectoryUri.fsPath}`,
-        );
-        migratedInit = true;
-      }
-    } catch (error) {
-      if (!isFileNotFound(error)) {
-        this.log.warn(`Unable to migrate legacy initialization: ${String(error)}`);
-      }
-    }
-
-    let migrated = 0;
-    for (const [name, type] of legacyEntries) {
-      if (name === INITIALIZATION_FILE) {
-        continue;
-      }
-      if (
-        (type & vscode.FileType.File) === 0 ||
-        !name.endsWith(".json") ||
-        name.includes(".tmp-")
-      ) {
-        continue;
-      }
-      const legacyFileUri = vscode.Uri.joinPath(this.legacyDirectoryUri, name);
-      try {
-        const bytes = await vscode.workspace.fs.readFile(legacyFileUri);
-        const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
-        if (parsed === undefined || storageFileName(parsed.path) !== name) {
-          continue;
-        }
-        try {
-          await vscode.workspace.fs.stat(this.fileSystem.fileUri(parsed.path));
-          continue;
-        } catch (statError) {
-          if (!isFileNotFound(statError)) {
-            throw statError;
-          }
-        }
-        const snapshotName = parsed.file.baseline.file;
-        if (snapshotName) {
-          const legacySnapshotUri = vscode.Uri.joinPath(
-            this.legacySnapshotsUri,
-            snapshotName,
-          );
-          try {
-            const compressed = await vscode.workspace.fs.readFile(
-              legacySnapshotUri,
-            );
-            const raw = decodeSnapshot(
-              compressed,
-              parsed.file.baseline.digest,
-              parsed.file.baseline.size,
-              parsed.file.baseline.size + 1,
-            );
-            await this.fileSystem.writeSnapshot(parsed.file, raw);
-          } catch (error) {
-            if (isFileNotFound(error)) {
-              continue;
-            }
-            this.log.warn(
-              `Unable to migrate snapshot ${snapshotName}: ${String(error)}`,
-            );
-            continue;
-          }
-        }
-        await this.fileSystem.writeJson(parsed.path, parsed.file);
-        migrated += 1;
-      } catch (error) {
-        this.log.warn(
-          `Unable to migrate legacy metadata ${name}: ${String(error)}`,
-        );
-      }
-    }
-    if (migrated > 0) {
-      this.log.info(
-        `Migrated ${migrated} legacy review files from ${this.legacyDirectoryUri.fsPath}`,
-      );
-    } else if (migratedInit) {
-      // Initialization already migrated; no files needed.
-    }
+  private syncCompiledMatcher(): void {
+    this.compiledMatcher = compileTrackingMatcher(this.initializationConfiguration);
   }
 
   private async loadInitialization(): Promise<void> {
@@ -439,6 +360,7 @@ export class PersistentStore {
         throw new Error("Invalid initialization configuration");
       }
       this.initializationConfiguration = configuration;
+      this.syncCompiledMatcher();
     } catch (error) {
       if (!isFileNotFound(error)) {
         this.log.warn(
@@ -459,7 +381,7 @@ export class PersistentStore {
       return false;
     }
     let valid = true;
-    await Promise.all(entries.map(async ([name, type]) => {
+    await forEachConcurrent(entries, STORE_CONCURRENCY_LIMIT, async ([name, type]) => {
       if (name === INITIALIZATION_FILE) {
         return;
       }
@@ -475,7 +397,7 @@ export class PersistentStore {
       try {
         const metadata = vscode.Uri.joinPath(this.directoryUri, name);
         const bytes = await vscode.workspace.fs.readFile(metadata);
-        const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
+        const parsed = decodeStoredFile(bytes);
         if (parsed === undefined || storageFileName(parsed.path) !== name) {
           throw new Error("Unsupported or malformed metadata");
         }
@@ -484,7 +406,7 @@ export class PersistentStore {
         valid = false;
         this.log.warn(`Ignoring metadata file ${name}: ${String(error)}`);
       }
-    }));
+    });
     return valid;
   }
   private async cleanupSnapshots(): Promise<void> {
@@ -515,11 +437,7 @@ export class PersistentStore {
   private async loadDirect(path: string): Promise<FileRecord | undefined> {
     try {
       const bytes = await vscode.workspace.fs.readFile(this.fileSystem.fileUri(path));
-      const parsed = parseStoredFile(JSON.parse(decoder.decode(bytes)));
-      if (parsed === undefined || parsed.path !== path) {
-        throw new Error("Invalid v4 per-file review metadata");
-      }
-      return parsed.file;
+      return parseAndValidateStoredFile(bytes, path);
     } catch (error) {
       if (isFileNotFound(error)) {
         return undefined;

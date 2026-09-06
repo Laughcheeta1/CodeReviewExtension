@@ -88,6 +88,13 @@ export function updateAddedLineDigests(
     occurrenceByLine.set(lineNumber, occurrence);
   }
 
+  const previousAddedByDigestOccurrence = new Map<string, string>();
+  for (const line of previous.currentLines) {
+    if (line.changeType !== "added") {
+      continue;
+    }
+    previousAddedByDigestOccurrence.set(`${line.digest}:${line.occurrence}`, line.digest);
+  }
   const digestUpdates = new Map<string, string>();
   for (const lineNumber of [...updatedLines].sort((a, b) => a - b)) {
     if (!addedLines.has(lineNumber)) {
@@ -103,17 +110,9 @@ export function updateAddedLineDigests(
     ) {
       continue;
     }
-    const matching = previous.currentLines.find(
-      (line) =>
-        line.changeType === "added" &&
-        line.digest === beforeLine.digest &&
-        line.occurrence === occurrence,
-    );
-    if (matching !== undefined) {
-      digestUpdates.set(
-        `${matching.digest}:${matching.occurrence}`,
-        afterLine.digest,
-      );
+    const key = `${beforeLine.digest}:${occurrence}`;
+    if (previousAddedByDigestOccurrence.has(key)) {
+      digestUpdates.set(key, afterLine.digest);
     }
   }
   if (digestUpdates.size === 0) {

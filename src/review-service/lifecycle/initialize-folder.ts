@@ -5,7 +5,7 @@ import {
   progressIncrement,
 } from "../../review-service-utils";
 import { createRecord, readStableSource } from "../../source-io";
-import { tracksPath, type TrackingTarget } from "../../tracking";
+import { compileTrackingMatcher, tracksPathCompiled, type TrackingTarget } from "../../tracking";
 import type { LifecycleDeps } from "./deps";
 
 export async function initializeFolder(
@@ -31,15 +31,16 @@ export async function initializeFolder(
     throw new Error("This workspace is already being initialized.");
   }
   try {
-    await deps.drainSources();
+    await deps.drainFolder(folder);
     await store.reset();
     const maxSize = deps.maxSize();
+    const matcher = compileTrackingMatcher({
+      schemaVersion: 1,
+      state: "initialized",
+      targets: configuredTargets,
+    });
     const paths = [...eligible]
-      .filter((path) => tracksPath(path, {
-        schemaVersion: 1,
-        state: "initialized",
-        targets: configuredTargets,
-      }))
+      .filter((path) => tracksPathCompiled(path, matcher))
       .sort();
     await vscode.window.withProgress(
       {

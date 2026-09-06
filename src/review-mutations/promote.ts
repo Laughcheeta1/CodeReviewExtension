@@ -26,16 +26,19 @@ export async function promote(
     return;
   }
   const document = await context.openDocumentForInternalUse(source);
+  const addedLines = new Set<number>();
+  for (const line of expected.currentLines) {
+    if (line.changeType === "added") {
+      addedLines.add(line.line);
+    }
+  }
+  const lines: string[] = [];
+  for (let index = 0; index < document.lineCount; index += 1) {
+    lines.push(document.lineAt(index).text);
+  }
   const removals = revExtRemovals(
-    Array.from(
-      { length: document.lineCount },
-      (_, index) => document.lineAt(index).text,
-    ),
-    new Set(
-      expected.currentLines
-        .filter((line) => line.changeType === "added")
-        .map((line) => line.line),
-    ),
+    lines,
+    addedLines,
     document.languageId,
   );
   if (removals.length > 0) {

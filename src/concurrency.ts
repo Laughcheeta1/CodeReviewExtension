@@ -57,3 +57,49 @@ export async function serialized<T>(
     }
   }
 }
+
+export const STORE_CONCURRENCY_LIMIT = 16;
+
+/**
+ * Run an operation for each item with bounded concurrency. The result order
+ * is not preserved; callers that need ordering should handle it themselves.
+ */
+export async function forEachConcurrent<T>(
+  items: readonly T[],
+  limit: number,
+  operation: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+  const bounded = Math.max(1, Math.min(limit, items.length));
+  let nextIndex = 0;
+  const workers = Array.from({ length: bounded }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) {
+        return;
+      }
+      const item = items[index]!;
+      await operation(item, index);
+    }
+  });
+  await Promise.all(workers);
+}
+
+/**
+ * Map items with bounded concurrency, preserving order.
+ */
+export async function mapConcurrent<T, R>(
+  items: readonly T[],
+  limit: number,
+  operation: (item: T, index: number) => Promise<R>,
+): Promise<readonly R[]> {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  const results = new Array<R>(items.length) as R[];
+  await forEachConcurrent(items, limit, async (item, index) => {
+    results[index] = await operation(item, index);
+  });
+  return results;
+}

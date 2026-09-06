@@ -35,20 +35,67 @@ export function parseInitializationConfiguration(
   return { schemaVersion: 1, state: "initialized", targets };
 }
 
+export interface CompiledTrackingMatcher {
+  readonly tracksRoot: boolean;
+  readonly files: ReadonlySet<string>;
+  readonly folders: ReadonlySet<string>;
+}
+
+export function compileTrackingMatcher(
+  configuration: InitializationConfiguration | undefined,
+): CompiledTrackingMatcher {
+  if (configuration?.state !== "initialized" || configuration.targets === undefined) {
+    return { tracksRoot: false, files: new Set(), folders: new Set() };
+  }
+  let tracksRoot = false;
+  const files = new Set<string>();
+  const folders = new Set<string>();
+  for (const target of configuration.targets) {
+    if (target.kind === "file") {
+      files.add(target.path);
+    } else if (target.path.length === 0) {
+      tracksRoot = true;
+    } else {
+      folders.add(target.path);
+    }
+  }
+  return { tracksRoot, files, folders };
+}
+
+export function tracksPathCompiled(
+  path: string,
+  matcher: CompiledTrackingMatcher,
+): boolean {
+  if (matcher.tracksRoot) {
+    return true;
+  }
+  if (matcher.files.has(path)) {
+    return true;
+  }
+  if (matcher.folders.has(path)) {
+    return true;
+  }
+  // Check ancestor folders: path = "a/b/c", ancestors = "a/b", "a"
+  let separator = path.lastIndexOf("/");
+  while (separator !== -1) {
+    const ancestor = path.slice(0, separator);
+    if (matcher.folders.has(ancestor)) {
+      return true;
+    }
+    separator = path.lastIndexOf("/", separator - 1);
+  }
+  return false;
+}
+
 export function tracksPath(
   path: string,
   configuration: InitializationConfiguration | undefined,
 ): boolean {
-  return (
-    configuration?.state === "initialized" &&
-    configuration.targets?.some((target) =>
-      target.kind === "file"
-        ? target.path === path
-        : target.path.length === 0 ||
-          path === target.path ||
-          path.startsWith(`${target.path}/`),
-    ) === true
-  );
+  if (configuration?.state !== "initialized") {
+    return false;
+  }
+  // Preserve exact behavior via compiled matcher for consistency.
+  return tracksPathCompiled(path, compileTrackingMatcher(configuration));
 }
 
 function isTrackingTarget(value: unknown): value is TrackingTarget {

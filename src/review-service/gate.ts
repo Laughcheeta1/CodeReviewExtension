@@ -45,4 +45,26 @@ export class SourceGate {
   async drainSources(): Promise<void> {
     await Promise.allSettled(this.sourceTails.values());
   }
+
+  async drainFolder(folder: vscode.WorkspaceFolder): Promise<void> {
+    const prefix = `${folder.uri.toString()}/`;
+    const folderKey = folder.uri.toString();
+    const relevant = [...this.sourceTails.entries()]
+      .filter(([key]) => {
+        if (key === folderKey) {
+          return true;
+        }
+        if (key.startsWith(prefix)) {
+          return true;
+        }
+        try {
+          const uri = vscode.Uri.parse(key);
+          return vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() === folderKey;
+        } catch {
+          return false;
+        }
+      })
+      .map(([, promise]) => promise);
+    await Promise.allSettled(relevant);
+  }
 }

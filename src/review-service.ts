@@ -38,7 +38,10 @@ import {
   isRevExtDisabled as readRevExtDisabled,
   maxFileSize,
 } from "./review-service/config";
-import { recomputeSource } from "./review-service/recompute";
+import {
+  recomputeSource,
+  type RecomputeDeps,
+} from "./review-service/recompute";
 import {
   cleanupIgnoredSources as cleanupIgnoredSourcesLifecycle,
   cleanupMissingSources as cleanupMissingSourcesLifecycle,
@@ -61,6 +64,13 @@ import {
   prepareDiff as prepareDiffLifecycle,
   type BaselineDeps,
 } from "./review-service/baseline";
+export type ReviewSummary = {
+  uri: vscode.Uri;
+  path: string;
+  status: ReviewStatus;
+  reviewed: number;
+  total: number;
+};
 export class ReviewService implements vscode.Disposable {
   private readonly stores = new Map<string, PersistentStore>();
   private readonly eligibility: EligibilityTracker;
@@ -73,6 +83,12 @@ export class ReviewService implements vscode.Disposable {
   readonly onDidChange = this.changedEmitter.event;
   private readonly promotedEmitter = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidPromote = this.promotedEmitter.event;
+  private readonly recomputeDeps: RecomputeDeps;
+  private readonly annotationContext: RevExtAnnotationContext;
+  private readonly mutationContext: ReviewMutationContext;
+  private readonly actionContext: ReviewActionContext;
+  private readonly lifecycleDeps: LifecycleDeps;
+  private readonly baselineDeps: BaselineDeps;
   constructor(
     private readonly log: vscode.LogOutputChannel,
     private readonly git: GitService,
@@ -85,6 +101,138 @@ export class ReviewService implements vscode.Disposable {
       this.log,
       () => this.changedEmitter.fire(undefined),
     );
+    this.annotationContext = {
+      git: this.git,
+      internalSaves: this.internalSaves,
+      openDocumentForInternalUse: (uri) => this.openDocumentForInternalUse(uri),
+      maxSize: () => this.maxSize(),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
+      isRevExtDisabled: (uri) => this.isRevExtDisabled(uri),
+      relativePath: (uri) => this.relativePath(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      recompute: (uri, forceDigest, createMissing, prepared, previous) =>
+        this.recompute(uri, forceDigest, createMissing, prepared, previous),
+    };
+    this.mutationContext = {
+      git: this.git,
+      internalSaves: this.internalSaves,
+      openDocumentForInternalUse: (uri) =>
+        this.openDocumentForInternalUse(uri),
+      changedEmitter: this.changedEmitter,
+      promotedEmitter: this.promotedEmitter,
+      relativePath: (uri) => this.relativePath(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      maxSize: () => this.maxSize(),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
+      isTrackableUri: (uri) => this.isTrackableUri(uri),
+      recompute: (uri, forceDigest, createMissing) =>
+        this.recompute(uri, forceDigest, createMissing),
+      annotatePendingDocument: (uri) => this.annotatePendingDocument(uri),
+    };
+    this.recomputeDeps = {
+      git: this.git,
+      log: this.log,
+      isEligibleSource: (candidate) => this.isEligibleSource(candidate),
+      relativePath: (candidate) => this.relativePath(candidate),
+      storeFor: (candidate) => this.storeFor(candidate),
+      maxSize: () => this.maxSize(),
+      ignoreEmptyLineDeletions: (candidate) =>
+        this.ignoreEmptyLineDeletions(candidate),
+      promoteFile: (candidate, file) =>
+        promoteMutation(this.mutationContext, candidate, file),
+    };
+    this.actionContext = {
+      parseBaselineUri: (uri) => this.parseBaselineUri(uri),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
+      initializeMissingSource: (uri) => this.initializeMissingSource(uri),
+      withSource: (uri, operation) => this.withSource(uri, operation),
+      dirtyDocument: (uri) => this.dirtyDocument(uri),
+      requireFresh: (uri, identity) => this.requireFresh(uri, identity),
+      applyReview: (
+        source,
+        file,
+        status,
+        reviewer,
+        matchesCurrent,
+        matchesDeleted,
+      ) =>
+        this.applyReview(
+          source,
+          file,
+          status,
+          reviewer,
+          matchesCurrent,
+          matchesDeleted,
+        ),
+      initializePendingFile: (uri) => this.initializePendingFile(uri),
+      storeFor: (uri) => this.storeFor(uri),
+      refreshEligiblePaths: (folder, force) =>
+        this.refreshEligiblePaths(folder, force),
+    };
+    this.lifecycleDeps = {
+      log: this.log,
+      git: this.git,
+      storeFor: (uri) => this.storeFor(uri),
+      storeForFolder: (folder) => this.storeForFolder(folder),
+      relativePath: (uri) => this.relativePath(uri),
+      isEligibleSource: (uri) => this.isEligibleSource(uri),
+      isTrackableUri: (uri) => this.isTrackableUri(uri),
+      maxSize: () => this.maxSize(),
+      isRevExtDisabled: (uri) => this.isRevExtDisabled(uri),
+      dirtyDocument: (uri) => this.dirtyDocument(uri),
+      withSource: (uri, operation) => this.withSource(uri, operation),
+      recompute: (
+        uri,
+        forceDigest,
+        createMissing,
+        prepared,
+        previous,
+        rebuildPolicy,
+      ) =>
+        this.recompute(
+          uri,
+          forceDigest,
+          createMissing,
+          prepared,
+          previous,
+          rebuildPolicy,
+        ),
+      recomputeSavedDocument: (document) =>
+        this.recomputeSavedDocument(document),
+      annotatePendingDocument: (uri) => this.annotatePendingDocument(uri),
+      annotationContext: () => this.annotationContext,
+      consumeInternalSave: (key) => this.internalSaves.delete(key),
+      hideSources: (uris) => this.hideSources(uris),
+      refreshEligiblePaths: (folder, force) =>
+        this.refreshEligiblePaths(folder, force),
+      ensureIncludes: (folder, path) =>
+        this.eligibility.ensureIncludes(folder, path),
+      setEligiblePaths: (folder, paths) =>
+        this.setEligiblePaths(folder, paths),
+      trackedPaths: (folder) => this.eligibility.trackedPaths(folder),
+      trackPath: (folder, path) => this.eligibility.trackPath(folder, path),
+      untrackPath: (folder, path) =>
+        this.eligibility.untrackPath(folder, path),
+      tryBeginInitialization: (folder) =>
+        this.gate.tryBeginInitialization(folder),
+      endInitialization: (folder) => this.gate.endInitialization(folder),
+      drainSources: () => this.gate.drainSources(),
+      drainFolder: (folder) => this.gate.drainFolder(folder),
+      notifyChanged: (uri) => this.changedEmitter.fire(uri),
+    };
+    this.baselineDeps = {
+      storeFor: (uri) => this.storeFor(uri),
+      relativePath: (uri) => this.relativePath(uri),
+      dirtyDocument: (uri) => this.dirtyDocument(uri),
+      withSource: (uri, operation) => this.withSource(uri, operation),
+      recompute: (uri, forceDigest) => this.recompute(uri, forceDigest),
+      requireFresh: (source, identity, forceDigest) =>
+        this.requireFresh(source, identity, forceDigest),
+      initializeMissingSource: (uri) => this.initializeMissingSource(uri),
+      ensureIncludes: (folder, path) =>
+        this.eligibility.ensureIncludes(folder, path),
+      maxSize: () => this.maxSize(),
+    };
   }
 
   /** Workspace-specific extension storage directory for tests and diagnostics. */
@@ -122,6 +270,7 @@ export class ReviewService implements vscode.Disposable {
 
   dispose(): void {
     this.internalDocumentLoads.clear();
+    this.internalSaves.clear();
     this.changedEmitter.dispose();
     this.promotedEmitter.dispose();
   }
@@ -221,48 +370,48 @@ export class ReviewService implements vscode.Disposable {
   }
   async initializeOpenedDocument(document: vscode.TextDocument): Promise<void> {
     await initializeOpenedDocumentLifecycle(
-      this.lifecycleDeps(),
+      this.lifecycleDeps,
       document,
     );
   }
   async initializeSource(uri: vscode.Uri): Promise<void> {
-    await initializeSourceLifecycle(this.lifecycleDeps(), uri);
+    await initializeSourceLifecycle(this.lifecycleDeps, uri);
   }
   async initializeDiscoveredSources(folder: vscode.WorkspaceFolder): Promise<void> {
-    await initializeDiscoveredSourcesLifecycle(this.lifecycleDeps(), folder);
+    await initializeDiscoveredSourcesLifecycle(this.lifecycleDeps, folder);
   }
   private async initializeMissingSource(uri: vscode.Uri): Promise<boolean> {
-    return initializeMissingSourceLifecycle(this.lifecycleDeps(), uri);
+    return initializeMissingSourceLifecycle(this.lifecycleDeps, uri);
   }
   async reconcileExternalChanges(
     folder: vscode.WorkspaceFolder,
     force = false,
   ): Promise<void> {
     await reconcileExternalChangesLifecycle(
-      this.lifecycleDeps(),
+      this.lifecycleDeps,
       folder,
       force,
     );
   }
   async refreshReviewPolicy(): Promise<void> {
-    await refreshReviewPolicyLifecycle(this.lifecycleDeps());
+    await refreshReviewPolicyLifecycle(this.lifecycleDeps);
   }
   async cleanupMissingSources(folder: vscode.WorkspaceFolder): Promise<void> {
-    await cleanupMissingSourcesLifecycle(this.lifecycleDeps(), folder);
+    await cleanupMissingSourcesLifecycle(this.lifecycleDeps, folder);
   }
   async cleanupIgnoredSources(folder: vscode.WorkspaceFolder): Promise<void> {
-    await cleanupIgnoredSourcesLifecycle(this.lifecycleDeps(), folder, (candidate, paths) =>
+    await cleanupIgnoredSourcesLifecycle(this.lifecycleDeps, folder, (candidate, paths) =>
       this.ignoreRules.ignoredPaths(candidate, paths),
     );
   }
   async reconcileCreatedSource(uri: vscode.Uri): Promise<void> {
-    await reconcileCreatedSourceLifecycle(this.lifecycleDeps(), uri);
+    await reconcileCreatedSourceLifecycle(this.lifecycleDeps, uri);
   }
   async reconcileExternalSource(uri: vscode.Uri): Promise<void> {
-    await reconcileExternalSourceLifecycle(this.lifecycleDeps(), uri);
+    await reconcileExternalSourceLifecycle(this.lifecycleDeps, uri);
   }
   async reconcileSavedDocument(document: vscode.TextDocument): Promise<void> {
-    await reconcileSavedDocumentLifecycle(this.lifecycleDeps(), document);
+    await reconcileSavedDocumentLifecycle(this.lifecycleDeps, document);
   }
   async initializeFolder(
     folder: vscode.WorkspaceFolder,
@@ -271,7 +420,7 @@ export class ReviewService implements vscode.Disposable {
     candidatePaths?: readonly string[],
   ): Promise<void> {
     await initializeFolderLifecycle(
-      this.lifecycleDeps(),
+      this.lifecycleDeps,
       folder,
       status,
       targets,
@@ -282,7 +431,7 @@ export class ReviewService implements vscode.Disposable {
     return parseBaselineUriLifecycle(uri);
   }
   async baselineContent(uri: vscode.Uri): Promise<string> {
-    return baselineContentLifecycle(this.baselineDeps(), uri);
+    return baselineContentLifecycle(this.baselineDeps, uri);
   }
   async prepareDiff(source: vscode.Uri): Promise<
     | {
@@ -291,46 +440,34 @@ export class ReviewService implements vscode.Disposable {
       }
     | undefined
   > {
-    return prepareDiffLifecycle(this.baselineDeps(), source);
+    return prepareDiffLifecycle(this.baselineDeps, source);
   }
   async markEditor(
     editor: vscode.TextEditor,
     status: ReviewStatus,
     reviewer?: Reviewer,
   ): Promise<boolean> {
-    return markEditorAction(this.actionContext(), editor, status, reviewer);
+    return markEditorAction(this.actionContext, editor, status, reviewer);
   }
   async markFile(
     source: vscode.Uri,
     status: ReviewStatus,
     reviewer?: Reviewer,
   ): Promise<boolean> {
-    return markFileAction(this.actionContext(), source, status, reviewer);
+    return markFileAction(this.actionContext, source, status, reviewer);
   }
   async markFolder(
     uri: vscode.Uri,
     status: ReviewStatus,
     reviewer?: Reviewer,
   ): Promise<number> {
-    return markFolderAction(this.actionContext(), uri, status, reviewer);
+    return markFolderAction(this.actionContext, uri, status, reviewer);
   }
   private async initializePendingFile(source: vscode.Uri): Promise<boolean> {
-    return initializePendingFileMutation(this.mutationContext(), source);
+    return initializePendingFileMutation(this.mutationContext, source);
   }
-  summary(folder?: vscode.WorkspaceFolder): readonly {
-    uri: vscode.Uri;
-    path: string;
-    status: ReviewStatus;
-    reviewed: number;
-    total: number;
-  }[] {
-    const result: {
-      uri: vscode.Uri;
-      path: string;
-      status: ReviewStatus;
-      reviewed: number;
-      total: number;
-    }[] = [];
+  summary(folder?: vscode.WorkspaceFolder): readonly ReviewSummary[] {
+    const result: ReviewSummary[] = [];
     for (const workspaceFolder of folder === undefined
       ? (vscode.workspace.workspaceFolders ?? [])
       : [folder]) {
@@ -392,18 +529,7 @@ export class ReviewService implements vscode.Disposable {
     rebuildPolicy = false,
   ): Promise<boolean> {
     return recomputeSource(
-      {
-        git: this.git,
-        log: this.log,
-        isEligibleSource: (candidate) => this.isEligibleSource(candidate),
-        relativePath: (candidate) => this.relativePath(candidate),
-        storeFor: (candidate) => this.storeFor(candidate),
-        maxSize: () => this.maxSize(),
-        ignoreEmptyLineDeletions: (candidate) =>
-          this.ignoreEmptyLineDeletions(candidate),
-        promoteFile: (candidate, file) =>
-          promoteMutation(this.mutationContext(), candidate, file),
-      },
+      this.recomputeDeps,
       uri,
       forceDigest,
       createMissing,
@@ -415,37 +541,10 @@ export class ReviewService implements vscode.Disposable {
   private async recomputeSavedDocument(
     document: vscode.TextDocument,
   ): Promise<boolean> {
-    return recomputeSavedSource(this.annotationContext(), document);
+    return recomputeSavedSource(this.annotationContext, document);
   }
   private async annotatePendingDocument(uri: vscode.Uri): Promise<number> {
-    return annotatePendingSource(this.annotationContext(), uri);
-  }
-  private annotationContext(): RevExtAnnotationContext {
-    return {
-      git: this.git,
-      internalSaves: this.internalSaves,
-      openDocumentForInternalUse: (uri) =>
-        this.openDocumentForInternalUse(uri),
-      maxSize: () => this.maxSize(),
-      isEligibleSource: (uri) => this.isEligibleSource(uri),
-      isRevExtDisabled: (uri) => this.isRevExtDisabled(uri),
-      relativePath: (uri) => this.relativePath(uri),
-      storeFor: (uri) => this.storeFor(uri),
-      recompute: (
-        uri,
-        forceDigest,
-        createMissing,
-        prepared,
-        previous,
-      ) =>
-        this.recompute(
-          uri,
-          forceDigest,
-          createMissing,
-          prepared,
-          previous,
-        ),
-    };
+    return annotatePendingSource(this.annotationContext, uri);
   }
   private async requireFresh(
     source: vscode.Uri,
@@ -453,7 +552,7 @@ export class ReviewService implements vscode.Disposable {
     forceDigest = true,
   ): Promise<FileRecord> {
     return requireFreshMutation(
-      this.mutationContext(),
+      this.mutationContext,
       source,
       identity,
       forceDigest,
@@ -468,7 +567,7 @@ export class ReviewService implements vscode.Disposable {
     matchesDeleted: (line: FileRecord["deletedLines"][number]) => boolean,
   ): Promise<boolean> {
     return applyReviewMutation(
-      this.mutationContext(),
+      this.mutationContext,
       source,
       file,
       status,
@@ -476,54 +575,6 @@ export class ReviewService implements vscode.Disposable {
       matchesCurrent,
       matchesDeleted,
     );
-  }
-  private actionContext(): ReviewActionContext {
-    return {
-      parseBaselineUri: (uri) => this.parseBaselineUri(uri),
-      isEligibleSource: (uri) => this.isEligibleSource(uri),
-      initializeMissingSource: (uri) => this.initializeMissingSource(uri),
-      withSource: (uri, operation) => this.withSource(uri, operation),
-      dirtyDocument: (uri) => this.dirtyDocument(uri),
-      requireFresh: (uri, identity) => this.requireFresh(uri, identity),
-      applyReview: (
-        source,
-        file,
-        status,
-        reviewer,
-        matchesCurrent,
-        matchesDeleted,
-      ) =>
-        this.applyReview(
-          source,
-          file,
-          status,
-          reviewer,
-          matchesCurrent,
-          matchesDeleted,
-        ),
-      initializePendingFile: (uri) => this.initializePendingFile(uri),
-      storeFor: (uri) => this.storeFor(uri),
-      refreshEligiblePaths: (folder, force) =>
-        this.refreshEligiblePaths(folder, force),
-    };
-  }
-  private mutationContext(): ReviewMutationContext {
-    return {
-      git: this.git,
-      internalSaves: this.internalSaves,
-      openDocumentForInternalUse: (uri) =>
-        this.openDocumentForInternalUse(uri),
-      changedEmitter: this.changedEmitter,
-      promotedEmitter: this.promotedEmitter,
-      relativePath: (uri) => this.relativePath(uri),
-      storeFor: (uri) => this.storeFor(uri),
-      maxSize: () => this.maxSize(),
-      isEligibleSource: (uri) => this.isEligibleSource(uri),
-      isTrackableUri: (uri) => this.isTrackableUri(uri),
-      recompute: (uri, forceDigest, createMissing) =>
-        this.recompute(uri, forceDigest, createMissing),
-      annotatePendingDocument: (uri) => this.annotatePendingDocument(uri),
-    };
   }
   private storeFor(uri: vscode.Uri): PersistentStore | undefined {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
@@ -535,73 +586,6 @@ export class ReviewService implements vscode.Disposable {
     folder: vscode.WorkspaceFolder,
   ): PersistentStore | undefined {
     return this.stores.get(folder.uri.toString());
-  }
-  private lifecycleDeps(): LifecycleDeps {
-    return {
-      log: this.log,
-      git: this.git,
-      storeFor: (uri) => this.storeFor(uri),
-      storeForFolder: (folder) => this.storeForFolder(folder),
-      relativePath: (uri) => this.relativePath(uri),
-      isEligibleSource: (uri) => this.isEligibleSource(uri),
-      isTrackableUri: (uri) => this.isTrackableUri(uri),
-      maxSize: () => this.maxSize(),
-      isRevExtDisabled: (uri) => this.isRevExtDisabled(uri),
-      dirtyDocument: (uri) => this.dirtyDocument(uri),
-      withSource: (uri, operation) => this.withSource(uri, operation),
-      recompute: (
-        uri,
-        forceDigest,
-        createMissing,
-        prepared,
-        previous,
-        rebuildPolicy,
-      ) =>
-        this.recompute(
-          uri,
-          forceDigest,
-          createMissing,
-          prepared,
-          previous,
-          rebuildPolicy,
-        ),
-      recomputeSavedDocument: (document) =>
-        this.recomputeSavedDocument(document),
-      annotatePendingDocument: (uri) => this.annotatePendingDocument(uri),
-      annotationContext: () => this.annotationContext(),
-      consumeInternalSave: (key) => this.internalSaves.delete(key),
-      hideSources: (uris) => this.hideSources(uris),
-      refreshEligiblePaths: (folder, force) =>
-        this.refreshEligiblePaths(folder, force),
-      ensureIncludes: (folder, path) =>
-        this.eligibility.ensureIncludes(folder, path),
-      setEligiblePaths: (folder, paths) =>
-        this.setEligiblePaths(folder, paths),
-      trackedPaths: (folder) => this.eligibility.trackedPaths(folder),
-      trackPath: (folder, path) => this.eligibility.trackPath(folder, path),
-      untrackPath: (folder, path) =>
-        this.eligibility.untrackPath(folder, path),
-      tryBeginInitialization: (folder) =>
-        this.gate.tryBeginInitialization(folder),
-      endInitialization: (folder) => this.gate.endInitialization(folder),
-      drainSources: () => this.gate.drainSources(),
-      notifyChanged: (uri) => this.changedEmitter.fire(uri),
-    };
-  }
-  private baselineDeps(): BaselineDeps {
-    return {
-      storeFor: (uri) => this.storeFor(uri),
-      relativePath: (uri) => this.relativePath(uri),
-      dirtyDocument: (uri) => this.dirtyDocument(uri),
-      withSource: (uri, operation) => this.withSource(uri, operation),
-      recompute: (uri, forceDigest) => this.recompute(uri, forceDigest),
-      requireFresh: (source, identity, forceDigest) =>
-        this.requireFresh(source, identity, forceDigest),
-      initializeMissingSource: (uri) => this.initializeMissingSource(uri),
-      ensureIncludes: (folder, path) =>
-        this.eligibility.ensureIncludes(folder, path),
-      maxSize: () => this.maxSize(),
-    };
   }
   private async refreshEligiblePaths(
     folder: vscode.WorkspaceFolder,
@@ -637,6 +621,3 @@ export class ReviewService implements vscode.Disposable {
     return this.gate.withSource(uri, operation);
   }
 }
-
-
-

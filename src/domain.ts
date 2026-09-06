@@ -30,7 +30,9 @@ export {
   fileStatus,
   reviewableLines,
   reviewCounts,
+  reviewStats,
   setReviewer,
+  type ReviewStats,
 } from "./domain/status";
 export { buildDiffRecords } from "./domain/diff";
 export {

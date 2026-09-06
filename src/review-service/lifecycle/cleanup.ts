@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { forEachConcurrent, STORE_CONCURRENCY_LIMIT } from "../../concurrency";
 import { isFileNotFound } from "../../review-service-utils";
 import type { LifecycleDeps } from "./deps";
 
@@ -11,21 +12,27 @@ export async function cleanupMissingSources(
     return;
   }
   let removed = 0;
-  for (const path of store.paths) {
+  const snapshot = [...store.paths];
+  // Sequential deletion preserves store ordering semantics; use bounded stat concurrency to detect missing files faster
+  const missing: string[] = [];
+  await forEachConcurrent(snapshot, STORE_CONCURRENCY_LIMIT, async (path) => {
     const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
     try {
       const stat = await vscode.workspace.fs.stat(uri);
       if ((stat.type & vscode.FileType.File) !== 0) {
-        continue;
+        return;
       }
     } catch (error) {
       if (!isFileNotFound(error)) {
         deps.log.warn(
           `Could not check whether ${path} still exists: ${String(error)}`,
         );
-        continue;
+        return;
       }
     }
+    missing.push(path);
+  });
+  for (const path of missing) {
     await store.delete(path);
     removed += 1;
   }

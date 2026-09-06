@@ -1,5 +1,8 @@
 import { physicalLines } from "../domain";
 
+const revExtEditsEncoder = new TextEncoder();
+const revExtEditsDecoder = new TextDecoder("utf-8", { fatal: true });
+
 export function addedLineNumbers(
   hunks: readonly { readonly newStart: number; readonly newCount: number }[],
 ): Set<number> {
@@ -17,9 +20,8 @@ export function addedLineNumbers(
 }
 
 export function sourceLines(bytes: Uint8Array): readonly string[] {
-  const decoder = new TextDecoder("utf-8", { fatal: true });
   return physicalLines(bytes).map((line) => {
-    let text = decoder.decode(line.bytes);
+    let text = revExtEditsDecoder.decode(line.bytes);
     if (text.endsWith("\n")) {
       text = text.slice(0, -1);
     }
@@ -35,17 +37,16 @@ export function applyByteEdits(
   edits: readonly { readonly line: number; readonly suffix: string }[],
 ): Uint8Array {
   const lines = physicalLines(bytes);
-  const encoder = new TextEncoder();
   const insertions: { readonly offset: number; readonly bytes: Uint8Array }[] = [];
-  const lineOffsets = new Map<number, number>();
+  const lineOffsets: number[] = [];
   let lineOffset = 0;
   for (let index = 0; index < lines.length; index += 1) {
-    lineOffsets.set(index + 1, lineOffset);
+    lineOffsets[index + 1] = lineOffset;
     lineOffset += lines[index]!.bytes.length;
   }
   for (const edit of edits) {
     const line = lines[edit.line - 1];
-    const offset = lineOffsets.get(edit.line);
+    const offset = lineOffsets[edit.line];
     if (line === undefined || offset === undefined) {
       continue;
     }
@@ -58,7 +59,7 @@ export function applyByteEdits(
     }
     insertions.push({
       offset: offset + contentLength,
-      bytes: encoder.encode(edit.suffix),
+      bytes: revExtEditsEncoder.encode(edit.suffix),
     });
   }
   if (insertions.length === 0) {

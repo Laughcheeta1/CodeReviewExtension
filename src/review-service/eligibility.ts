@@ -19,9 +19,14 @@ export function relativePath(uri: vscode.Uri): string | undefined {
  * ignore/trackability question through the shared Git-ignore guard, so no
  * lifecycle path can invent its own eligibility rule.
  */
+interface DiscoveredSnapshot {
+  readonly paths: readonly string[];
+  readonly pathSet: ReadonlySet<string>;
+}
+
 export class EligibilityTracker {
   private readonly eligiblePaths = new Map<string, Set<string>>();
-  private readonly discoveredPaths = new Map<string, readonly string[]>();
+  private readonly discoveredPaths = new Map<string, DiscoveredSnapshot>();
   private readonly refreshes = new Map<
     string,
     Promise<readonly string[] | undefined>
@@ -41,17 +46,29 @@ export class EligibilityTracker {
     const key = folder.uri.toString();
     const store = this.stores.get(key);
     const discovered = [...paths];
-    this.discoveredPaths.set(key, discovered);
+    this.discoveredPaths.set(key, {
+      paths: discovered,
+      pathSet: new Set(discovered),
+    });
     const next = new Set(
       discovered.filter((path) => store?.tracksPath(path)),
     );
     const previous = this.eligiblePaths.get(key);
     this.eligiblePaths.set(key, next);
-    if (
-      previous === undefined ||
-      previous.size !== next.size ||
-      [...previous].some((path) => !next.has(path))
-    ) {
+    let changed = false;
+    if (previous === undefined) {
+      changed = true;
+    } else if (previous.size !== next.size) {
+      changed = true;
+    } else {
+      for (const path of previous) {
+        if (!next.has(path)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) {
       this.notifyChanged();
     }
   }
@@ -80,10 +97,21 @@ export class EligibilityTracker {
     path: string,
   ): Promise<boolean> {
     let eligible = await this.refreshEligiblePaths(folder);
-    if (eligible !== undefined && !eligible.includes(path)) {
-      eligible = await this.refreshEligiblePaths(folder, true);
+    if (eligible !== undefined) {
+      const key = folder.uri.toString();
+      const snapshot = this.discoveredPaths.get(key);
+      const hasPath = snapshot?.pathSet.has(path) ?? eligible.includes(path);
+      if (!hasPath) {
+        eligible = await this.refreshEligiblePaths(folder, true);
+        if (eligible !== undefined) {
+          const refreshed = this.discoveredPaths.get(key);
+          return refreshed?.pathSet.has(path) ?? eligible.includes(path);
+        }
+        return false;
+      }
+      return true;
     }
-    return eligible !== undefined && eligible.includes(path);
+    return false;
   }
 
   async refreshEligiblePaths(
@@ -94,7 +122,7 @@ export class EligibilityTracker {
     if (!force) {
       const cached = this.discoveredPaths.get(key);
       if (cached !== undefined) {
-        return cached;
+        return cached.paths;
       }
     }
     return coalesced(this.refreshes, key, async () => {

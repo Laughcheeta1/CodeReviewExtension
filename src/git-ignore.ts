@@ -7,6 +7,8 @@ import {
   type IgnoreFile,
 } from "./ignore-matcher";
 
+const gitIgnoreDecoder = new TextDecoder();
+
 /**
  * Read and apply workspace .gitignore files without consulting Git.
  *
@@ -102,7 +104,7 @@ export class GitIgnoreService {
         try {
           return {
             directory: directoryOf(relativePath(uri)),
-            contents: new TextDecoder().decode(
+            contents: gitIgnoreDecoder.decode(
               await vscode.workspace.fs.readFile(uri),
             ),
           };
