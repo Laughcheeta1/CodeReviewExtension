@@ -54,10 +54,22 @@ export async function activate(
   );
   (globalThis as unknown as Record<string, unknown>).__codeReviewTrackerStorageUri =
     context.storageUri?.toString();
-  await service.initialize();
+  try {
+    await service.initialize();
+  } catch (error) {
+    log.warn(
+      `Review tracking initialization failed; commands remain available: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   context.subscriptions.push(service);
 
-  await startupReconcile(service, ignoreRules, log);
+  try {
+    await startupReconcile(service, ignoreRules, log);
+  } catch (error) {
+    log.warn(
+      `Review tracking startup reconciliation failed; commands remain available: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   const decorations = new ReviewDecorations(service);
   const tree = new ReviewTree(service);

@@ -91,6 +91,7 @@ async function initializeMissingSourceFor(
     return false;
   }
   await store.includeTrackingTarget({ kind: "file", path });
+  deps.trackPath(folder, path);
   if (!deps.isTrackableUri(uri)) {
     return false;
   }

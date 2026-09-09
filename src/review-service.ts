@@ -242,10 +242,22 @@ export class ReviewService implements vscode.Disposable {
   }
 
   async initialize(): Promise<void> {
+    if (this.storageUri === undefined) {
+      this.log.warn(
+        "Workspace storage is unavailable; review tracking is disabled until storage is available.",
+      );
+      return;
+    }
     await Promise.all((vscode.workspace.workspaceFolders ?? []).map(async (folder) => {
-      const store = new PersistentStore(folder, this.log, this.storageUri);
-      await store.initialize();
-      this.stores.set(folder.uri.toString(), store);
+      try {
+        const store = new PersistentStore(folder, this.log, this.storageUri);
+        await store.initialize();
+        this.stores.set(folder.uri.toString(), store);
+      } catch (error) {
+        this.log.warn(
+          `Review tracking is unavailable for ${folder.uri.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }));
   }
   hasMetadata(folder: vscode.WorkspaceFolder): boolean {
