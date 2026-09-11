@@ -1,5 +1,5 @@
 import type { GitBlameLine } from "../git";
-import type { Reviewer, ReviewStatus } from "./types";
+import type { LastReviewer, Reviewer, ReviewStatus } from "./types";
 
 /**
  * Blame is only an initial classifier for genuinely new changed lines.
@@ -97,5 +97,47 @@ export function initialStatusCallback(
 ): (currentLine: number) => ReviewStatus {
   return (currentLine: number) => {
     return initialStatusForBlameLine(blame.get(currentLine), currentUser);
+  };
+}
+
+/**
+ * Initial reviewer for a genuinely new added line classified as reviewed.
+ *
+ * Returns a reviewer derived from the blamed author only when the line is a
+ * confident other-user addition (the same condition that yields a reviewed
+ * status). All other lines return undefined because pending lines must not
+ * carry a reviewer. The timestamp is supplied by the caller so every line in
+ * one recomputation shares the same generation time.
+ */
+export function initialReviewerForBlameLine(
+  blame: GitBlameLine | undefined,
+  currentUser: Reviewer | undefined,
+  at: string,
+): LastReviewer | undefined {
+  if (initialStatusForBlameLine(blame, currentUser) !== "reviewed") {
+    return undefined;
+  }
+  const name = normalizedName(blame?.authorName) ?? normalizedName(currentUser?.name);
+  if (name === undefined) {
+    return undefined;
+  }
+  const email = normalizedEmail(blame?.authorEmail) ?? normalizedEmail(currentUser?.email);
+  return email === undefined ? { name, time: at } : { name, email, time: at };
+}
+
+/**
+ * Build the per-line initial-reviewer callback expected by diff records.
+ *
+ * Like the status callback, this performs only map lookups. It must be
+ * passed together with `initialStatusCallback` so blame-derived reviewed
+ * lines persist with a reviewer and satisfy v4 validation on restart.
+ */
+export function initialReviewerCallback(
+  blame: ReadonlyMap<number, GitBlameLine>,
+  currentUser: Reviewer | undefined,
+  at: string,
+): (currentLine: number) => LastReviewer | undefined {
+  return (currentLine: number) => {
+    return initialReviewerForBlameLine(blame.get(currentLine), currentUser, at);
   };
 }

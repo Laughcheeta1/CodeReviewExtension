@@ -2,8 +2,10 @@ import * as vscode from "vscode";
 import {
   buildDiffRecords,
   digestBytes,
+  initialReviewerCallback,
   initialStatusCallback,
   type FileRecord,
+  type LastReviewer,
   type RawGitHunk,
   type ReviewStatus,
 } from "../domain";
@@ -127,7 +129,7 @@ export async function recomputeSource(
       deps.relativePath(uri) ?? uri.fsPath,
     ));
   const ignoreEmptyLineDeletions = deps.ignoreEmptyLineDeletions(uri);
-  const initialStatusForAddition = await resolveInitialStatusForAdditions(
+  const initialClassification = await resolveInitialClassificationForAdditions(
     deps,
     uri,
     path,
@@ -138,7 +140,11 @@ export async function recomputeSource(
     bytes,
     rawHunks,
     existing,
-    { ignoreEmptyLineDeletions, initialStatusForAddition },
+    {
+      ignoreEmptyLineDeletions,
+      initialStatusForAddition: initialClassification?.status,
+      initialReviewerForAddition: initialClassification?.reviewer,
+    },
   );
   if (!(await deps.isEligibleSource(uri))) {
     return false;
@@ -167,20 +173,31 @@ export async function recomputeSource(
 }
 
 /**
- * Resolve the blame-based initial status for genuinely new additions.
+ * Resolve the blame-based initial classification for genuinely new additions.
  *
  * The snapshot diff remains the authority for what changed. This helper
- * blames the current file once (never once per line) and returns a
- * line-number callback for `buildDiffRecords`. Any failure, missing
+ * blames the current file once (never once per line) and returns
+ * line-number callbacks for `buildDiffRecords`. Any failure, missing
  * identity, or file without additions yields undefined so new lines stay
  * conservatively pending and existing records are preserved.
+ *
+ * The reviewer callback is returned together with the status callback so a
+ * confident other-user addition persists as reviewed *with* a reviewer.
+ * Without it the record would fail v4 validation on restart with
+ * "Invalid v4 per-file review metadata".
  */
-async function resolveInitialStatusForAdditions(
+async function resolveInitialClassificationForAdditions(
   deps: RecomputeDeps,
   uri: vscode.Uri,
   relativePath: string,
   rawHunks: readonly RawGitHunk[],
-): Promise<((currentLine: number) => ReviewStatus) | undefined> {
+): Promise<
+  | {
+      readonly status: (currentLine: number) => ReviewStatus;
+      readonly reviewer: (currentLine: number) => LastReviewer | undefined;
+    }
+  | undefined
+> {
   let hasAdditions = false;
   for (const hunk of rawHunks) {
     if (hunk.newCount > 0) {
@@ -204,7 +221,11 @@ async function resolveInitialStatusForAdditions(
     if (currentUser === undefined) {
       return undefined;
     }
-    return initialStatusCallback(blame, currentUser);
+    const at = now();
+    return {
+      status: initialStatusCallback(blame, currentUser),
+      reviewer: initialReviewerCallback(blame, currentUser, at),
+    };
   } catch (error) {
     deps.log.warn(
       `Git blame classification failed for ${relativePath}; new changes stay pending: ${String(error)}`,

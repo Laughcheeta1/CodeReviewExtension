@@ -8,8 +8,10 @@ import {
 } from "./concurrency";
 import {
   folderHash,
+  describeStoredFileProblem,
   parseStoredFile,
   storageFileName,
+  storedFile,
   summarize,
   type FileSummary,
 } from "./storage-format";
@@ -32,10 +34,22 @@ function decodeStoredFile(bytes: Uint8Array): ReturnType<typeof parseStoredFile>
   return parseStoredFile(JSON.parse(decoder.decode(bytes)));
 }
 
+function describeStoredBytes(bytes: Uint8Array, expectedPath: string): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(decoder.decode(bytes));
+  } catch (error) {
+    return `stored JSON for "${expectedPath}" is not valid UTF-8 JSON: ${String(error)}`;
+  }
+  return describeStoredFileProblem(value, expectedPath);
+}
+
 function parseAndValidateStoredFile(bytes: Uint8Array, expectedPath: string): FileRecord {
   const parsed = decodeStoredFile(bytes);
   if (parsed === undefined || parsed.path !== expectedPath) {
-    throw new Error("Invalid v4 per-file review metadata");
+    throw new Error(
+      `Invalid v4 per-file review metadata for "${expectedPath}": ${describeStoredBytes(bytes, expectedPath)}`,
+    );
   }
   return parsed.file;
 }
@@ -143,6 +157,11 @@ export class PersistentStore {
     if (safeToClean) {
       await this.cleanupSnapshots();
     }
+    this.log.info(
+      `Review store initialized for ${this.folder.uri.fsPath}: ` +
+        `state=${this.initializationState}, metadataFiles=${this.summaries.size}, ` +
+        `snapshotsCleaned=${safeToClean}, storage=${this.directoryUri.toString()}.`,
+    );
   }
   tracksPath(path: string): boolean {
     return tracksPathCompiled(path, this.compiledMatcher);
@@ -227,8 +246,9 @@ export class PersistentStore {
     return coalesced(this.loadTails, path, () => this.loadUncached(path));
   }
   private async loadUncached(path: string): Promise<FileRecord | undefined> {
+    const fileUri = this.fileSystem.fileUri(path);
     try {
-      const bytes = await vscode.workspace.fs.readFile(this.fileSystem.fileUri(path));
+      const bytes = await vscode.workspace.fs.readFile(fileUri);
       const file = parseAndValidateStoredFile(bytes, path);
       this.summaries.set(path, summarize(file));
       this.touch(path, file);
@@ -239,7 +259,8 @@ export class PersistentStore {
         return undefined;
       }
       this.log.warn(
-        `Unable to load review metadata for ${path}: ${String(error)}`,
+        `Unable to load review metadata for "${path}" ` +
+          `at ${fileUri.toString()} (folder ${this.folder.uri.fsPath}): ${String(error)}`,
       );
       throw error;
     }
@@ -260,6 +281,23 @@ export class PersistentStore {
     baselineBytes?: Uint8Array,
   ): Promise<void> {
     const normalized = { ...file, fileStatus: fileStatus(file) };
+    const staged = storedFile(path, normalized);
+    const stagedProblem =
+      parseStoredFile(JSON.parse(JSON.stringify(staged))) === undefined
+        ? describeStoredFileProblem(
+            JSON.parse(JSON.stringify(staged)),
+            path,
+          )
+        : undefined;
+    if (stagedProblem !== undefined) {
+      throw new Error(
+        `Refusing to persist invalid v4 review metadata for "${path}" ` +
+          `(baseline ${normalized.baseline.digest.slice(0, 12)}…, ` +
+          `current ${normalized.current.digest.slice(0, 12)}…, ` +
+          `${normalized.currentLines.length} current/${normalized.deletedLines.length} deleted lines, ` +
+          `${normalized.hunks.length} hunks): ${stagedProblem}`,
+      );
+    }
     await this.enqueue(path, async () => {
       const previous = this.cache.has(path)
         ? this.cache.get(path)
@@ -285,7 +323,8 @@ export class PersistentStore {
         previous = await this.loadDirect(path);
       } catch (error) {
         this.log.warn(
-          `Deleting unreadable review metadata for ${path}: ${String(error)}`,
+          `Deleting unreadable review metadata for "${path}" ` +
+            `at ${this.fileSystem.fileUri(path).toString()}: ${String(error)}`,
         );
       }
       try {
@@ -353,18 +392,34 @@ export class PersistentStore {
   private async loadInitialization(): Promise<void> {
     try {
       const bytes = await vscode.workspace.fs.readFile(this.initializationUri);
-      const configuration = parseInitializationConfiguration(
-        JSON.parse(decoder.decode(bytes)),
-      );
+      let raw: unknown;
+      try {
+        raw = JSON.parse(decoder.decode(bytes));
+      } catch (error) {
+        throw new Error(
+          `initialization file at ${this.initializationUri.toString()} is not valid JSON: ${String(error)}`,
+        );
+      }
+      const configuration = parseInitializationConfiguration(raw);
       if (configuration === undefined) {
-        throw new Error("Invalid initialization configuration");
+        throw new Error(
+          `Invalid initialization configuration at ${this.initializationUri.toString()}: ` +
+            `expected { schemaVersion: 1, state: "disabled" } or ` +
+            `{ schemaVersion: 1, state: "initialized", targets: [...] }; got ${JSON.stringify(raw)?.slice(0, 300)}`,
+        );
       }
       this.initializationConfiguration = configuration;
       this.syncCompiledMatcher();
+      this.log.info(
+        `Loaded initialization for ${this.folder.uri.fsPath}: ` +
+          `state=${configuration.state}, ` +
+          `targets=${configuration.targets?.length ?? 0}.`,
+      );
     } catch (error) {
       if (!isFileNotFound(error)) {
         this.log.warn(
-          `Unable to load initialization configuration: ${String(error)}`,
+          `Unable to load initialization configuration for ${this.folder.uri.fsPath} ` +
+            `at ${this.initializationUri.toString()}: ${String(error)}`,
         );
       }
     }
@@ -375,12 +430,20 @@ export class PersistentStore {
       entries = await vscode.workspace.fs.readDirectory(this.directoryUri);
     } catch (error) {
       if (isFileNotFound(error)) {
+        this.log.info(
+          `No review storage directory yet for ${this.folder.uri.fsPath} at ${this.directoryUri.toString()}; starting empty.`,
+        );
         return true;
       }
-      this.log.warn(`Unable to scan review metadata: ${String(error)}`);
+      this.log.warn(
+        `Unable to scan review metadata for ${this.folder.uri.fsPath} ` +
+          `at ${this.directoryUri.toString()}: ${String(error)}`,
+      );
       return false;
     }
     let valid = true;
+    let loaded = 0;
+    let ignored = 0;
     await forEachConcurrent(entries, STORE_CONCURRENCY_LIMIT, async ([name, type]) => {
       if (name === INITIALIZATION_FILE) {
         return;
@@ -397,16 +460,41 @@ export class PersistentStore {
       try {
         const metadata = vscode.Uri.joinPath(this.directoryUri, name);
         const bytes = await vscode.workspace.fs.readFile(metadata);
-        const parsed = decodeStoredFile(bytes);
-        if (parsed === undefined || storageFileName(parsed.path) !== name) {
-          throw new Error("Unsupported or malformed metadata");
+        let raw: unknown;
+        try {
+          raw = JSON.parse(decoder.decode(bytes));
+        } catch (error) {
+          throw new Error(
+            `file ${name} is not valid JSON: ${String(error)}`,
+          );
+        }
+        const parsed = parseStoredFile(raw);
+        if (parsed === undefined) {
+          throw new Error(
+            `file ${name}: ${describeStoredFileProblem(raw)}`,
+          );
+        }
+        if (storageFileName(parsed.path) !== name) {
+          throw new Error(
+            `file ${name} stores path "${parsed.path}" but is named for a different source ` +
+              `(expected ${storageFileName(parsed.path)}); the file may have been copied or hashed under another path`,
+          );
         }
         this.summaries.set(parsed.path, summarize(parsed.file));
+        loaded += 1;
       } catch (error) {
         valid = false;
-        this.log.warn(`Ignoring metadata file ${name}: ${String(error)}`);
+        ignored += 1;
+        this.log.warn(
+          `Ignoring metadata file ${name} for ${this.folder.uri.fsPath} ` +
+            `at ${vscode.Uri.joinPath(this.directoryUri, name).toString()}: ${String(error)}`,
+        );
       }
     });
+    this.log.info(
+      `Scanned review metadata for ${this.folder.uri.fsPath}: ` +
+        `${loaded} valid, ${ignored} ignored, safeToCleanSnapshots=${valid}.`,
+    );
     return valid;
   }
   private async cleanupSnapshots(): Promise<void> {
@@ -415,7 +503,10 @@ export class PersistentStore {
       entries = await vscode.workspace.fs.readDirectory(this.snapshotsUri);
     } catch (error) {
       if (!isFileNotFound(error)) {
-        this.log.warn(`Unable to clean snapshots: ${String(error)}`);
+        this.log.warn(
+          `Unable to clean snapshots for ${this.folder.uri.fsPath} ` +
+            `at ${this.snapshotsUri.toString()}: ${String(error)}`,
+        );
       }
       return;
     }

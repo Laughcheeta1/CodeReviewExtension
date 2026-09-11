@@ -17,4 +17,4 @@ export {
   storedFile,
   summarize,
 } from "./storage-format/record";
-export { parseStoredFile } from "./storage-format/schema";
+export { describeStoredFileProblem, parseStoredFile } from "./storage-format/schema";

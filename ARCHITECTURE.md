@@ -22,9 +22,10 @@ decisions.
 - The snapshot diff determines what changed. Stored metadata determines the
   status of already-known lines. Git `blame` determines only the initial status
   of newly discovered current-line additions: a new line by the current user
-  starts `pending`, by another user starts `reviewed`, and unknown attribution
-  starts `pending`. A pure deletion has no current-file side to blame and stays
-  `pending` for now.
+  starts `pending`, by another user starts `reviewed` with the blamed author
+  recorded as its `LastReviewer` (so the record satisfies v4 validation on
+  restart), and unknown attribution starts `pending`. A pure deletion has no
+  current-file side to blame and stays `pending` for now.
 - Blame attribution stays conservative: uncommitted/zero-commit lines count as
   current-user `pending`, an unambiguous 1-1 replacement inherits its added-side
   classification on the deleted side while larger hunks stay `pending`, blame
@@ -276,8 +277,9 @@ Existing decisions transfer as follows:
   cannot prove which duplicate was removed.
 - `inReview` and `reviewed` transfer together when identity is unambiguous;
   new or ambiguous records are pending.
-- The blame callback (`DiffOptions.initialStatusForAddition`) is passed to
-  `buildDiffRecords` only for new additions. It never overwrites a transferred
+- The blame callbacks (`DiffOptions.initialStatusForAddition` and
+  `DiffOptions.initialReviewerForAddition`) are passed to
+  `buildDiffRecords` only for new additions. They never overwrite a transferred
   stored decision.
 
 Saved-file and clean external-file reconciliation may add identity comments to

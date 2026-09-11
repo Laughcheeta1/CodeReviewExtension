@@ -65,6 +65,7 @@ export function buildDiffRecords(
     const newLines = current.slice(newIndex, newIndex + raw.newCount);
 
     let replacementAddedStatus: ReviewStatus | undefined;
+    let replacementAddedReviewer: CurrentLineRecord["lastReviewer"];
     const isSimpleReplacement = raw.oldCount === 1 && raw.newCount === 1;
     for (let index = 0; index < newLines.length; index += 1) {
       const newNumber = raw.newStart + index;
@@ -82,8 +83,14 @@ export function buildDiffRecords(
         transferred?.reviewStatus ??
         options.initialStatusForAddition?.(newNumber) ??
         "pending";
+      const lastReviewer =
+        transferred?.lastReviewer ??
+        (reviewStatus === "pending"
+          ? undefined
+          : options.initialReviewerForAddition?.(newNumber));
       if (isSimpleReplacement) {
         replacementAddedStatus = reviewStatus;
+        replacementAddedReviewer = lastReviewer;
       }
       currentLines.push({
         line: newNumber,
@@ -91,7 +98,7 @@ export function buildDiffRecords(
         changeType: "added",
         reviewStatus,
         occurrence,
-        lastReviewer: transferred?.lastReviewer,
+        lastReviewer,
       });
     }
 
@@ -109,19 +116,25 @@ export function buildDiffRecords(
       const transferred = previousDeleted.get(`${digest}:${oldNumber}`);
       // A pure deletion has no current-file side to blame, so it stays
       // pending. Only an unambiguous one-to-one replacement inherits the
-      // added side's initial classification; larger hunks stay
+      // added side's initial classification (and reviewer, so the inherited
+      // reviewed record satisfies v4 validation); larger hunks stay
       // conservative because no safe line pairing exists.
       const reviewStatus =
         transferred?.reviewStatus ??
         (isSimpleReplacement ? replacementAddedStatus : undefined) ??
         "pending";
+      const lastReviewer =
+        transferred?.lastReviewer ??
+        (isSimpleReplacement && reviewStatus === replacementAddedStatus
+          ? replacementAddedReviewer
+          : undefined);
       deletedLines.push({
         baselineLine: oldNumber,
         digest,
         occurrence,
         changeType: "deleted",
         reviewStatus,
-        lastReviewer: transferred?.lastReviewer,
+        lastReviewer,
       });
     }
     oldCursor = oldIndex + raw.oldCount + 1;

@@ -39,9 +39,17 @@ export async function initializeFolder(
       state: "initialized",
       targets: configuredTargets,
     });
+    const eligibleCount = [...eligible].length;
     const paths = [...eligible]
       .filter((path) => tracksPathCompiled(path, matcher))
       .sort();
+    deps.log.info(
+      `Initializing review tracking for ${folder.uri.fsPath}: ` +
+        `status=${status}, targets=${configuredTargets.length}, ` +
+        `eligible=${eligibleCount}, matched=${paths.length}.`,
+    );
+    let succeeded = 0;
+    let skipped = 0;
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -54,8 +62,13 @@ export async function initializeFolder(
           const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
           try {
             await initializeOneFile(deps, folder, uri, path, status, maxSize);
+            succeeded += 1;
           } catch (error) {
-            deps.log.warn(`Skipping ${path}: ${String(error)}`);
+            skipped += 1;
+            deps.log.warn(
+              `Skipping initialization of "${path}" in ${folder.uri.fsPath} ` +
+                `at ${uri.toString()}: ${String(error)}`,
+            );
           } finally {
             completed += 1;
             progress.report({
@@ -68,6 +81,11 @@ export async function initializeFolder(
     );
     await store.enableTracking(configuredTargets);
     deps.setEligiblePaths(folder, paths);
+    deps.log.info(
+      `Initialized review tracking for ${folder.uri.fsPath}: ` +
+        `${succeeded} files written, ${skipped} skipped, ` +
+        `targets=${JSON.stringify(configuredTargets).slice(0, 500)}.`,
+    );
     deps.notifyChanged();
   } finally {
     deps.endInitialization(folder);

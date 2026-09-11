@@ -90,9 +90,25 @@ export interface DiffOptions {
    * transfers. Stored metadata remains authoritative; blame-derived
    * values never overwrite an already-known record. When omitted, new
    * lines stay pending.
+   *
+   * A non-pending status for a new line requires a reviewer to satisfy
+   * persisted validation (see `initialReviewerForAddition`). Callers that
+   * classify new lines as reviewed must also supply that reviewer callback;
+   * otherwise the record is rejected on read as invalid v4 metadata.
    */
   readonly initialStatusForAddition?:
     | ((currentLine: number) => ReviewStatus)
+    | undefined;
+  /**
+   * Initial reviewer for a genuinely new added current line.
+   *
+   * Consulted only when no stored review decision transfers and the
+   * resolved status is non-pending. Pending lines never carry a reviewer.
+   * The blame-based recomputation path derives this from the blamed author
+   * so other-user additions persist as valid reviewed records.
+   */
+  readonly initialReviewerForAddition?:
+    | ((currentLine: number) => LastReviewer | undefined)
     | undefined;
 }
 

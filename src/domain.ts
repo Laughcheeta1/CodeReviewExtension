@@ -36,6 +36,8 @@ export {
 } from "./domain/status";
 export { buildDiffRecords } from "./domain/diff";
 export {
+  initialReviewerCallback,
+  initialReviewerForBlameLine,
   initialStatusCallback,
   initialStatusForBlameLine,
   isCurrentUserLine,

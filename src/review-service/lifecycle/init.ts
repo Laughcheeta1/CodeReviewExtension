@@ -33,10 +33,17 @@ export async function initializeDiscoveredSources(
 ): Promise<void> {
   const store = deps.storeForFolder(folder);
   if (store === undefined || store.initializationState !== "initialized") {
+    deps.log.info(
+      `Skipping discovered-source initialization for ${folder.uri.fsPath}: ` +
+        `store=${store === undefined ? "missing" : store.initializationState}.`,
+    );
     return;
   }
   const eligible = await deps.refreshEligiblePaths(folder);
   if (eligible === undefined) {
+    deps.log.warn(
+      `Skipping discovered-source initialization for ${folder.uri.fsPath}: eligible paths could not be enumerated.`,
+    );
     return;
   }
   await store.includeTrackingTargets(
@@ -47,14 +54,22 @@ export async function initializeDiscoveredSources(
   let initialized = 0;
   for (const path of paths) {
     const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
-    if (await deps.withSource(uri, () => deps.recompute(uri, false, true))) {
-      initialized += 1;
+    try {
+      if (await deps.withSource(uri, () => deps.recompute(uri, false, true))) {
+        initialized += 1;
+      }
+    } catch (error) {
+      deps.log.warn(
+        `Skipping discovered-source initialization of "${path}" in ${folder.uri.fsPath} ` +
+          `at ${uri.toString()}: ${String(error)}`,
+      );
     }
   }
+  deps.log.info(
+    `Discovered-source initialization for ${folder.uri.fsPath}: ` +
+      `eligible=${eligible.length}, missing=${paths.length}, initialized=${initialized}.`,
+  );
   if (initialized > 0) {
-    deps.log.info(
-      `Initialized review metadata for ${initialized} discovered files at startup.`,
-    );
     deps.notifyChanged();
   }
 }
@@ -99,7 +114,9 @@ async function initializeMissingSourceFor(
     deps.recompute(uri, false, true),
   );
   if (initialized) {
-    deps.log.info(`Initialized review metadata for opened file ${path}.`);
+    deps.log.info(
+      `Initialized review metadata for "${path}" in ${folder.uri.fsPath} at ${uri.toString()}.`,
+    );
     deps.notifyChanged(uri);
   }
   return initialized;
