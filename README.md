@@ -35,6 +35,15 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
 - Unsaved editors cannot be reviewed. Save first so disk content remains authoritative.
 - Only duplicate added lines receive a temporary `RevExt` end-of-line comment. The complete tagged line becomes its identity, so later insertions do not disturb the review state of its duplicate peers. JavaScript, TypeScript, JSX, and TSX lines all use direct `// RevExt: N` suffixes. In JSX/TSX, a marker may therefore appear as rendered text; the comments are removed when the file is promoted. Older JSX expression markers are still recognized for cleanup.
 - If RevExt comments cause problems in a file type, add its extension to `codeReviewTracker.revExtDisabledExtensions` in Settings, for example `[".tsx", "md"]`. Matching is case-insensitive and accepts either a leading dot or no dot. Review tracking and metadata continue to work; only automatic RevExt comment generation is disabled. Existing markers are still removed when the file is promoted.
+- To share RevExt opt-outs with the whole codebase through Git, use `.vscode/review-extension.json` instead of (or in addition to) the per-user setting. It supports files, folders, and extensions while keeping review tracking active:
+  ```json
+  {
+    "revExtIgnoredFiles": ["src/generated.ts"],
+    "revExtIgnoredFolders": ["generated", "src/__generated__"],
+    "revExtIgnoredExtensions": [".html", "md"]
+  }
+  ```
+  File and folder entries are workspace-relative posix paths; folders match the folder itself and everything below it. Extensions match the final extension case-insensitively, with or without a leading dot. Right-click a file or folder in the Explorer (or use the Command Palette) and choose **Code Review: Ignore File/Folder/Extension for RevExt Comments** to update this file.
 - Marking a folder pending, in review, or reviewed shows a progress notification. Its message reports how many files were successfully changed out of the folder's eligible file total.
 
 When every addition and deletion is reviewed, the saved file is automatically promoted to the next baseline and its obsolete diff tab closes.

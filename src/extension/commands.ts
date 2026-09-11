@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import type { GitIgnoreService } from "../git-ignore";
 import {
+  ignoreExtensionForRevExt,
+  ignoreFileForRevExt,
+  ignoreFolderForRevExt,
   initializeAll,
   markActive,
   markFile,
@@ -86,6 +89,18 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand("codeReviewTracker.showLogs", () =>
       log.show(),
+    ),
+    vscode.commands.registerCommand(
+      "codeReviewTracker.ignoreFileForRevExt",
+      (uri?: vscode.Uri) => ignoreFileForRevExt(uri),
+    ),
+    vscode.commands.registerCommand(
+      "codeReviewTracker.ignoreFolderForRevExt",
+      (uri?: vscode.Uri) => ignoreFolderForRevExt(uri),
+    ),
+    vscode.commands.registerCommand(
+      "codeReviewTracker.ignoreExtensionForRevExt",
+      (uri?: vscode.Uri) => ignoreExtensionForRevExt(uri),
     ),
   );
 }

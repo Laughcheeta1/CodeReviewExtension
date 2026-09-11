@@ -13,3 +13,8 @@ export {
 export { resolveReviewer } from "./review-commands/reviewer-flow";
 export { markActive, markFile, markFolder } from "./review-commands/mark";
 export { initializeAll, sendSelection } from "./review-commands/workspace";
+export {
+  ignoreExtensionForRevExt,
+  ignoreFileForRevExt,
+  ignoreFolderForRevExt,
+} from "./review-commands/revext-ignore";

@@ -549,7 +549,11 @@ decisions. Markers make each duplicate's bytes unique.
   dot optional (`"tsx"` ≡ `".tsx"` ≡ `".TSX"`); dotfiles/no-extension/trailing
   dot → never disabled; `undefined` list → never disabled. Applies to save,
   external, and pending-init generation; tracking/metadata still work and
-  promotion still cleans old markers.
+  promotion still cleans old markers. The repo-shared
+  `.vscode/review-extension.json` (`revExtIgnoredFiles`,
+  `revExtIgnoredFolders`, `revExtIgnoredExtensions`) is combined with the
+  user setting via `isRevExtDisabledWithWorkspaceConfig`; either source
+  skips generation while tracking continues.
 
 ---
 
@@ -571,6 +575,9 @@ Manifest commands (`package.json:33-99`):
 | `sendSelectionToTerminal` | Send Selection to Agent | Fenced payload to Code Review Agent terminal. |
 | `refresh` | Refresh | Forced reconcile of every folder. |
 | `showLogs` | Show Logs | Reveals the output channel. |
+| `ignoreFileForRevExt` | Ignore File for RevExt Comments | Adds the file to `.vscode/review-extension.json`; tracking continues. |
+| `ignoreFolderForRevExt` | Ignore Folder for RevExt Comments | Adds the folder to `.vscode/review-extension.json`; tracking continues. |
+| `ignoreExtensionForRevExt` | Ignore Extension for RevExt Comments | Adds the extension to `.vscode/review-extension.json`; tracking continues. |
 
 Wrappers (`review-commands.ts`): `markActive`/`markFile`/`markFolder` all
 `initializeSource` first, resolve reviewers only for non-pending, show
@@ -605,7 +612,7 @@ when `editorTextFocus`; `ctrl+alt+p` sends selection; activity-bar container
 | `maxFileSizeBytes` | number `1048576`, min 1024, window | Read + snapshot-decode ceiling; exceeded → error, record preserved. |
 | `ignoreEmptyLineDeletions` | boolean `false`, window | Drop LF/CRLF-only deletions; empty effective diff auto-promotes; change triggers `refreshReviewPolicy`. |
 | `openFilesInReviewView` | boolean `true`, window | Visible file opens route through the native review diff. |
-| `revExtDisabledExtensions` | string[] `[]`, window | Final-extension opt-out of marker generation (§8). |
+| `revExtDisabledExtensions` | string[] `[]`, window | Final-extension opt-out of marker generation (§8); combined with `.vscode/review-extension.json` shared files/folders/extensions. |
 
 ---
 

@@ -58,10 +58,12 @@ new line; there is no synthetic `modified` record.
   decisions and promote a fully reviewed file.
 - `revext.ts`, `revext-syntax.ts`, `revext-config.ts`, and
   `revext-annotation.ts` preserve duplicate-added-line identity with temporary
-  source comments and apply the configured extension exclusions.
-- `review-commands.ts`, `initialization-setup.ts`, and `ui.ts` provide setup,
-  commands, the native diff provider, sidebar, decorations, and terminal
-  integration.
+  source comments and apply the configured extension exclusions plus the
+  repo-shared `.vscode/review-extension.json` file/folder/extension exclusions.
+- `review-commands.ts`, `review-commands/revext-ignore.ts`,
+  `initialization-setup.ts`, and `ui.ts` provide setup, commands (including
+  shared RevExt ignore management), the native diff provider, sidebar,
+  decorations, and terminal integration.
 
 ## Workspace lifecycle and eligibility
 
@@ -346,6 +348,18 @@ paths skip automatic RevExt generation while keeping review metadata and
 state active. Promotion remains responsible for removing any existing
 generated markers.
 
+The repo-shared `.vscode/review-extension.json` file provides the same
+skip-generation guarantee for the whole codebase through Git. It holds
+`revExtIgnoredFiles`, `revExtIgnoredFolders`, and `revExtIgnoredExtensions`
+arrays (plus `revExtDisabledExtensions` as an extension alias). Files are
+exact workspace-relative posix paths, folders match the folder itself and
+everything below it, and extensions match the final extension
+case-insensitively with or without a leading dot. The per-user setting and
+the shared file are combined: either source disables automatic RevExt
+generation. Missing or invalid shared files yield an empty config so
+generation stays enabled. The Ignore File/Folder/Extension commands maintain
+this file; tracked files stay tracked in all cases.
+
 ## Native diff UI and commands
 
 The `code-review-baseline:` content provider exposes a digest-addressed,
@@ -389,7 +403,9 @@ terminal. A configured `agentCommand` is started only when a new terminal is
 created and the workspace is trusted.
 
 Other commands are setup/reconfiguration, whole-workspace pending/reviewed
-initialization, refresh, and log display. The manifest also exposes
+initialization, refresh, log display, and RevExt ignore management
+(`ignoreFileForRevExt`, `ignoreFolderForRevExt`,
+`ignoreExtensionForRevExt`). The manifest also exposes
 `maxFileSizeBytes`, `ignoreEmptyLineDeletions`, `openFilesInReviewView`, and
 `revExtDisabledExtensions`. Changing the empty-line setting forces a
 serialized policy reconciliation for existing tracked sources. The extension supports local files in Restricted Mode with limited functionality, targets VS Code

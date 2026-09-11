@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -94,6 +94,18 @@
       {
         "command": "codeReviewTracker.showLogs",
         "title": "Code Review: Show Logs"
+      },
+      {
+        "command": "codeReviewTracker.ignoreFileForRevExt",
+        "title": "Code Review: Ignore File for RevExt Comments"
+      },
+      {
+        "command": "codeReviewTracker.ignoreFolderForRevExt",
+        "title": "Code Review: Ignore Folder for RevExt Comments"
+      },
+      {
+        "command": "codeReviewTracker.ignoreExtensionForRevExt",
+        "title": "Code Review: Ignore Extension for RevExt Comments"
       }
     ],
     "menus": {
@@ -118,6 +130,14 @@
         {
           "command": "codeReviewTracker.sendSelectionToTerminal",
           "group": "codeReview@4"
+        },
+        {
+          "command": "codeReviewTracker.ignoreFileForRevExt",
+          "group": "codeReview@5"
+        },
+        {
+          "command": "codeReviewTracker.ignoreExtensionForRevExt",
+          "group": "codeReview@6"
         }
       ],
       "editor/title": [
@@ -157,6 +177,21 @@
           "command": "codeReviewTracker.markFolderReviewed",
           "when": "resourceScheme == file && explorerResourceIsFolder == true",
           "group": "codeReview@3"
+        },
+        {
+          "command": "codeReviewTracker.ignoreFileForRevExt",
+          "when": "resourceScheme == file && explorerResourceIsFolder == false",
+          "group": "codeReview@4"
+        },
+        {
+          "command": "codeReviewTracker.ignoreExtensionForRevExt",
+          "when": "resourceScheme == file && explorerResourceIsFolder == false",
+          "group": "codeReview@5"
+        },
+        {
+          "command": "codeReviewTracker.ignoreFolderForRevExt",
+          "when": "resourceScheme == file && explorerResourceIsFolder == true",
+          "group": "codeReview@4"
         }
       ]
     },
