@@ -2,6 +2,14 @@
 export type ReviewStatus = "pending" | "inReview" | "reviewed";
 export type ChangeType = "unchanged" | "added";
 
+/** Author attribution supplied by the Git adapter to domain classification. */
+export interface GitBlameLine {
+  readonly line: number;
+  readonly authorName?: string | undefined;
+  readonly authorEmail?: string | undefined;
+  readonly commit: string;
+}
+
 export interface Reviewer {
   readonly name: string;
   readonly email?: string;
@@ -111,4 +119,3 @@ export interface DiffOptions {
     | ((currentLine: number) => LastReviewer | undefined)
     | undefined;
 }
-

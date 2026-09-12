@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import { forEachConcurrent, STORE_CONCURRENCY_LIMIT } from "../../concurrency";
 import { isFileNotFound } from "../../review-service-utils";
-import type { LifecycleDeps } from "./deps";
+import type { CleanupDeps } from "./deps";
 
 export async function cleanupMissingSources(
-  deps: LifecycleDeps,
+  deps: CleanupDeps,
   folder: vscode.WorkspaceFolder,
 ): Promise<void> {
   const store = deps.storeForFolder(folder);
@@ -43,7 +43,7 @@ export async function cleanupMissingSources(
 }
 
 export async function cleanupIgnoredSources(
-  deps: LifecycleDeps,
+  deps: CleanupDeps,
   folder: vscode.WorkspaceFolder,
   ignoredPaths: (
     folder: vscode.WorkspaceFolder,
@@ -63,11 +63,27 @@ export async function cleanupIgnoredSources(
     );
     return;
   }
+  let removed = 0;
   for (const path of ignored) {
-    await store.delete(path);
+    const uri = vscode.Uri.joinPath(folder.uri, ...path.split("/"));
+    try {
+      await deps.withSource(uri, async () => {
+        // A source write or another ignore refresh can finish while cleanup
+        // waits for this source. Recheck the rules inside the write gate.
+        if (!(await ignoredPaths(folder, [path])).has(path)) {
+          return;
+        }
+        await store.delete(path);
+        removed += 1;
+      });
+    } catch (error) {
+      deps.log.warn(
+        `Could not clean up ignored source ${path}; existing metadata was preserved: ${String(error)}`,
+      );
+    }
   }
-  if (ignored.size > 0) {
-    deps.log.info(`Removed metadata for ${ignored.size} ignored files.`);
+  if (removed > 0) {
+    deps.log.info(`Removed metadata for ${removed} ignored files.`);
     deps.notifyChanged();
   }
 }

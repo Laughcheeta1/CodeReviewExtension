@@ -13,6 +13,7 @@ export type {
   DiffHunk,
   DiffOptions,
   FileRecord,
+  GitBlameLine,
   LastReviewer,
   PhysicalLine,
   RawGitHunk,

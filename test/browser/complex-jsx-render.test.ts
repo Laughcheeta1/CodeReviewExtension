@@ -31,16 +31,10 @@ const fixtures: readonly Fixture[] = [
   },
 ];
 
-test("renders annotated complex JSX and TSX in a real browser", async (context) => {
+test("renders annotated complex JSX and TSX in a real browser", async () => {
   const browser = await findBrowser();
-  if (browser === undefined) {
-    context.skip("No supported headless browser is installed.");
-    return;
-  }
-  if (!(await browserWorks(browser))) {
-    context.skip("The installed headless browser cannot start in this environment.");
-    return;
-  }
+  assert.ok(browser, "Install Chrome or Chromium to run the required browser test.");
+  assert.ok(await browserWorks(browser), "The installed browser must start for the required browser test.");
 
   for (const fixture of fixtures) {
     await renderFixture(browser, fixture);
@@ -50,7 +44,7 @@ test("renders annotated complex JSX and TSX in a real browser", async (context) 
 async function findBrowser(): Promise<string | undefined> {
   for (const candidate of ["google-chrome", "chromium", "chromium-browser"]) {
     try {
-      await execute(candidate, ["--version"]);
+      await execute(candidate, ["--version"], { timeout: 10_000 });
       return candidate;
     } catch {
       continue;
@@ -67,7 +61,7 @@ async function browserWorks(browser: string): Promise<boolean> {
       "--no-sandbox",
       "--dump-dom",
       "about:blank",
-    ]);
+    ], { timeout: 30_000 });
     return result.stdout.includes("<html");
   } catch {
     return false;
@@ -122,7 +116,7 @@ async function renderFixture(browser: string, fixture: Fixture): Promise<void> {
       "--virtual-time-budget=1000",
       `--user-data-dir=${path.join(directory, "chrome-user-data")}`,
       `file://${htmlPath}`,
-    ], { maxBuffer: 4 * 1024 * 1024 });
+    ], { maxBuffer: 4 * 1024 * 1024, timeout: 30_000 });
     const rendered = result.stdout;
     assert.match(rendered, /data-render-status="rendered"/, fixture.fileName);
     assert.match(rendered, /Operations dashboard/, fixture.fileName);

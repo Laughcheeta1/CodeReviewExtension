@@ -68,6 +68,7 @@ export class PersistentStore {
   private readonly cache = new Map<string, FileRecord | undefined>();
   private readonly loadTails = new Map<string, Promise<FileRecord | undefined>>();
   private readonly writeTails = new Map<string, Promise<unknown>>();
+  private readonly initializationTails = new Map<string, Promise<unknown>>();
   private readonly directoryUri: vscode.Uri;
   private readonly snapshotsUri: vscode.Uri;
   private readonly initializationUri: vscode.Uri;
@@ -168,9 +169,9 @@ export class PersistentStore {
   }
   async disableTracking(): Promise<void> {
     const configuration = { schemaVersion: 1, state: "disabled" } as const;
-    await this.fileSystem.writeInitialization(configuration);
-    this.initializationConfiguration = configuration;
-    this.compiledMatcher = compileTrackingMatcher(configuration);
+    await serialized(this.initializationTails, INITIALIZATION_FILE, () =>
+      this.writeInitialization(configuration),
+    );
   }
   async enableTracking(targets: readonly TrackingTarget[]): Promise<void> {
     const configuration = {
@@ -178,6 +179,11 @@ export class PersistentStore {
       state: "initialized",
       targets,
     } as const;
+    await serialized(this.initializationTails, INITIALIZATION_FILE, () =>
+      this.writeInitialization(configuration),
+    );
+  }
+  private async writeInitialization(configuration: InitializationConfiguration): Promise<void> {
     await this.fileSystem.writeInitialization(configuration);
     this.initializationConfiguration = configuration;
     this.compiledMatcher = compileTrackingMatcher(configuration);
@@ -186,6 +192,13 @@ export class PersistentStore {
     return this.includeTrackingTargets([target]);
   }
   async includeTrackingTargets(
+    candidates: readonly TrackingTarget[],
+  ): Promise<boolean> {
+    return serialized(this.initializationTails, INITIALIZATION_FILE, () =>
+      this.includeTrackingTargetsSerialized(candidates),
+    );
+  }
+  private async includeTrackingTargetsSerialized(
     candidates: readonly TrackingTarget[],
   ): Promise<boolean> {
     const targets = this.initializationConfiguration?.targets;
@@ -209,7 +222,11 @@ export class PersistentStore {
     if (additions.length === 0) {
       return false;
     }
-    await this.enableTracking([...targets, ...additions]);
+    await this.writeInitialization({
+      schemaVersion: 1,
+      state: "initialized",
+      targets: [...targets, ...additions],
+    });
     return true;
   }
   trackingTargets(): readonly TrackingTarget[] | undefined {
@@ -344,6 +361,7 @@ export class PersistentStore {
     });
   }
   async reset(): Promise<void> {
+    await Promise.allSettled(this.initializationTails.values());
     const initializationConfiguration = this.initializationConfiguration;
     await Promise.allSettled(this.writeTails.values());
     try {
@@ -554,5 +572,4 @@ export class PersistentStore {
     await serialized(this.writeTails, path, operation);
   }
 }
-
 

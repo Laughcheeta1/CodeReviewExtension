@@ -6,7 +6,7 @@ Code Review Tracker adds saved-file, line-level review state to VS Code. It comp
 
 Git must be installed. The extension uses local Git both as its `git diff --no-index` diff engine and to read the reviewer's configured `user.name` and `user.email` when available. After the first review decision, that identity is cached for the workspace and reused for later decisions. It does not synchronize branches, pull, commit, or collaborator data.
 
-On first activation, choose whether to initialize Code Review Tracker for that repository. Choosing **Never Initialize** records the opt-out in the repository and prevents future automatic initialization prompts. If you choose **Initialize**, a multi-select checklist opens with every candidate file selected. Use the Select All or Deselect All buttons, then check only the files you want to track before choosing:
+On first activation, choose whether to initialize Code Review Tracker for that workspace. Choosing **Never Initialize** records the opt-out in VS Code's workspace storage and prevents future automatic initialization prompts. If you choose **Initialize**, a multi-select checklist opens with every candidate file selected. Use the Select All or Deselect All buttons, then check the initial files to track before choosing:
 
 - **Start Reviewed** to snapshot the selected eligible saved files as their reviewed baseline.
 - **Start Pending** to use an empty baseline, making every selected saved line an addition awaiting review.
@@ -17,14 +17,16 @@ Dismissing a setup step leaves the workspace untouched and shows the initializat
 To resume setup without restarting VS Code, run **Code Review: Set Up Tracking** from the Command Palette.
 Running it again reconfigures the repository. **Code Review: Mark Entire Workspace Pending** and **Code Review: Mark Entire Workspace Reviewed** explicitly replace the current selection with the entire workspace, including eligible files added later.
 
-Open **Code Review: Open Review Diff** or select a file in the Code Review sidebar. The compressed baseline appears on the left and the saved source file on the right.
+The selection seeds tracking: other eligible files encountered later through startup, open, save, or commands can also be included automatically. Use `.gitignore` for durable exclusions or **Never Initialize** to disable tracking.
+
+Open **Go to Review View** or select a file in the Code Review sidebar. The compressed baseline appears on the left and the saved source file on the right.
 
 - Git additions are reviewed on the right.
 - Git deletions are reviewed on the left.
 - After a saved edit on the right, the open diff resolves decorations and left-side actions against the latest saved generation while keeping the same baseline. If a deleted line is restored, its old left-side action becomes a safe no-op.
 - A replacement remains one deletion plus one addition; the extension does not guess that they form a “modified” line.
 - Use the line commands for selections. In the Explorer, right-click a tracked file to mark all of its reviewable changes as pending, in review, or reviewed.
-- To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>.
+- To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>. Confirm delivery only when the terminal is ready to receive the text: a shell can execute embedded commands. Canceling sends nothing.
 - **Mark File Pending** also works for a clean tracked file: it makes every physical line in that file pending without changing review metadata for other files.
 - Deleting a source file hides it for the rest of the current VS Code session but preserves its review metadata. On the next startup, metadata and snapshots for files that still do not exist are removed.
 - By default, deleting a line containing only its line ending is reviewable;
@@ -43,14 +45,14 @@ Open **Code Review: Open Review Diff** or select a file in the Code Review sideb
     "revExtIgnoredExtensions": [".html", "md"]
   }
   ```
-  File and folder entries are workspace-relative posix paths; folders match the folder itself and everything below it. Extensions match the final extension case-insensitively, with or without a leading dot. Right-click a file or folder in the Explorer (or use the Command Palette) and choose **Code Review: Ignore File/Folder/Extension for RevExt Comments** to update this file.
+  File and folder entries are workspace-relative posix paths; folders match the folder itself and everything below it. Use `"."` in `revExtIgnoredFolders` to disable markers for the entire workspace. Extensions match the final extension case-insensitively, with or without a leading dot. Right-click a file or folder in the Explorer (or use the Command Palette) and choose **Code Review: Ignore File/Folder/Extension for RevExt Comments** to update this file.
 - Marking a folder pending, in review, or reviewed shows a progress notification. Its message reports how many files were successfully changed out of the folder's eligible file total.
 
 When every addition and deletion is reviewed, the saved file is automatically promoted to the next baseline and its obsolete diff tab closes.
 
 Code received from someone else starts auto-reviewed: newly discovered lines blamed on another Git user start `reviewed`, while your own, uncommitted, or unknown-attribution lines start `pending`. The `.vscode/code-review-tracker/` path remains gitignored for backward compatibility so legacy review state is never committed, but the extension now persists review state in VS Code workspace-specific extension storage via `ExtensionContext.storageUri` instead of inside the repository.
 
-Shared state lives under VS Code workspace storage:
+Local review state lives under VS Code workspace storage; it is not shared with collaborators:
 
 ```text
 <storageUri>/<sha256(folderUri)>/
@@ -74,4 +76,9 @@ pnpm test
 pnpm run package:vsix
 ```
 
-The aggregate test runs type checking, linting, unit tests, and the Extension Host smoke test. See [ARCHITECTURE.md](ARCHITECTURE.md) for the component, design, and manual verification checks.
+The browser test requires Chrome or Chromium. Extension Host tests require a
+graphical session (or Xvfb on Linux). Missing browser support fails validation.
+The shared RevExt configuration excludes this project's source and tests from
+automatic annotation so developing the extension does not rewrite its fixtures.
+
+The aggregate test runs type checking, linting, unit tests, the JSX/browser test, and Extension Host lifecycle, restart, and disabled-workspace suites. See [ARCHITECTURE.md](ARCHITECTURE.md) for the component, design, and manual verification checks.

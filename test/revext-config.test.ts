@@ -39,6 +39,14 @@ test("exposes the shared workspace config path", () => {
   assert.equal(REVIEW_EXTENSION_CONFIG_RELPATH, ".vscode/review-extension.json");
 });
 
+test("workspace root folder disables markers throughout the workspace", () => {
+  const config = parseRevExtWorkspaceConfig({ revExtIgnoredFolders: [".", "./"] });
+  assert.deepEqual(config.folders, ["."]);
+  assert.equal(isRevExtIgnoredByWorkspaceConfig("root.ts", config), true);
+  assert.equal(isRevExtIgnoredByWorkspaceConfig("nested/source.ts", config), true);
+  assert.equal(isRevExtIgnoredByWorkspaceConfig("", config), false);
+});
+
 test("matches shared workspace files, folders, and extensions", () => {
   const config = parseRevExtWorkspaceConfig({
     revExtIgnoredFiles: ["src/generated.ts"],
@@ -65,7 +73,7 @@ test("normalizes backslashes, leading segments, and alias extension keys", () =>
     revExtDisabledExtensions: [" TSX "],
   });
   assert.deepEqual(config.files, ["src/dup.ts"]);
-  assert.deepEqual(config.folders, ["docs"]);
+  assert.deepEqual(config.folders, [".", "docs"]);
   assert.deepEqual(config.extensions, ["tsx"]);
   assert.equal(isRevExtIgnoredByWorkspaceConfig("src\\dup.ts", config), true);
   assert.equal(isRevExtIgnoredByWorkspaceConfig("docs/guide.txt", config), true);

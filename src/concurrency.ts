@@ -63,6 +63,8 @@ export const STORE_CONCURRENCY_LIMIT = 16;
 /**
  * Run an operation for each item with bounded concurrency. The result order
  * is not preserved; callers that need ordering should handle it themselves.
+ * On failure, stop scheduling new items and drain active operations before
+ * rejecting, so caller cleanup cannot race effects from this batch.
  */
 export async function forEachConcurrent<T>(
   items: readonly T[],
@@ -74,18 +76,30 @@ export async function forEachConcurrent<T>(
   }
   const bounded = Math.max(1, Math.min(limit, items.length));
   let nextIndex = 0;
+  let failed = false;
+  let firstError: unknown;
   const workers = Array.from({ length: bounded }, async () => {
-    while (true) {
+    while (!failed) {
       const index = nextIndex;
       nextIndex += 1;
       if (index >= items.length) {
         return;
       }
       const item = items[index]!;
-      await operation(item, index);
+      try {
+        await operation(item, index);
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
+      }
     }
   });
   await Promise.all(workers);
+  if (failed) {
+    throw firstError;
+  }
 }
 
 /**

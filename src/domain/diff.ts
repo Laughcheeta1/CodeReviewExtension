@@ -81,7 +81,9 @@ export function buildDiffRecords(
       );
       const reviewStatus =
         transferred?.reviewStatus ??
-        options.initialStatusForAddition?.(newNumber) ??
+        (previousCurrent.has(newLines[index]!.digest)
+          ? "pending"
+          : options.initialStatusForAddition?.(newNumber)) ??
         "pending";
       const lastReviewer =
         transferred?.lastReviewer ??

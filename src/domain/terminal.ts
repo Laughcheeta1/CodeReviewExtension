@@ -17,13 +17,12 @@ export function terminalPayload(
         ? `${firstOneBased}`
         : `${firstOneBased} - ${lastOneBased}`;
     const content = source.slice(range.start, last + 1).join("\n");
-    const backticks = Math.max(
-      3,
-      ...(content.match(/`+/g) ?? []).map((run) => run.length + 1),
-    );
+    let backticks = 3;
+    for (const run of content.matchAll(/`+/g)) {
+      backticks = Math.max(backticks, run[0].length + 1);
+    }
     const fence = "`".repeat(backticks);
     return `> Line ${label}, file ${path}:\n${fence}\n${content}\n${fence}\n`;
   });
   return `${blocks.join("\n")}\n`;
 }
-

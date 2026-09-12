@@ -377,10 +377,9 @@ async function assertMetadataPresent(folder, relativePath, options = {}) {
       `${pathHash(path)}.${baseline?.digest}.gz`,
       `Metadata for ${path} has a snapshot identity unrelated to its path`,
     );
-    assert.ok(
-      inventory.snapshotNames.has(snapshotName),
-      `Metadata for ${path} references missing snapshot ${snapshotName}`,
-    );
+    // A promotion may publish metadata after the directory listing was read.
+    // Reading the referenced snapshot is the authority; the earlier listing
+    // is not an atomic view of the metadata/snapshot generation.
     const compressed = await readSnapshot(folder, snapshotName);
     const baselineBytes = await gunzipAsync(compressed);
     assert.equal(
@@ -633,16 +632,17 @@ async function assertAbsentDuring(
 function watchForbiddenPaths(folder, paths) {
   const forbidden = new Set(paths.map((path) => pathHash(normalizedPath(path))));
   const events = [];
+  const root = trackerUri(folder);
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(folder, ".vscode/code-review-tracker/**"),
+    new vscode.RelativePattern(root, "**/*"),
     false,
     false,
     false,
   );
 
   const inspect = (kind, uri) => {
-    const relative = normalizedPath(vscode.workspace.asRelativePath(uri, false));
-    const name = relative.slice(".vscode/code-review-tracker/".length);
+    const relative = normalizedPath(uri.path.slice(root.path.length + 1));
+    const name = relative;
     const isForbiddenMetadata = [...forbidden].some(
       (hash) =>
         name === `${hash}.json` || name.startsWith(`.${hash}.json.tmp-`),

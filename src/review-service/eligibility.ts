@@ -125,6 +125,12 @@ export class EligibilityTracker {
         return cached.paths;
       }
     }
+    const activeRefresh = this.refreshes.get(key);
+    if (force && activeRefresh !== undefined) {
+      // A filesystem event invalidates scans started before that event.
+      // Wait for that scan, then coalesce callers into a fresh trailing scan.
+      await activeRefresh;
+    }
     return coalesced(this.refreshes, key, async () => {
       try {
         const eligible = await eligibleWorkspacePaths(folder, this.ignoreRules);

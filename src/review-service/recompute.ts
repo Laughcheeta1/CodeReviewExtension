@@ -101,7 +101,9 @@ export async function recomputeSource(
     prepared ?? (await readStableSource(uri, deps.maxSize(), initialStat));
   const digest = digestBytes(bytes);
   const policyNeedsRebuild =
-    rebuildPolicy && existing.baseline.digest !== existing.current.digest;
+    rebuildPolicy &&
+    existing.baseline.size > 0 &&
+    existing.baseline.digest !== existing.current.digest;
   if (digest === existing.current.digest && !policyNeedsRebuild) {
     if (
       source.modifiedAt === existing.current.modifiedAt &&
@@ -129,12 +131,16 @@ export async function recomputeSource(
       deps.relativePath(uri) ?? uri.fsPath,
     ));
   const ignoreEmptyLineDeletions = deps.ignoreEmptyLineDeletions(uri);
-  const initialClassification = await resolveInitialClassificationForAdditions(
-    deps,
-    uri,
-    path,
-    rawHunks,
-  );
+  // A policy-only rebuild has no new current lines to attribute. Existing
+  // decisions transfer by their unchanged byte identities without Git blame.
+  const initialClassification = digest === existing.current.digest
+    ? undefined
+    : await resolveInitialClassificationForAdditions(
+        deps,
+        uri,
+        path,
+        rawHunks,
+      );
   const diff = buildDiffRecords(
     baseline,
     bytes,

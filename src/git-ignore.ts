@@ -100,7 +100,10 @@ export class GitIgnoreService {
       excluded,
     );
     return Promise.all(
-      uris.map(async (uri) => {
+      uris.filter((uri) =>
+        vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() ===
+        folder.uri.toString(),
+      ).map(async (uri) => {
         try {
           return {
             directory: directoryOf(relativePath(uri)),

@@ -88,3 +88,32 @@ test("reviewer is undefined without a directory or an identity", async () => {
     }
   });
 });
+
+test("diff keeps unchanged lines outside hunks despite user inter-hunk context", async () => {
+  const keys = ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"];
+  const previous = keys.map((key) => process.env[key]);
+  process.env.GIT_CONFIG_COUNT = "1";
+  process.env.GIT_CONFIG_KEY_0 = "diff.interHunkContext";
+  process.env.GIT_CONFIG_VALUE_0 = "5";
+  try {
+    assert.deepEqual(
+      await new GitService().diff(
+        encoder.encode("a\nb\nc\nd\ne\n"),
+        encoder.encode("x\nb\nc\nd\ny\n"),
+      ),
+      [
+        { oldStart: 1, oldCount: 1, newStart: 1, newCount: 1 },
+        { oldStart: 5, oldCount: 1, newStart: 5, newCount: 1 },
+      ],
+    );
+  } finally {
+    for (const [index, key] of keys.entries()) {
+      const value = previous[index];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});

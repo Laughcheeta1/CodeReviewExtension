@@ -3,19 +3,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { RawGitHunk, Reviewer } from "./domain";
+import type { GitBlameLine, RawGitHunk, Reviewer } from "./domain";
+
+export type { GitBlameLine } from "./domain";
 
 const execute = promisify(execFile);
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 const BLAME_HEADER =
-  /^([0-9a-f]{5,40}|0{5,40}) (\d+) (\d+) (\d+)$/;
-
-export interface GitBlameLine {
-  readonly line: number;
-  readonly authorName?: string | undefined;
-  readonly authorEmail?: string | undefined;
-  readonly commit: string;
-}
+  /^([0-9a-f]{40}|[0-9a-f]{64}) (\d+) (\d+)(?: (\d+))?$/;
 
 export class GitService {
   constructor(private readonly executable = "git") {}
@@ -125,6 +120,7 @@ export class GitService {
         "--no-color",
         "--text",
         "--unified=0",
+        "--inter-hunk-context=0",
         "--diff-algorithm=myers",
         "--indent-heuristic",
         "--",
@@ -168,9 +164,10 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 /**
  * Parse `git blame --line-porcelain` output into per-line authorship.
  *
- * Each porcelain block starts with `<commit> <orig> <final> <count>`,
- * followed by `author` / `author-mail` metadata and exactly `count`
- * TAB-prefixed content lines. The map is keyed by final (current-file)
+ * Each block starts with `<commit> <orig> <final> [<count>]`, followed
+ * by author metadata and one TAB-prefixed content line. The optional count
+ * describes the group, whose remaining lines still have their own blocks.
+ * The map is keyed by final (current-file)
  * one-based line numbers so callers can classify snapshot-diff additions.
  */
 export function parseBlamePorcelain(
@@ -187,13 +184,15 @@ export function parseBlamePorcelain(
     }
     const commit = header[1] ?? "";
     const finalLine = Number(header[3] ?? "0");
-    const count = Number(header[4] ?? "0");
     let authorName: string | undefined;
     let authorEmail: string | undefined;
     index += 1;
     while (index < lines.length) {
       const current = lines[index] ?? "";
       if (current.startsWith("\t")) {
+        break;
+      }
+      if (BLAME_HEADER.test(current)) {
         break;
       }
       if (current.startsWith("author ")) {
@@ -214,16 +213,9 @@ export function parseBlamePorcelain(
       }
       index += 1;
     }
-    for (let offset = 0; offset < count; offset += 1) {
-      const lineNumber = finalLine + offset;
-      const content = lines[index] ?? "";
-      if (!content.startsWith("\t") && offset < count) {
-        // A malformed block ends parsing for this group; the caller
-        // treats missing lines as unknown attribution.
-        break;
-      }
-      result.set(lineNumber, {
-        line: lineNumber,
+    if ((lines[index] ?? "").startsWith("\t")) {
+      result.set(finalLine, {
+        line: finalLine,
         authorName,
         authorEmail,
         commit,
@@ -233,5 +225,3 @@ export function parseBlamePorcelain(
   }
   return result;
 }
-
-

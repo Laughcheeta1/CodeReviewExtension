@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { ReviewStatus } from "../domain";
-import type { ReviewService } from "../review-service";
+import type { ReviewService, ReviewSummary } from "../review-service";
 import { statusText } from "./formatting";
 
 type TreeNode =
@@ -22,23 +22,20 @@ export class ReviewTree
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined>();
   readonly onDidChangeTreeData = this.emitter.event;
   private readonly subscription: vscode.Disposable;
-  private cachedSummary: readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[] | undefined;
-  private cachedGrouped: Map<ReviewStatus, readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]> | undefined;
-  constructor(private readonly service: ReviewService) {
+  private cachedGrouped: ReadonlyMap<ReviewStatus, readonly ReviewSummary[]> | undefined;
+  constructor(private readonly service: Pick<ReviewService, "onDidChange" | "summary">) {
     this.subscription = service.onDidChange(() => {
-      this.cachedSummary = undefined;
       this.cachedGrouped = undefined;
       this.emitter.fire(undefined);
     });
   }
 
-  private ensureGrouped(): Map<ReviewStatus, readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]> {
-    if (this.cachedGrouped !== undefined && this.cachedSummary !== undefined) {
+  private ensureGrouped(): ReadonlyMap<ReviewStatus, readonly ReviewSummary[]> {
+    if (this.cachedGrouped !== undefined) {
       return this.cachedGrouped;
     }
     const summary = this.service.summary();
-    this.cachedSummary = summary;
-    const grouped = new Map<ReviewStatus, { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]>();
+    const grouped = new Map<ReviewStatus, ReviewSummary[]>();
     for (const status of ["pending", "inReview", "reviewed"] as const) {
       grouped.set(status, []);
     }
@@ -48,8 +45,7 @@ export class ReviewTree
     for (const status of ["pending", "inReview", "reviewed"] as const) {
       grouped.get(status)?.sort((a, b) => a.path.localeCompare(b.path));
     }
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    this.cachedGrouped = grouped as unknown as Map<ReviewStatus, readonly { uri: vscode.Uri; path: string; status: ReviewStatus; reviewed: number; total: number }[]>;
+    this.cachedGrouped = grouped;
     return this.cachedGrouped;
   }
   getTreeItem(node: TreeNode): vscode.TreeItem {

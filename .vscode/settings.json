@@ -1,5 +1,6 @@
 {
   "npm.packageManager": "pnpm",
   "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "codeReviewTracker.revExtDisabledExtensions": ["ts", "tsx", "js", "jsx", "mjs"]
 }

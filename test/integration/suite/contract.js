@@ -1197,6 +1197,10 @@ async function run() {
         }
         return value;
       },
+      // This event reconciles the entire workspace, not just this source.
+      // Allow bounded time proportional to the verified fixture population;
+      // each persisted digest/snapshot assertion remains mandatory.
+      { timeoutMs: Math.max(5_000, expectedPaths.size * 500) },
     );
     assert.equal(
       acceptedSavedEmptyLine.file.baseline.size,

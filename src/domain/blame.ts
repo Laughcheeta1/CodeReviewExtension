@@ -1,5 +1,4 @@
-import type { GitBlameLine } from "../git";
-import type { LastReviewer, Reviewer, ReviewStatus } from "./types";
+import type { GitBlameLine, LastReviewer, Reviewer, ReviewStatus } from "./types";
 
 /**
  * Blame is only an initial classifier for genuinely new changed lines.

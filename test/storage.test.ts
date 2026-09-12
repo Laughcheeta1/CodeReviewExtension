@@ -171,6 +171,36 @@ test("folderHash is deterministic and collision free per folder uri", () => {
   assert.equal(a, a2);
 });
 
+test("concurrent tracking inclusions preserve all targets and a later opt-out on disk", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "code-review-target-race-"));
+  try {
+    const folder = { uri: FakeUri.file(join(directory, "workspace")), name: "ws", index: 0 } as unknown as import("vscode").WorkspaceFolder;
+    const storage = FakeUri.file(join(directory, "storage")) as unknown as import("vscode").Uri;
+    const store = new storeMod.PersistentStore(folder, fakeLog, storage);
+    await store.initialize();
+    await store.enableTracking([]);
+    const targets = Array.from({ length: 12 }, (_, index) => ({ kind: "file" as const, path: `source-${index}.ts` }));
+    assert.deepEqual(await Promise.all(targets.map((target) => store.includeTrackingTarget(target))), targets.map(() => true));
+    const restarted = new storeMod.PersistentStore(folder, fakeLog, storage);
+    await restarted.initialize();
+    assert.deepEqual(restarted.trackingTargets(), targets);
+    assert.deepEqual(store.trackingTargets(), targets);
+
+    await Promise.all([
+      store.includeTrackingTarget({ kind: "file", path: "last.ts" }),
+      store.disableTracking(),
+      store.includeTrackingTarget({ kind: "file", path: "blocked.ts" }),
+    ]);
+    const disabled = new storeMod.PersistentStore(folder, fakeLog, storage);
+    await disabled.initialize();
+    assert.equal(store.initializationState, "disabled");
+    assert.equal(disabled.initializationState, "disabled");
+    assert.equal(disabled.tracksPath("blocked.ts"), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("store directories isolate multiple workspace folders", async () => {
   const storageBase = await mkdtemp(join(tmpdir(), "code-review-storage-base-"));
   const workspaceA = await mkdtemp(join(tmpdir(), "code-review-workspace-A-"));

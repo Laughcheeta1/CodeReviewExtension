@@ -336,6 +336,12 @@ test("setReviewer clears pending and requires identity otherwise", () => {
   assert.throws(() => setReviewer("reviewed", undefined, frozenTime));
 });
 
+test("terminalPayload handles large selections with many backtick runs", () => {
+  const text = `${"`a".repeat(150_000)}\n\`\`\`\`\`\`\nend`;
+  const payload = terminalPayload("large.txt", text, [{ start: 0, end: 3 }]);
+  assert.equal(payload, `> Line 1 - 3, file large.txt:\n\`\`\`\`\`\`\`\n${text}\n\`\`\`\`\`\`\`\n\n`);
+});
+
 test("terminalPayload labels single lines and ranges with escalated fences", () => {
   const payload = terminalPayload("src/a.ts", "one\ntwo\nthree", [
     { start: 0, end: 0 },

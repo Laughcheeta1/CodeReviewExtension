@@ -40,15 +40,26 @@ export function watchWorkspace(
     new vscode.RelativePattern(folder, "**/.gitignore"),
   );
   let ignoreRefresh: Promise<void> | undefined;
+  let ignoreRefreshPending = false;
   const refreshIgnoredPaths = () => {
-    if (ignoreRefresh === undefined) {
-      ignoreRefresh = (async () => {
+    ignoreRefreshPending = true;
+    if (ignoreRefresh !== undefined) {
+      return;
+    }
+    ignoreRefresh = (async () => {
+      do {
+        ignoreRefreshPending = false;
         await refreshFolder(service, ignoreRules, log, folder, false, false);
         await service.initializeDiscoveredSources(folder);
-      })().finally(() => {
-        ignoreRefresh = undefined;
-      });
-    }
+        // An edit during the previous pass invalidates its rule snapshot.
+        // Collapse bursts into a trailing pass without losing the last edit.
+      } while (ignoreRefreshPending);
+    })().finally(() => {
+      ignoreRefresh = undefined;
+      if (ignoreRefreshPending) {
+        refreshIgnoredPaths();
+      }
+    });
     runLogged(log, "Ignore-rule refresh", ignoreRefresh);
   };
   context.subscriptions.push(

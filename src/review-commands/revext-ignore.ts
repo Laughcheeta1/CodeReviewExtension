@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { serialized } from "../concurrency";
 import { errorMessage } from "../extension-utils";
 import {
   normalizeRepoFolder,
@@ -10,6 +11,8 @@ type RevExtIgnoreKey =
   | "revExtIgnoredFiles"
   | "revExtIgnoredFolders"
   | "revExtIgnoredExtensions";
+
+const configWrites = new Map<string, Promise<unknown>>();
 
 /** Add the selected file to the shared RevExt ignore list. */
 export async function ignoreFileForRevExt(
@@ -142,7 +145,7 @@ function resolveWorkspaceRelative(
     return undefined;
   }
   if (target.toString() === folder.uri.toString()) {
-    return undefined;
+    return { folder, relativePath: "." };
   }
   const relativePath = vscode.workspace
     .asRelativePath(target, false)
@@ -198,6 +201,22 @@ async function addConfigEntry(
     folder.uri,
     ...REVIEW_EXTENSION_CONFIG_RELPATH.split("/"),
   );
+  await serialized(configWrites, configUri.toString(), () =>
+    writeConfigEntry(configUri, folder, key, entry),
+  );
+}
+
+async function writeConfigEntry(
+  configUri: vscode.Uri,
+  folder: vscode.WorkspaceFolder,
+  key: RevExtIgnoreKey,
+  entry: string,
+): Promise<void> {
+  if (vscode.workspace.textDocuments.some((document) =>
+    document.uri.toString() === configUri.toString() && document.isDirty,
+  )) {
+    throw new Error(`Save ${REVIEW_EXTENSION_CONFIG_RELPATH} before changing RevExt ignore entries.`);
+  }
   const raw = await readConfigObject(configUri);
   const existing = Array.isArray(raw[key]) ? raw[key] : [];
   const normalizedEntry = key === "revExtIgnoredExtensions"
@@ -245,7 +264,7 @@ async function readConfigObject(
     }
     throw error;
   }
-  return {};
+  throw new Error(`${REVIEW_EXTENSION_CONFIG_RELPATH} must contain a JSON object. Existing content was preserved.`);
 }
 
 function isEntryNotFound(error: unknown): boolean {

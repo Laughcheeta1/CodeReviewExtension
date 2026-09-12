@@ -66,7 +66,7 @@ export function isRevExtIgnoredByWorkspaceConfig(
     }
   }
   for (const folder of config.folders) {
-    if (normalizedPath === folder || normalizedPath.startsWith(`${folder}/`)) {
+    if (folder === "." || normalizedPath === folder || normalizedPath.startsWith(`${folder}/`)) {
       return true;
     }
   }
@@ -199,6 +199,9 @@ export function normalizeRepoPath(value: string): string | undefined {
 
 /** Normalizes a workspace-relative folder entry to a prefix-matchable form. */
 export function normalizeRepoFolder(value: string): string | undefined {
+  if (/^\.(?:\/)?$/.test(value.trim().replaceAll("\\", "/"))) {
+    return ".";
+  }
   const normalized = normalizeRepoPath(value);
   if (normalized === undefined) {
     return undefined;

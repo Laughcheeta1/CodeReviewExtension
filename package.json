@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -292,14 +292,14 @@
     "compile": "pnpm run check-types && node esbuild.js",
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
-    "lint": "eslint src test --max-warnings=0 && pnpm run check:integration",
+    "lint": "eslint src test --max-warnings=0 && pnpm run check:integration && node --check scripts/package-vsix.mjs",
     "check:integration": "node --check test/integration/run.mjs && node --check test/integration/suite/contract.js && node --check test/integration/suite/restart.js && node --check test/integration/suite/disabled.js && node --check test/integration/suite/inventory.js",
     "test:unit": "node --import tsx --test test/*.test.ts",
     "test:browser": "node --import tsx --test test/browser/*.test.ts",
     "test:integration": "pnpm run build && node test/integration/run.mjs",
     "test": "pnpm run check-types && pnpm run lint && pnpm run test:unit && pnpm run test:browser && pnpm run test:integration",
     "package": "pnpm run check-types && pnpm run build",
-    "package:vsix": "pnpm exec vsce package --no-dependencies --no-rewrite-relative-links --allow-missing-repository",
+    "package:vsix": "pnpm run package && node scripts/package-vsix.mjs",
     "vscode:prepublish": "pnpm run package"
   },
   "devDependencies": {
