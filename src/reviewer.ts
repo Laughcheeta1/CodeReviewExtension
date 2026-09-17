@@ -1,6 +1,8 @@
 import type { Reviewer } from "./domain";
+import { coalesced, serialized } from "./concurrency";
 
 const REVIEWER_CACHE_KEY = "reviewerCache";
+const SINGLETON_KEY = "reviewer-cache-writes";
 
 export interface ReviewerIdentitySource {
   reviewer(directory: string | undefined): Promise<Reviewer | undefined>;
@@ -12,7 +14,7 @@ export interface ReviewerCacheStorage {
 }
 
 export class ReviewerCache {
-  private updateTail: Promise<void> = Promise.resolve();
+  private readonly updateTails = new Map<string, Promise<unknown>>();
 
   constructor(private readonly storage: ReviewerCacheStorage) {}
 
@@ -25,7 +27,9 @@ export class ReviewerCache {
   }
 
   public async set(workspaceKey: string, reviewer: Reviewer): Promise<void> {
-    const update = this.updateTail.then(async () => {
+    // All writes share one key because every update read-modify-writes the
+    // same stored object; per-key serialization could lose a concurrent key.
+    await serialized(this.updateTails, SINGLETON_KEY, async () => {
       const entries = this.storage.get<unknown>(REVIEWER_CACHE_KEY);
       const current = isRecord(entries) ? entries : {};
       await this.storage.update(REVIEWER_CACHE_KEY, {
@@ -33,8 +37,6 @@ export class ReviewerCache {
         [workspaceKey]: reviewer,
       });
     });
-    this.updateTail = update.catch(() => undefined);
-    await update;
   }
 }
 
@@ -54,17 +56,9 @@ export class ReviewerResolver {
     directory: string | undefined,
     fallback: () => Promise<Reviewer | undefined>,
   ): Promise<Reviewer | undefined> {
-    const active = this.resolutions.get(workspaceKey);
-    if (active !== undefined) {
-      return active;
-    }
-    const current = this.resolveUncached(workspaceKey, directory, fallback);
-    this.resolutions.set(workspaceKey, current);
-    void current.then(
-      () => this.clearResolution(workspaceKey, current),
-      () => this.clearResolution(workspaceKey, current),
+    return coalesced(this.resolutions, workspaceKey, () =>
+      this.resolveUncached(workspaceKey, directory, fallback),
     );
-    return current;
   }
 
   private async resolveUncached(
@@ -88,15 +82,6 @@ export class ReviewerResolver {
       await this.cache.set(workspaceKey, fromFallback);
     }
     return fromFallback;
-  }
-
-  private clearResolution(
-    workspaceKey: string,
-    resolution: Promise<Reviewer | undefined>,
-  ): void {
-    if (this.resolutions.get(workspaceKey) === resolution) {
-      this.resolutions.delete(workspaceKey);
-    }
   }
 }
 

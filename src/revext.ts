@@ -1,6 +1,5 @@
 import {
   findRevExtMarker,
-  markerStyles,
   markerSuffix,
   stripRevExtMarker,
   supportsRevExt,
@@ -31,7 +30,6 @@ export function revExtEdits(
   if (!supportsRevExt(languageId)) {
     return { edits: [], nextId };
   }
-  const styles = markerStyles(lines, languageId);
   const groups = new Map<string, number[]>();
   for (const line of addedLines) {
     const text = lines[line - 1];
@@ -42,12 +40,6 @@ export function revExtEdits(
     const matching = groups.get(key) ?? [];
     matching.push(line);
     groups.set(key, matching);
-  }
-  for (const line of addedLines) {
-    const text = lines[line - 1];
-    if (text === undefined) {
-      continue;
-    }
     const marker = findRevExtMarker(text, languageId);
     if (marker !== undefined) {
       nextId = Math.max(nextId, marker.id + 1);
@@ -63,17 +55,15 @@ export function revExtEdits(
         continue;
       }
       const text = lines[line - 1]!;
-      const style = styles[line - 1];
       if (
         findRevExtMarker(text, languageId) !== undefined ||
-        style === undefined ||
         !safeForSuffix(text, languageId)
       ) {
         continue;
       }
       edits.push({
         line,
-        suffix: markerSuffix(text, languageId, style, nextId),
+        suffix: markerSuffix(text, languageId, "line", nextId),
       });
       nextId += 1;
     }

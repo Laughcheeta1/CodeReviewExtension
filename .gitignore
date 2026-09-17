@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.vsix
 .vscode-test/
+.vscode/code-review-tracker/
+.vscode/code-review-tracker/**

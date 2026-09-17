@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { digestBytes, type FileRecord } from "./domain";
+import { isFileNotFound } from "./errors";
 import { decodeSnapshot, encodeSnapshot } from "./snapshot";
 import {
   storageFileName,
@@ -68,34 +69,34 @@ export class StoreFileSystem {
   }
 
   async writeJson(path: string, file: FileRecord): Promise<void> {
-    await vscode.workspace.fs.createDirectory(this.directoryUri);
-    const temporary = vscode.Uri.joinPath(
-      this.directoryUri,
+    await this.writeJsonAtomically(
+      this.fileUri(path),
+      storedFile(path, file),
       `.${storageFileName(path)}.tmp-${randomUUID()}`,
     );
-    try {
-      const contents = `${JSON.stringify(storedFile(path, file), null, 2)}\n`;
-      await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));
-      await vscode.workspace.fs.rename(temporary, this.fileUri(path), {
-        overwrite: true,
-      });
-    } finally {
-      await this.deleteTemporary(temporary);
-    }
   }
 
   async writeInitialization(
     configuration: InitializationConfiguration,
   ): Promise<void> {
-    await vscode.workspace.fs.createDirectory(this.directoryUri);
-    const temporary = vscode.Uri.joinPath(
-      this.directoryUri,
+    await this.writeJsonAtomically(
+      this.initializationUri,
+      configuration,
       `.initialization.json.tmp-${randomUUID()}`,
     );
+  }
+
+  private async writeJsonAtomically(
+    target: vscode.Uri,
+    data: unknown,
+    temporaryName: string,
+  ): Promise<void> {
+    await vscode.workspace.fs.createDirectory(this.directoryUri);
+    const temporary = vscode.Uri.joinPath(this.directoryUri, temporaryName);
     try {
-      const contents = `${JSON.stringify(configuration, null, 2)}\n`;
+      const contents = `${JSON.stringify(data, null, 2)}\n`;
       await vscode.workspace.fs.writeFile(temporary, encoder.encode(contents));
-      await vscode.workspace.fs.rename(temporary, this.initializationUri, {
+      await vscode.workspace.fs.rename(temporary, target, {
         overwrite: true,
       });
     } finally {
@@ -127,10 +128,4 @@ export class StoreFileSystem {
       }
     }
   }
-}
-
-function isFileNotFound(error: unknown): boolean {
-  return (
-    error instanceof vscode.FileSystemError && error.code === "FileNotFound"
-  );
 }

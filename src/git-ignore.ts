@@ -1,10 +1,13 @@
 import * as vscode from "vscode";
+import { serialized } from "./concurrency";
 import {
   createWorkspaceIgnoreMatcher,
   ignoredPathsFromMatcher,
   type WorkspaceIgnoreMatcher,
   type IgnoreFile,
 } from "./ignore-matcher";
+
+const gitIgnoreDecoder = new TextDecoder();
 
 /**
  * Read and apply workspace .gitignore files without consulting Git.
@@ -21,13 +24,12 @@ export class GitIgnoreService {
   >();
   private readonly unavailableWorkspaces = new Set<string>();
   private readonly failuresByWorkspace = new Map<string, unknown>();
-  private readonly refreshes = new Map<string, Promise<void>>();
+  private readonly refreshes = new Map<string, Promise<unknown>>();
 
   /** Refresh the rule snapshot at a workspace lifecycle boundary. */
   public async refresh(folder: vscode.WorkspaceFolder): Promise<void> {
     const key = folder.uri.toString();
-    const previous = this.refreshes.get(key) ?? Promise.resolve();
-    const current = previous.catch(() => undefined).then(async () => {
+    await serialized(this.refreshes, key, async () => {
       try {
         const files = await this.readIgnoreFiles(folder);
         this.matchersByWorkspace.set(key, createWorkspaceIgnoreMatcher(files));
@@ -39,14 +41,6 @@ export class GitIgnoreService {
         throw error;
       }
     });
-    this.refreshes.set(key, current);
-    try {
-      await current;
-    } finally {
-      if (this.refreshes.get(key) === current) {
-        this.refreshes.delete(key);
-      }
-    }
   }
 
   public async ignoredPaths(
@@ -106,11 +100,14 @@ export class GitIgnoreService {
       excluded,
     );
     return Promise.all(
-      uris.map(async (uri) => {
+      uris.filter((uri) =>
+        vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() ===
+        folder.uri.toString(),
+      ).map(async (uri) => {
         try {
           return {
             directory: directoryOf(relativePath(uri)),
-            contents: new TextDecoder().decode(
+            contents: gitIgnoreDecoder.decode(
               await vscode.workspace.fs.readFile(uri),
             ),
           };

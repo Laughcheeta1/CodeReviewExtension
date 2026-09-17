@@ -37,6 +37,20 @@ export default tseslint.config(
     files: ["test/**/*.ts"],
     rules: { "@typescript-eslint/no-floating-promises": "off" },
   },  // RevExt: 7
+  {
+    files: ["src/domain/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [{
+            group: ["vscode", "node:*", "../**", "!node:crypto"],
+            message: "Domain rules depend only on domain modules and byte hashing; keep editor and IO adapters outside this layer.",
+          }],
+        },
+      ],
+    },
+  },
   {  // RevExt: 3
     ignores: [
       "dist/**",

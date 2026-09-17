@@ -19,6 +19,19 @@ decisions.
 - Workspace `.gitignore` files are read and evaluated by the extension. Git's
   global excludes, repository `.git/info/exclude`, and Git ignore configuration
   are deliberately not consulted.
+- The snapshot diff determines what changed. Stored metadata determines the
+  status of already-known lines. Git `blame` determines only the initial status
+  of newly discovered current-line additions: a new line by the current user
+  starts `pending`, by another user starts `reviewed` with the blamed author
+  recorded as its `LastReviewer` (so the record satisfies v4 validation on
+  restart), and unknown attribution starts `pending`. A pure deletion has no
+  current-file side to blame and stays `pending` for now.
+- Blame attribution stays conservative: uncommitted/zero-commit lines count as
+  current-user `pending`, an unambiguous 1-1 replacement inherits its added-side
+  classification on the deleted side while larger hunks stay `pending`, blame
+  failures fall back to `pending` without changing stored metadata, and each
+  reconciliation blames the current file at most once (batched per-file
+  lookup).
 
 Review state is meaningful only for the exact baseline and current digests in
 the record. A replacement is represented as one deleted old line and one added
@@ -26,14 +39,47 @@ new line; there is no synthetic `modified` record.
 
 ## Runtime pieces
 
+### Dependency direction
+
+The activation module is the composition root. Commands, workspace events, and
+UI providers call the application service; they do not independently commit
+review records. The service supplies capability-specific interfaces to
+lifecycle, annotation, and mutation operations. Cleanup receives only logging,
+store lookup, source serialization, and change notification capabilities. UI
+providers likewise depend on only the service queries and events they consume.
+
+```mermaid
+flowchart TD
+  Activation[Extension activation] --> Adapters[Commands, events, UI]
+  Activation --> Service[ReviewService]
+  Adapters --> Service
+  Service --> Operations[Lifecycle and review operations]
+  Operations --> Domain[Pure identity, diff, transfer, and status rules]
+  Operations --> IO[Git, source IO, and persistent store]
+  IO --> Storage[Atomic metadata and verified snapshots]
+```
+
+The domain layer owns review meaning; VS Code adapters own editor interaction;
+the store owns durable representation. The service coordinates their lifetimes.
+This keeps filesystem and editor events from becoming separate implementations
+of review policy.
+
+Blame attribution types belong to the domain contract; the Git adapter produces
+them. Lint rules prevent domain modules from importing parent-layer modules,
+VS Code, or Node IO APIs (byte hashing through `node:crypto` is permitted).
+
+### Module responsibilities
+
 - `extension.ts` activates the extension, creates services, performs startup
   reconciliation, registers VS Code commands/providers/watchers, and connects
   saved-file and external-file events.
 - `review-service.ts` is the orchestration boundary. It owns workspace stores,
   eligibility checks, reconciliation, per-source serialization, stale checks,
   and the events consumed by the UI.
-- `domain.ts`, `source-io.ts`, and `git.ts` implement byte/line identity,
-  stable reads, record construction, and local Git hunk calculation.
+- `domain.ts`, `domain/blame.ts`, `source-io.ts`, and `git.ts` implement
+  byte/line identity, stable reads, record construction, local Git hunk
+  calculation, and per-file `blame --line-porcelain` attribution with its
+  initial-status callback.
 - `store.ts`, `store-io.ts`, `snapshot.ts`, `storage-format.ts`, and
   `tracking.ts` implement persisted configuration, v4 metadata, gzip
   snapshots, validation, atomic writes, cleanup, and the small detail cache.
@@ -43,10 +89,12 @@ new line; there is no synthetic `modified` record.
   decisions and promote a fully reviewed file.
 - `revext.ts`, `revext-syntax.ts`, `revext-config.ts`, and
   `revext-annotation.ts` preserve duplicate-added-line identity with temporary
-  source comments and apply the configured extension exclusions.
-- `review-commands.ts`, `initialization-setup.ts`, and `ui.ts` provide setup,
-  commands, the native diff provider, sidebar, decorations, and terminal
-  integration.
+  source comments and apply the configured extension exclusions plus the
+  repo-shared `.vscode/review-extension.json` file/folder/extension exclusions.
+- `review-commands.ts`, `review-commands/revext-ignore.ts`,
+  `initialization-setup.ts`, and `ui.ts` provide setup, commands (including
+  shared RevExt ignore management), the native diff provider, sidebar,
+  decorations, and terminal integration.
 
 ## Workspace lifecycle and eligibility
 
@@ -71,6 +119,13 @@ eligibility, removes metadata that is newly ignored, and initializes newly
 eligible sources. The explicit **Refresh** command performs a forced workspace
 reconciliation. An external change is reconciled even when the file has no
 open editor or review diff.
+
+Ignore edits received during a refresh schedule a serialized trailing pass so
+the latest rules are applied even if an earlier pass fails. Overlapping
+workspace roots enumerate only files and ignore rules owned by that root;
+a nested workspace folder is handled by its own store and ignore service.
+Forced discovery waits for an older in-flight scan and then performs a fresh
+scan; a creation event cannot be satisfied by a snapshot begun before it.
 
 Document loads performed internally for language detection or marker
 maintenance do not make the source visible or open its review diff. When the
@@ -141,7 +196,7 @@ files and runs:
 
 ```text
 git diff --no-index --no-ext-diff --no-textconv --no-color --text \
-  --unified=0 --diff-algorithm=myers --indent-heuristic -- baseline current
+  --unified=0 --inter-hunk-context=0 --diff-algorithm=myers --indent-heuristic -- baseline current
 ```
 
 Exit code 0 means unchanged, 1 is a valid diff, and all other results fail.
@@ -156,15 +211,28 @@ only lines remain reviewable.
 
 ## Persisted state
 
-The current layout is:
+All review state is persisted in VS Code workspace-specific extension storage
+via `ExtensionContext.storageUri`. The repository contains no active review
+metadata or snapshots; `.vscode/code-review-tracker/` remains gitignored for
+backward compatibility but is no longer written. A one-time migration copies
+valid legacy files from `.vscode/code-review-tracker/` into the new location
+when extension storage is empty and leaves the legacy files untouched
+otherwise; new and legacy state are never mixed.
+
+The current layout beneath the workspace storage root is:
 
 ```text
-.vscode/code-review-tracker/
+<storageUri>/<sha256(folderUri)>/
   initialization.json
   <sha256(relative-path)>.json
   snapshots/
     <sha256(relative-path)>.<baseline-digest>.gz
 ```
+
+When multiple workspace folders are open, each folder is isolated in its own
+deterministic sub-directory `<sha256(folderUri)>` beneath the shared
+`storageUri`; `ReviewService` derives the per-folder directory from
+`storageUri` passed at activation and never uses `globalStorageUri`.
 
 Each metadata file is a `StoredFile` with `schemaVersion: 4`, the normalized
 workspace-relative path, and a `FileRecord` containing:
@@ -226,8 +294,13 @@ The common recomputation pipeline is:
 3. stable-read the saved source and calculate its exact digest;
 4. if the digest changed, load and verify the baseline snapshot, run Git, and
    rebuild the line records, applying the configured empty-line deletion
-   policy;
+   policy and the blame-based initial-status callback for new additions;
 5. atomically commit the new generation only after the final eligibility check.
+
+Policy-only rebuilds of identical saved bytes preserve the existing addition
+decisions without repeating blame or reviewer lookups. An empty baseline has no
+deletions to filter, so unchanged content with that baseline needs no policy
+rebuild at all. Changed content still follows the normal classification path.
 
 When `ignoreEmptyLineDeletions` is enabled and the effective diff contains no
 reviewable changes, the current bytes are automatically promoted to the next
@@ -236,8 +309,9 @@ snapshot history. In a mixed diff, the exact old baseline remains until the
 remaining additions or non-empty deletions are reviewed; only the empty
 deletion is omitted from review metadata.
 
-New additions and deletions start `pending`. Existing decisions transfer as
-follows:
+New additions start `pending` unless the blame callback classifies a genuinely
+new line as other-user `reviewed`. Pure deletions start `pending` for now.
+Existing decisions transfer as follows:
 
 - A deletion matches the previous deleted record by baseline digest and exact
   baseline line number. If the old line is restored, it is rebuilt as an
@@ -248,6 +322,10 @@ follows:
   cannot prove which duplicate was removed.
 - `inReview` and `reviewed` transfer together when identity is unambiguous;
   new or ambiguous records are pending.
+- The blame callbacks (`DiffOptions.initialStatusForAddition` and
+  `DiffOptions.initialReviewerForAddition`) are passed to
+  `buildDiffRecords` only for new additions. They never overwrite a transferred
+  stored decision.
 
 Saved-file and clean external-file reconciliation may add identity comments to
 new duplicate additions. If the duplicate count changes, review transfer
@@ -265,9 +343,18 @@ record is committed.
 
 Per-source operations—save/external reconciliation, diff preparation, baseline
 reads, decisions, deletion, and promotion—are serialized by `ReviewService`.
+Ignored-source cleanup uses that same queue and rechecks ignore eligibility
+after waiting; a failed check preserves state. Store configuration updates use
+a separate initialization queue so concurrent target inclusion cannot overwrite
+another target or reverse a queued opt-out.
 Workspace initialization waits for existing source operations and rejects new
 ones while it resets the store. This prevents asynchronous VS Code events from
 committing conflicting generations.
+
+Bounded batches stop scheduling after their first failure and wait for active
+operations to finish before rejecting. Callers may therefore start recovery
+without racing effects left behind by a rejected batch. UI caches are derived,
+invalidated by service events, and never authorize persistence or review actions.
 
 The stat pair is an optimization signal, not content authority. Startup and
 ordinary diff preparation may skip a read when mtime and size match. Save and
@@ -313,6 +400,24 @@ paths skip automatic RevExt generation while keeping review metadata and
 state active. Promotion remains responsible for removing any existing
 generated markers.
 
+The repo-shared `.vscode/review-extension.json` file provides the same
+skip-generation guarantee for the whole codebase through Git. It holds
+`revExtIgnoredFiles`, `revExtIgnoredFolders`, and `revExtIgnoredExtensions`
+arrays (plus `revExtDisabledExtensions` as an extension alias). Files are
+exact workspace-relative posix paths, folders match the folder itself and
+everything below it (`.` matches the entire workspace), and extensions match the final extension
+case-insensitively with or without a leading dot. The per-user setting and
+the shared file are combined: either source disables automatic RevExt
+generation. Missing or invalid shared files yield an empty config so
+generation stays enabled. The Ignore File/Folder/Extension commands maintain
+this file; tracked files stay tracked in all cases.
+
+Ignore commands serialize updates to the shared file, preserve unrelated keys,
+and reject malformed JSON or dirty configuration documents before writing.
+This repository disables automatic markers for implementation and test files
+through that shared configuration so self-hosted development cannot rewrite
+test fixtures or introduce unrelated source edits during verification.
+
 ## Native diff UI and commands
 
 The `code-review-baseline:` content provider exposes a digest-addressed,
@@ -352,11 +457,17 @@ Reviewer resolution is cached per workspace and follows this order: cached
 identity, local Git identity, configured `reviewerName`/`reviewerEmail`, then
 interactive fallback. `sendSelectionToTerminal` sends fenced, line-labeled
 current editor text to the active terminal or creates a `Code Review Agent`
-terminal. A configured `agentCommand` is started only when a new terminal is
-created and the workspace is trusted.
+terminal. Each invocation requires explicit confirmation before creating a
+terminal, starting a command, or delivering text: a shell can execute embedded
+newlines even when `sendText` does not append another newline. Confirmation is
+not cached because the foreground program can change between invocations.
+A configured `agentCommand` is started only when a new terminal is created and
+the workspace is trusted, using configuration scoped to the source workspace.
 
 Other commands are setup/reconfiguration, whole-workspace pending/reviewed
-initialization, refresh, and log display. The manifest also exposes
+initialization, refresh, log display, and RevExt ignore management
+(`ignoreFileForRevExt`, `ignoreFolderForRevExt`,
+`ignoreExtensionForRevExt`). The manifest also exposes
 `maxFileSizeBytes`, `ignoreEmptyLineDeletions`, `openFilesInReviewView`, and
 `revExtDisabledExtensions`. Changing the empty-line setting forces a
 serialized policy reconciliation for existing tracked sources. The extension supports local files in Restricted Mode with limited functionality, targets VS Code
@@ -376,6 +487,17 @@ The aggregate test runs type checking, linting, unit tests, the JSX/browser
 test, and Extension Host integration suites. Individual checks are available
 as `pnpm run check-types`, `pnpm run lint`, `pnpm run test:unit`,
 `pnpm run test:browser`, and `pnpm run test:integration`.
+
+Browser verification requires a working Chrome or Chromium executable; missing
+or unusable browsers fail the check instead of silently skipping it. Integration
+forbidden-write watchers monitor the actual VS Code extension storage as well
+as verifying final metadata and snapshot inventories.
+
+`pnpm run package:vsix` builds with pnpm, then stages the explicit VSIX allowlist.
+The staging manifest omits the prepublish hook because vsce otherwise invokes
+it through a different package manager. The repository manifest is never
+rewritten during packaging. The public vsce API packages the staged runtime and
+documentation, including third-party notices, and staging is always cleaned.
 
 The integration contract verifies persisted metadata, gzip snapshots, cleanup,
 external writes, save/open/command/folder paths, dynamic ignore changes, and

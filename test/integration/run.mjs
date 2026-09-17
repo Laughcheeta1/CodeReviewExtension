@@ -51,6 +51,22 @@ async function launch(workspace, userData, suite) {
   });
 }
 
+async function cleanupFixture(fixture, failed) {
+  if (failed) {
+    console.error(
+      `Integration failure diagnostics preserved:\n` +
+      `Workspace: ${fixture.workspace}\n` +
+      `VS Code user data and review storage: ${fixture.userData}\n` +
+      `Extension logs: ${path.join(fixture.userData, "logs")}`,
+    );
+    return;
+  }
+  await Promise.all([
+    rm(fixture.workspace, { recursive: true, force: true }),
+    rm(fixture.userData, { recursive: true, force: true }),
+  ]);
+}
+
 /**
  * Watch the tracker directory before the extension starts. A final absence
  * check alone is insufficient: a buggy lifecycle path could create metadata
@@ -58,7 +74,7 @@ async function launch(workspace, userData, suite) {
  * final hash and its temporary-write prefix so that transient writes fail the
  * parent test as well.
  */
-function watchForbiddenWrites(trackerDirectory, snapshotsDirectory, paths) {
+function watchForbiddenWrites(trackerDirectory, snapshotsDirectory, paths, userData) {
   const hashes = new Map(
     paths.map((sourcePath) => [
       sha256(sourcePath),
@@ -70,7 +86,7 @@ function watchForbiddenWrites(trackerDirectory, snapshotsDirectory, paths) {
     if (filename === null || filename === undefined) {
       return;
     }
-    const name = filename.toString();
+    const name = path.basename(filename.toString());
     for (const [hash, sourcePath] of hashes) {
       if (
         name === `${hash}.json` ||
@@ -88,6 +104,12 @@ function watchForbiddenWrites(trackerDirectory, snapshotsDirectory, paths) {
   const snapshotWatcher = watch(snapshotsDirectory, (_event, filename) =>
     inspect("snapshot", filename),
   );
+  // The active store lives beneath VS Code's user data, whose workspace ID
+  // is chosen at launch. Observe that tree before activation so transient
+  // forbidden writes cannot hide behind final-state absence assertions.
+  const storageWatcher = watch(userData, { recursive: true }, (_event, filename) =>
+    inspect("extension-storage", filename),
+  );
   // A tracker reset can replace the watched directory while the extension is
   // reconciling.  The final inventory and extension-host watcher remain the
   // authoritative assertions; an OS watcher error must not abort cleanup and
@@ -98,6 +120,7 @@ function watchForbiddenWrites(trackerDirectory, snapshotsDirectory, paths) {
     close() {
       metadataWatcher.close();
       snapshotWatcher.close();
+      storageWatcher.close();
     },
     events,
   };
@@ -273,6 +296,7 @@ async function main() {
     enabled.tracker,
     enabled.snapshots,
     enabled.forbidden,
+    enabled.userData,
   );
   let enabledFailure;
   try {
@@ -310,10 +334,10 @@ async function main() {
     enabledFailure = error;
   } finally {
     enabledWatch.close();
-    await Promise.all([
-      rm(enabled.workspace, { recursive: true, force: true }),
-      rm(enabled.userData, { recursive: true, force: true }),
-    ]);
+    await cleanupFixture(
+      enabled,
+      enabledFailure !== undefined || enabledWatch.events.length > 0,
+    );
   }
   if (enabledFailure !== undefined) {
     throw enabledFailure;
@@ -337,6 +361,7 @@ async function main() {
       "disabled-folder/source.txt",
       "disabled-external.txt",
     ],
+    disabled.userData,
   );
   let disabledFailure;
   try {
@@ -349,10 +374,10 @@ async function main() {
     disabledFailure = error;
   } finally {
     disabledWatch.close();
-    await Promise.all([
-      rm(disabled.workspace, { recursive: true, force: true }),
-      rm(disabled.userData, { recursive: true, force: true }),
-    ]);
+    await cleanupFixture(
+      disabled,
+      disabledFailure !== undefined || disabledWatch.events.length > 0,
+    );
   }
   if (disabledFailure !== undefined) {
     throw disabledFailure;

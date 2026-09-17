@@ -1,0 +1,4 @@
+{
+  "revExtIgnoredFolders": ["src", "test"],
+  "revExtIgnoredFiles": ["esbuild.js", "eslint.config.mjs"]
+}

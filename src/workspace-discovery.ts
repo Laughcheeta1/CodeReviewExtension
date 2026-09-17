@@ -21,9 +21,17 @@ export async function eligibleWorkspacePaths(
     new vscode.RelativePattern(folder, "**/*"),
     excluded,
   );
-  const paths = uris.map((uri) =>
-    vscode.workspace.asRelativePath(uri, false).replaceAll("\\", "/"),
-  );
+  // A parent root's glob can also find files owned by a nested workspace
+  // root. Each root has its own store and ignore rules, so only its owner
+  // may interpret the workspace-relative path.
+  const paths = uris
+    .filter((uri) =>
+      vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() ===
+      folder.uri.toString(),
+    )
+    .map((uri) =>
+      vscode.workspace.asRelativePath(uri, false).replaceAll("\\", "/"),
+    );
   await ignoreRules.refresh(folder);
   const ignored = await ignoreRules.ignoredPaths(folder, paths);
   return paths.filter((path) => !ignored.has(path));

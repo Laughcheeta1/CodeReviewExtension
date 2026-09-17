@@ -32,7 +32,16 @@ export function createWorkspaceIgnoreMatcher(
       const depthDifference = pathDepth(left.directory) - pathDepth(right.directory);
       return depthDifference || left.directory.localeCompare(right.directory);
     });
-  return new WorkspaceIgnoreMatcher(scopes);
+  const scopesByDirectory = new Map<string, Ignore[]>();
+  for (const scope of scopes) {
+    const existing = scopesByDirectory.get(scope.directory);
+    if (existing === undefined) {
+      scopesByDirectory.set(scope.directory, [scope.matcher]);
+    } else {
+      existing.push(scope.matcher);
+    }
+  }
+  return new WorkspaceIgnoreMatcher(scopes, scopesByDirectory);
 }
 
 /** Apply a previously compiled matcher to workspace-relative paths. */
@@ -53,7 +62,21 @@ export function ignoredPathsFromMatcher(
 export class WorkspaceIgnoreMatcher {
   private readonly states = new Map<string, boolean>();
 
-  constructor(private readonly scopes: readonly IgnoreScope[]) {}
+  constructor(
+    private readonly scopes: readonly IgnoreScope[],
+    private readonly scopesByDirectory: ReadonlyMap<string, readonly Ignore[]> = (() => {
+      const map = new Map<string, Ignore[]>();
+      for (const scope of scopes) {
+        const existing = map.get(scope.directory);
+        if (existing === undefined) {
+          map.set(scope.directory, [scope.matcher]);
+        } else {
+          existing.push(scope.matcher);
+        }
+      }
+      return map;
+    })(),
+  ) {}
 
   public ignores(path: string): boolean {
     return this.stateForFile(path);
@@ -94,16 +117,23 @@ export class WorkspaceIgnoreMatcher {
   /** Apply each directory's rules from the workspace root downward. */
   private directState(path: string): boolean {
     let state = false;
-    for (const scope of this.scopes) {
-      const relative = relativeToScope(path, scope.directory);
+    const ancestors = ancestorDirectories(path);
+    for (const ancestor of ancestors) {
+      const matchers = this.scopesByDirectory.get(ancestor);
+      if (matchers === undefined) {
+        continue;
+      }
+      const relative = relativeToScope(path, ancestor);
       if (relative === undefined || relative.length === 0) {
         continue;
       }
-      const result = scope.matcher.test(relative);
-      if (result.ignored) {
-        state = true;
-      } else if (result.unignored) {
-        state = false;
+      for (const matcher of matchers) {
+        const result = matcher.test(relative);
+        if (result.ignored) {
+          state = true;
+        } else if (result.unignored) {
+          state = false;
+        }
       }
     }
     return state;
@@ -128,6 +158,30 @@ function pathDepth(path: string): number {
 function parentPath(path: string): string | undefined {
   const separator = path.lastIndexOf("/");
   return separator === -1 ? undefined : path.slice(0, separator);
+}
+
+function ancestorDirectories(path: string): readonly string[] {
+  const isDirectory = path.endsWith("/");
+  const normalized = isDirectory ? path.slice(0, -1) : path;
+  const ancestors: string[] = [""];
+  if (normalized.length === 0) {
+    return ancestors;
+  }
+  const directoryPart = isDirectory ? normalized : (parentPath(normalized) ?? "");
+  if (directoryPart.length === 0) {
+    return ancestors;
+  }
+  const parts = directoryPart.split("/");
+  let prefix = "";
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part === undefined || part.length === 0) {
+      continue;
+    }
+    prefix = prefix.length === 0 ? part : `${prefix}/${part}`;
+    ancestors.push(prefix);
+  }
+  return ancestors;
 }
 
 function relativeToScope(path: string, scope: string): string | undefined {

@@ -15,3 +15,10 @@ test("folder progress uses readable labels for in-review status", () => {
     "1/2 files successfully set to in review",
   );
 });
+
+test("folder progress reports pending files out of the total", () => {
+  assert.equal(
+    folderProgressMessage(0, 5, "pending"),
+    "0/5 files successfully set to pending",
+  );
+});

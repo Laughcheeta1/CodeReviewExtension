@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { physicalLines, type RawGitHunk } from "./domain";
 
+export { isFileNotFound } from "./errors";
+
 export const now = (): string => new Date().toISOString();
 
 export function initialAdditionHunks(
@@ -42,11 +44,5 @@ export function isExcludedPath(path: string): boolean {
     path.startsWith(".vscode-test/") ||
     path === ".vscode/code-review-tracker" ||
     path.startsWith(".vscode/code-review-tracker/")
-  );
-}
-
-export function isFileNotFound(error: unknown): boolean {
-  return (
-    error instanceof vscode.FileSystemError && error.code === "FileNotFound"
   );
 }
