@@ -1,16 +1,20 @@
 import * as vscode from "vscode";
 import type { GitIgnoreService } from "../git-ignore";
+import { openReviewDiff } from "../review-commands/diff-view";
 import {
   ignoreExtensionForRevExt,
   ignoreFileForRevExt,
   ignoreFolderForRevExt,
-  initializeAll,
+} from "../review-commands/revext-ignore";
+import {
   markActive,
   markFile,
   markFolder,
-  openReviewDiff,
+} from "../review-commands/mark";
+import {
+  initializeAll,
   sendSelection,
-} from "../review-commands";
+} from "../review-commands/workspace";
 import type { ReviewService } from "../review-service";
 import type { ReviewerResolver } from "../reviewer";
 import { promptForInitialization } from "../initialization-setup";

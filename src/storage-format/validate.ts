@@ -1,4 +1,4 @@
-import type { FileRecord, LastReviewer } from "../domain";
+import type { FileRecord, LastReviewer } from "../domain/types";
 
 export function isReviewStatus(value: unknown): boolean {
   return value === "pending" || value === "inReview" || value === "reviewed";

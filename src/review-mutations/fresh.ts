@@ -1,5 +1,5 @@
 import type * as vscode from "vscode";
-import type { FileRecord } from "../domain";
+import type { FileRecord } from "../domain/types";
 import type { BaselineIdentity, ReviewMutationContext } from "./context";
 
 export async function requireFresh(

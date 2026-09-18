@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildDiffRecords } from "../src/domain/diff.ts";
 import {
   baselineLineDigest,
-  buildDiffRecords,
   digestBytes,
-  fileStatus,
   physicalLines,
+} from "../src/domain/identity.ts";
+import {
+  fileStatus,
   reviewableLines,
   reviewCounts,
   setReviewer,
-  terminalPayload,
-  type CurrentLineRecord,
-  type DeletedLineRecord,
-  type FileRecord,
-  type ReviewStatus,
-} from "../src/domain.ts";
+} from "../src/domain/status.ts";
+import { terminalPayload } from "../src/domain/terminal.ts";
+import type {
+  CurrentLineRecord,
+  DeletedLineRecord,
+  FileRecord,
+  ReviewStatus,
+} from "../src/domain/types.ts";
 
 const encoder = new TextEncoder();
 const frozenTime = "2026-03-01T12:00:00.000Z";

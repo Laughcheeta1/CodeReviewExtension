@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildDiffRecords } from "../src/domain/diff.ts";
+import { digestBytes } from "../src/domain/identity.ts";
+import { fileStatus } from "../src/domain/status.ts";
 import {
-  buildDiffRecords,
-  digestBytes,
-  fileStatus,
-} from "../src/domain.ts";
-import {
-  parseStoredFile,
   pathHash,
   snapshotFileName,
-  sourceMayHaveChanged,
   storageFileName,
+} from "../src/storage-format/naming.ts";
+import {
+  sourceMayHaveChanged,
   storedFile,
   summarize,
   type StoredFile,
-} from "../src/storage-format.ts";
+} from "../src/storage-format/record.ts";
+import { parseStoredFile } from "../src/storage-format/schema.ts";
 
 const encoder = new TextEncoder();
 const frozenTime = "2026-03-01T12:00:00.000Z";

@@ -1,11 +1,10 @@
 import type * as vscode from "vscode";
-import {
-  reviewStats,
-  setReviewer,
-  type FileRecord,
-  type Reviewer,
-  type ReviewStatus,
-} from "../domain";
+import { reviewStats, setReviewer } from "../domain/status";
+import type {
+  FileRecord,
+  Reviewer,
+  ReviewStatus,
+} from "../domain/types";
 import { now } from "../review-service-utils";
 import type { ReviewMutationContext } from "./context";
 import { promote } from "./promote";

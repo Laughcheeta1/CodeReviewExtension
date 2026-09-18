@@ -6,15 +6,13 @@ import { watchWorkspace } from "./extension/watchers";
 import { GitService } from "./git";
 import { GitIgnoreService } from "./git-ignore";
 import { promptForInitialization } from "./initialization-setup";
-import { openDocumentInReviewView } from "./review-commands";
+import { openDocumentInReviewView } from "./review-commands/diff-view";
 import { ReviewService } from "./review-service";
 import { ReviewerCache, ReviewerResolver } from "./reviewer";
-import {
-  BaselineContentProvider,
-  ReviewDecorations,
-  ReviewFileDecorations,
-  ReviewTree,
-} from "./ui";
+import { BaselineContentProvider } from "./ui/content-provider";
+import { ReviewDecorations } from "./ui/decorations";
+import { ReviewFileDecorations } from "./ui/file-decorations";
+import { ReviewTree } from "./ui/tree";
 import { runLogged } from "./extension-utils";
 
 export type ExtensionApi = {

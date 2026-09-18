@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { ReviewStatus } from "../domain";
+import type { ReviewStatus } from "../domain/types";
 import { revExtMarkerStart } from "../revext";
 import { supportsRevExt } from "../revext-syntax";
 import type { ReviewService } from "../review-service";

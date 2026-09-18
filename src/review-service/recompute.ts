@@ -1,14 +1,16 @@
 import * as vscode from "vscode";
+import { buildDiffRecords } from "../domain/diff";
+import { digestBytes } from "../domain/identity";
 import {
-  buildDiffRecords,
-  digestBytes,
   initialReviewerCallback,
   initialStatusCallback,
-  type FileRecord,
-  type LastReviewer,
-  type RawGitHunk,
-  type ReviewStatus,
-} from "../domain";
+} from "../domain/blame";
+import type {
+  FileRecord,
+  LastReviewer,
+  RawGitHunk,
+  ReviewStatus,
+} from "../domain/types";
 import type { GitService } from "../git";
 import {
   initialAdditionHunks,
@@ -20,7 +22,7 @@ import {
   readStableSource,
   type PreparedSource,
 } from "../source-io";
-import { sourceMayHaveChanged } from "../storage-format";
+import { sourceMayHaveChanged } from "../storage-format/record";
 import type { PersistentStore } from "../store";
 
 export interface RecomputeDeps {

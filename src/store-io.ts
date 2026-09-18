@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
-import { digestBytes, type FileRecord } from "./domain";
+import { digestBytes } from "./domain/identity";
+import type { FileRecord } from "./domain/types";
 import { isFileNotFound } from "./errors";
 import { decodeSnapshot, encodeSnapshot } from "./snapshot";
-import {
-  storageFileName,
-  storedFile,
-} from "./storage-format";
+import { storageFileName } from "./storage-format/naming";
+import { storedFile } from "./storage-format/record";
 import type { InitializationConfiguration } from "./tracking";
 
 const encoder = new TextEncoder();

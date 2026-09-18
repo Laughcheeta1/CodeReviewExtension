@@ -4,7 +4,7 @@ import test from "node:test";
 import type * as vscode from "vscode";
 import type { GitService } from "../src/git.ts";
 import type { PersistentStore } from "../src/store.ts";
-import type { FileRecord, ReviewStatus } from "../src/domain.ts";
+import type { FileRecord, ReviewStatus } from "../src/domain/types.ts";
 
 const folder = { uri: { fsPath: "/workspace" } };
 const fakeVscode = { workspace: { getWorkspaceFolder: () => folder } };

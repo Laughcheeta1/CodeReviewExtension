@@ -1,20 +1,22 @@
 import * as vscode from "vscode";
-import { fileStatus, type FileRecord } from "./domain";
+import { fileStatus } from "./domain/status";
+import type { FileRecord } from "./domain/types";
 import {
   coalesced,
   forEachConcurrent,
   serialized,
   STORE_CONCURRENCY_LIMIT,
 } from "./concurrency";
+import { folderHash, storageFileName } from "./storage-format/naming";
 import {
-  folderHash,
   describeStoredFileProblem,
   parseStoredFile,
-  storageFileName,
+} from "./storage-format/schema";
+import {
   storedFile,
   summarize,
   type FileSummary,
-} from "./storage-format";
+} from "./storage-format/record";
 import { decodeSnapshot } from "./snapshot";
 import { isFileNotFound } from "./errors";
 import {

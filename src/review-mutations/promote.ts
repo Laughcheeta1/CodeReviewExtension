@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { digestBytes, type FileRecord } from "../domain";
+import { digestBytes } from "../domain/identity";
+import type { FileRecord } from "../domain/types";
 import { revExtRemovals } from "../revext";
 import { createRecord, readStableSource } from "../source-io";
 import type { ReviewMutationContext } from "./context";

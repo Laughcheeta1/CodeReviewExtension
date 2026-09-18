@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import type { FileRecord } from "../domain";
+import type { FileRecord } from "../domain/types";
 import type { PersistentStore } from "../store";
-import type { BaselineIdentity } from "../review-mutations";
+import type { BaselineIdentity } from "../review-mutations/context";
 
 export const BASELINE_SCHEME = "code-review-baseline";
 

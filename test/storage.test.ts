@@ -154,11 +154,9 @@ moduleLoader._load = function (request: string, parent?: unknown, isMain?: unkno
 // Import after stubbing
 let naming: typeof import("../src/storage-format/naming.ts");
 let storeMod: typeof import("../src/store.ts");
-let storageFormat: typeof import("../src/storage-format.ts");
 before(async () => {
   naming = require("../src/storage-format/naming.ts") as typeof import("../src/storage-format/naming.ts");
   storeMod = require("../src/store.ts") as typeof import("../src/store.ts");
-  storageFormat = require("../src/storage-format.ts") as typeof import("../src/storage-format.ts");
 });
 
 test("folderHash is deterministic and collision free per folder uri", () => {

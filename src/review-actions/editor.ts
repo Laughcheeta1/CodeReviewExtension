@@ -1,5 +1,5 @@
 import type * as vscode from "vscode";
-import type { Reviewer, ReviewStatus } from "../domain";
+import type { Reviewer, ReviewStatus } from "../domain/types";
 import { selectedLines } from "../review-service-utils";
 import type { ReviewActionContext } from "./context";
 import { withFreshFile } from "./shared";

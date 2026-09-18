@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { physicalLines, type RawGitHunk } from "./domain";
+import { physicalLines } from "./domain/identity";
+import type { RawGitHunk } from "./domain/types";
 
 export { isFileNotFound } from "./errors";
 

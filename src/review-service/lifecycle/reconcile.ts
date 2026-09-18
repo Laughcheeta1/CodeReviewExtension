@@ -5,7 +5,7 @@ import {
   isFileNotFound,
   progressIncrement,
 } from "../../review-service-utils";
-import { recomputeExternalSource } from "../../revext-annotation";
+import { recomputeExternalSource } from "../../revext-annotation/external";
 import type { LifecycleDeps } from "./deps";
 import { initializeMissingSource } from "./init";
 

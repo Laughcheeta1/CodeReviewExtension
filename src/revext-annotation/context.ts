@@ -1,6 +1,6 @@
 import type * as vscode from "vscode";
 import type { GitService } from "../git";
-import type { FileRecord } from "../domain";
+import type { FileRecord } from "../domain/types";
 import type { PersistentStore } from "../store";
 import type { PreparedSource } from "../source-io";
 

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { Reviewer, ReviewStatus } from "../domain";
+import type { Reviewer, ReviewStatus } from "../domain/types";
 import { progressIncrement } from "../review-service-utils";
 import { folderProgressMessage } from "../review-progress";
 import type { ReviewActionContext } from "./context";

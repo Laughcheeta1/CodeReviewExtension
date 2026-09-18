@@ -1,6 +1,6 @@
 import type * as vscode from "vscode";
-import type { FileRecord } from "../domain";
-import type { BaselineIdentity } from "../review-mutations";
+import type { FileRecord } from "../domain/types";
+import type { BaselineIdentity } from "../review-mutations/context";
 import type { ReviewActionContext } from "./context";
 
 /**

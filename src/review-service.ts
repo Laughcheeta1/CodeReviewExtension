@@ -1,33 +1,26 @@
 import * as vscode from "vscode";
-import {
-  type FileRecord,
-  type ReviewStatus,
-  type Reviewer,
-} from "./domain";
+import type {
+  FileRecord,
+  ReviewStatus,
+  Reviewer,
+} from "./domain/types";
 import { GitService } from "./git";
 import { GitIgnoreService } from "./git-ignore";
 import { PersistentStore } from "./store";
 import type { TrackingTarget } from "./tracking";
 import type { PreparedSource } from "./source-io";
-import {
-  annotatePendingDocument as annotatePendingSource,
-  recomputeSavedDocument as recomputeSavedSource,
-  type RevExtAnnotationContext,
-} from "./revext-annotation";
-import {
-  applyReview as applyReviewMutation,
-  initializePendingFile as initializePendingFileMutation,
-  promote as promoteMutation,
-  requireFresh as requireFreshMutation,
-  type BaselineIdentity,
-  type ReviewMutationContext,
-} from "./review-mutations";
-import {
-  markEditor as markEditorAction,
-  markFile as markFileAction,
-  markFolder as markFolderAction,
-  type ReviewActionContext,
-} from "./review-actions";
+import type { RevExtAnnotationContext } from "./revext-annotation/context";
+import { recomputeSavedDocument as recomputeSavedSource } from "./revext-annotation/saved";
+import { annotatePendingDocument as annotatePendingSource } from "./revext-annotation/pending";
+import type { BaselineIdentity, ReviewMutationContext } from "./review-mutations/context";
+import { applyReview as applyReviewMutation } from "./review-mutations/review";
+import { initializePendingFile as initializePendingFileMutation } from "./review-mutations/pending";
+import { promote as promoteMutation } from "./review-mutations/promote";
+import { requireFresh as requireFreshMutation } from "./review-mutations/fresh";
+import type { ReviewActionContext } from "./review-actions/context";
+import { markEditor as markEditorAction } from "./review-actions/editor";
+import { markFile as markFileAction } from "./review-actions/file";
+import { markFolder as markFolderAction } from "./review-actions/folder";
 import {
   EligibilityTracker,
   relativePath as workspaceRelativePath,
@@ -42,21 +35,25 @@ import {
   recomputeSource,
   type RecomputeDeps,
 } from "./review-service/recompute";
+import type { LifecycleDeps } from "./review-service/lifecycle/deps";
 import {
-  cleanupIgnoredSources as cleanupIgnoredSourcesLifecycle,
-  cleanupMissingSources as cleanupMissingSourcesLifecycle,
   initializeDiscoveredSources as initializeDiscoveredSourcesLifecycle,
-  initializeFolder as initializeFolderLifecycle,
   initializeMissingSource as initializeMissingSourceLifecycle,
   initializeOpenedDocument as initializeOpenedDocumentLifecycle,
   initializeSource as initializeSourceLifecycle,
+} from "./review-service/lifecycle/init";
+import { initializeFolder as initializeFolderLifecycle } from "./review-service/lifecycle/initialize-folder";
+import {
   reconcileCreatedSource as reconcileCreatedSourceLifecycle,
   reconcileExternalChanges as reconcileExternalChangesLifecycle,
   reconcileExternalSource as reconcileExternalSourceLifecycle,
   reconcileSavedDocument as reconcileSavedDocumentLifecycle,
   refreshReviewPolicy as refreshReviewPolicyLifecycle,
-  type LifecycleDeps,
-} from "./review-service/lifecycle";
+} from "./review-service/lifecycle/reconcile";
+import {
+  cleanupIgnoredSources as cleanupIgnoredSourcesLifecycle,
+  cleanupMissingSources as cleanupMissingSourcesLifecycle,
+} from "./review-service/lifecycle/cleanup";
 import {
   baselineContent as baselineContentLifecycle,
   isBaselineUri,

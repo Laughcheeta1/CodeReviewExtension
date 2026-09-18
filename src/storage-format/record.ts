@@ -1,9 +1,9 @@
-import {
-  reviewStats,
-  type FileRecord,
-  type ReviewStatus,
-  type SourceSnapshot,
-} from "../domain";
+import { reviewStats } from "../domain/status";
+import type {
+  FileRecord,
+  ReviewStatus,
+  SourceSnapshot,
+} from "../domain/types";
 
 
 export interface StoredFile {

@@ -11,8 +11,8 @@ import {
   initialStatusForBlameLine,
   isCurrentUserLine,
 } from "../src/domain/blame.ts";
-import { buildDiffRecords } from "../src/domain.ts";
-import type { FileRecord } from "../src/domain.ts";
+import { buildDiffRecords } from "../src/domain/diff.ts";
+import type { FileRecord } from "../src/domain/types.ts";
 
 const execute = promisify(execFile);
 const encoder = new TextEncoder();

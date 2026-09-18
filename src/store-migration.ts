@@ -1,10 +1,8 @@
 import * as vscode from "vscode";
 import { isFileNotFound } from "./errors";
 import { decodeSnapshot } from "./snapshot";
-import {
-  parseStoredFile,
-  storageFileName,
-} from "./storage-format";
+import { parseStoredFile } from "./storage-format/schema";
+import { storageFileName } from "./storage-format/naming";
 import { parseInitializationConfiguration } from "./tracking";
 import type { StoreFileSystem } from "./store-io";
 

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { ReviewStatus } from "../domain";
+import type { ReviewStatus } from "../domain/types";
 import type { ReviewService, ReviewSummary } from "../review-service";
 import { statusText } from "./formatting";
 

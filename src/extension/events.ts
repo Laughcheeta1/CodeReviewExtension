@@ -3,9 +3,9 @@ import { runLogged } from "../extension-utils";
 import {
   closePromotedDiffTabs,
   openDocumentInReviewView,
-} from "../review-commands";
+} from "../review-commands/diff-view";
 import type { ReviewService } from "../review-service";
-import type { ReviewDecorations } from "../ui";
+import type { ReviewDecorations } from "../ui/decorations";
 
 function collectTabState(): {
   readonly normalTextUris: ReadonlySet<string>;

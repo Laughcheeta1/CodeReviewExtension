@@ -1,7 +1,7 @@
 import type * as vscode from "vscode";
-import type { FileRecord, Reviewer, ReviewStatus } from "../domain";
+import type { FileRecord, Reviewer, ReviewStatus } from "../domain/types";
 import type { PersistentStore } from "../store";
-import type { BaselineIdentity } from "../review-mutations";
+import type { BaselineIdentity } from "../review-mutations/context";
 
 export interface ReviewActionContext {
   readonly parseBaselineUri: (uri: vscode.Uri) => BaselineIdentity | undefined;

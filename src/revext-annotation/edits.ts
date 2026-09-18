@@ -1,4 +1,4 @@
-import { physicalLines } from "../domain";
+import { physicalLines } from "../domain/identity";
 
 const revExtEditsEncoder = new TextEncoder();
 const revExtEditsDecoder = new TextDecoder("utf-8", { fatal: true });

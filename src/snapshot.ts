@@ -1,5 +1,5 @@
 import { gzipSync, gunzipSync } from "node:zlib";
-import { digestBytes } from "./domain";
+import { digestBytes } from "./domain/identity";
 
 export function encodeSnapshot(bytes: Uint8Array): Uint8Array {
   return gzipSync(bytes);

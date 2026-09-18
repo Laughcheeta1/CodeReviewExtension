@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { digestBytes } from "../src/domain.ts";
+import { digestBytes } from "../src/domain/identity.ts";
 import { decodeSnapshot, encodeSnapshot } from "../src/snapshot.ts";
 
 const encoder = new TextEncoder();

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Reviewer } from "../src/domain.ts";
+import type { Reviewer } from "../src/domain/types.ts";
 import {
   ReviewerCache,
   ReviewerResolver,

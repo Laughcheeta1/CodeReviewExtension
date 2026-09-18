@@ -174,16 +174,24 @@ moduleLoader._load = function (request: string, parent?: unknown, isMain?: unkno
 };
 
 let storeMod: typeof import("../src/store.ts");
-let storageFormat: typeof import("../src/storage-format.ts");
-let domain: typeof import("../src/domain.ts");
+let diffMod: typeof import("../src/domain/diff.ts");
+let blameMod: typeof import("../src/domain/blame.ts");
+let identityMod: typeof import("../src/domain/identity.ts");
+let statusMod: typeof import("../src/domain/status.ts");
+let recordMod: typeof import("../src/storage-format/record.ts");
+let schemaMod: typeof import("../src/storage-format/schema.ts");
 let sourceIo: typeof import("../src/source-io.ts");
 let naming: typeof import("../src/storage-format/naming.ts");
 let snapshotMod: typeof import("../src/snapshot.ts");
 
 before(async () => {
   storeMod = require("../src/store.ts") as typeof import("../src/store.ts");
-  storageFormat = require("../src/storage-format.ts") as typeof import("../src/storage-format.ts");
-  domain = require("../src/domain.ts") as typeof import("../src/domain.ts");
+  diffMod = require("../src/domain/diff.ts") as typeof import("../src/domain/diff.ts");
+  blameMod = require("../src/domain/blame.ts") as typeof import("../src/domain/blame.ts");
+  identityMod = require("../src/domain/identity.ts") as typeof import("../src/domain/identity.ts");
+  statusMod = require("../src/domain/status.ts") as typeof import("../src/domain/status.ts");
+  recordMod = require("../src/storage-format/record.ts") as typeof import("../src/storage-format/record.ts");
+  schemaMod = require("../src/storage-format/schema.ts") as typeof import("../src/storage-format/schema.ts");
   sourceIo = require("../src/source-io.ts") as typeof import("../src/source-io.ts");
   naming = require("../src/storage-format/naming.ts") as typeof import("../src/storage-format/naming.ts");
   snapshotMod = require("../src/snapshot.ts") as typeof import("../src/snapshot.ts");
@@ -250,7 +258,7 @@ test("initialization persists pending and reviewed records across a simulated re
     // Snapshots must still decode to the recorded baseline digests.
     for (const [relativePath, file] of [["pending.txt", pending], ["reviewed.txt", reviewed]] as const) {
       const decoded = await restarted.loadBaseline(file!, 1024 * 1024);
-      const { digestBytes } = domain;
+      const { digestBytes } = identityMod;
       assert.equal(digestBytes(decoded), file!.baseline.digest, `baseline snapshot for ${relativePath} must match its digest`);
     }
 
@@ -280,19 +288,20 @@ test("blame-derived reviewed additions persist with reviewer attribution", async
     const me = { name: "Me", email: "me@x.test" };
     const blame = new Map([[2, { line: 2, commit: "a".repeat(40), authorName: "Alice", authorEmail: "alice@x.test" }]]);
     const at = "2026-03-01T12:00:00.000Z";
-    const diff = domain.buildDiffRecords(baseline, current, hunks, undefined, {
-      initialStatusForAddition: domain.initialStatusCallback(blame as never, me),
-      initialReviewerForAddition: domain.initialReviewerCallback(blame as never, me, at),
+    const diff = diffMod.buildDiffRecords(baseline, current, hunks, undefined, {
+      initialStatusForAddition: blameMod.initialStatusCallback(blame as never, me),
+      initialReviewerForAddition: blameMod.initialReviewerCallback(blame as never, me, at),
     });
     assert.equal(diff.currentLines[1]?.reviewStatus, "reviewed");
     assert.deepEqual(diff.currentLines[1]?.lastReviewer, { name: "Alice", email: "alice@x.test", time: at });
     assert.equal(diff.deletedLines[0]?.reviewStatus, "reviewed");
     assert.deepEqual(diff.deletedLines[0]?.lastReviewer, { name: "Alice", email: "alice@x.test", time: at });
 
-    const { digestBytes, fileStatus } = domain;
+    const { digestBytes } = identityMod;
+    const { fileStatus } = statusMod;
     const baselineDigest = digestBytes(baseline);
     const currentDigest = digestBytes(current);
-    const stored = storageFormat.storedFile("blamed.ts", {
+    const stored = recordMod.storedFile("blamed.ts", {
       baseline: { file: naming.snapshotFileName("blamed.ts", baselineDigest), digest: baselineDigest, codec: "gzip", size: baseline.byteLength, createdAt: at },
       current: { digest: currentDigest, modifiedAt: 7, size: current.byteLength, gitAlgorithm: "myers", generatedAt: at },
       fileStatus: fileStatus(diff),
@@ -300,7 +309,7 @@ test("blame-derived reviewed additions persist with reviewer attribution", async
       nextRevExtId: 1,
       updatedAt: at,
     } as never);
-    assert.notEqual(storageFormat.parseStoredFile(JSON.parse(JSON.stringify(stored))), undefined, "blame-reviewed record must satisfy v4 validation");
+    assert.notEqual(schemaMod.parseStoredFile(JSON.parse(JSON.stringify(stored))), undefined, "blame-reviewed record must satisfy v4 validation");
 
     // It must also survive a real store restart, not just an in-memory parse.
     const store = new storeMod.PersistentStore(folder, fakeLog as unknown as import("vscode").LogOutputChannel, storageUri);
@@ -333,13 +342,14 @@ test("commit refuses reviewed-without-reviewer with a detailed error", async () 
     const baseline = encoder.encode("a\n");
     const current = encoder.encode("a\nnew\n");
     const hunks = [{ oldStart: 1, oldCount: 0, newStart: 2, newCount: 1 }];
-    const diff = domain.buildDiffRecords(baseline, current, hunks, undefined, {
+    const diff = diffMod.buildDiffRecords(baseline, current, hunks, undefined, {
       initialStatusForAddition: () => "reviewed" as const,
     });
     assert.equal(diff.currentLines[1]?.reviewStatus, "reviewed");
     assert.equal(diff.currentLines[1]?.lastReviewer, undefined);
 
-    const { digestBytes, fileStatus } = domain;
+    const { digestBytes } = identityMod;
+    const { fileStatus } = statusMod;
     const baselineDigest = digestBytes(baseline);
     const currentDigest = digestBytes(current);
     const at = "2026-03-01T12:00:00.000Z";
@@ -374,8 +384,11 @@ test("commit refuses reviewed-without-reviewer with a detailed error", async () 
 });
 
 test("describeStoredFileProblem names the exact broken invariant", async () => {
-  const { describeStoredFileProblem, parseStoredFile, storedFile } = storageFormat;
-  const { buildDiffRecords, digestBytes, fileStatus } = domain;
+  const { describeStoredFileProblem, parseStoredFile } = schemaMod;
+  const { storedFile } = recordMod;
+  const { buildDiffRecords } = diffMod;
+  const { digestBytes } = identityMod;
+  const { fileStatus } = statusMod;
   const encoder = new TextEncoder();
   const baseline = encoder.encode("a\nb\n");
   const current = encoder.encode("a\nc\n");

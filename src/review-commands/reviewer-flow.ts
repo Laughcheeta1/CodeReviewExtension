@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { Reviewer } from "../domain";
+import type { Reviewer } from "../domain/types";
 import type { ReviewerResolver } from "../reviewer";
 
 export async function resolveReviewer(

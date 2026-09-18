@@ -1,14 +1,14 @@
 import * as vscode from "vscode";
-import {
-  buildDiffRecords,
-  digestBytes,
-  fileStatus,
-  type FileRecord,
-  type RawGitHunk,
-  type SourceSnapshot,
-} from "./domain";
+import { buildDiffRecords } from "./domain/diff";
+import { digestBytes } from "./domain/identity";
+import { fileStatus } from "./domain/status";
+import type {
+  FileRecord,
+  RawGitHunk,
+  SourceSnapshot,
+} from "./domain/types";
 import { GitService } from "./git";
-import { snapshotFileName } from "./storage-format";
+import { snapshotFileName } from "./storage-format/naming";
 import { now } from "./review-service-utils";
 
 const decoder = new TextDecoder("utf-8", { fatal: true });

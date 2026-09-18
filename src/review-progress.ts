@@ -1,4 +1,4 @@
-import type { ReviewStatus } from "./domain";
+import type { ReviewStatus } from "./domain/types";
 
 export function folderProgressMessage(
   marked: number,

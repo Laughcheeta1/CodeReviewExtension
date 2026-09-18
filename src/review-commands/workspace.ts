@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { terminalPayload } from "../domain";
+import { terminalPayload } from "../domain/terminal";
 import { errorMessage } from "../extension-utils";
 import type { GitIgnoreService } from "../git-ignore";
 import type { ReviewService } from "../review-service";

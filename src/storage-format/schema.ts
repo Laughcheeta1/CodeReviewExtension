@@ -1,5 +1,6 @@
-import { fileStatus, type FileRecord, type ReviewStatus } from "../domain";
-import type { LastReviewer } from "../domain";
+import { fileStatus } from "../domain/status";
+import type { FileRecord, ReviewStatus } from "../domain/types";
+import type { LastReviewer } from "../domain/types";
 import { snapshotFileName } from "./naming";
 import type { StoredFile } from "./record";
 import { isFileRecord, isObject, isRelativePath } from "./validate";

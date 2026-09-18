@@ -3,14 +3,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import ts from "typescript";
+import { buildDiffRecords } from "../src/domain/diff.ts";
+import { digestBytes, isEmptyPhysicalLine } from "../src/domain/identity.ts";
 import {
-  buildDiffRecords,
-  digestBytes,
-  isEmptyPhysicalLine,
   newlyAddedLineNumbers,
   updateAddedLineDigests,
-  type FileRecord,
-} from "../src/domain.ts";
+} from "../src/domain/transfer.ts";
+import type { FileRecord } from "../src/domain/types.ts";
 import {
   revExtEdits,
   revExtMarkerStart,

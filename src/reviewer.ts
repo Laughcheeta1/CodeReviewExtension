@@ -1,4 +1,4 @@
-import type { Reviewer } from "./domain";
+import type { Reviewer } from "./domain/types";
 import { coalesced, serialized } from "./concurrency";
 
 const REVIEWER_CACHE_KEY = "reviewerCache";

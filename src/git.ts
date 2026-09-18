@@ -3,9 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { GitBlameLine, RawGitHunk, Reviewer } from "./domain";
+import type { GitBlameLine, RawGitHunk, Reviewer } from "./domain/types";
 
-export type { GitBlameLine } from "./domain";
+export type { GitBlameLine } from "./domain/types";
 
 const execute = promisify(execFile);
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;

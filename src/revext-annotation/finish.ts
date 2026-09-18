@@ -1,9 +1,6 @@
 import type * as vscode from "vscode";
-import {
-  updateAddedLineDigests,
-  type FileRecord,
-  type RawGitHunk,
-} from "../domain";
+import { updateAddedLineDigests } from "../domain/transfer";
+import type { FileRecord, RawGitHunk } from "../domain/types";
 import { diffWithProgress, type PreparedSource } from "../source-io";
 import type { RevExtAnnotationContext } from "./context";
 

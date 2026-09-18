@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { ReviewStatus } from "../domain";
+import type { ReviewStatus } from "../domain/types";
 
 export const statusText: Record<ReviewStatus, string> = {
   pending: "Pending review",

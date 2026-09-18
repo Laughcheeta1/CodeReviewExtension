@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { digestBytes, newlyAddedLineNumbers } from "../domain";
+import { digestBytes } from "../domain/identity";
+import { newlyAddedLineNumbers } from "../domain/transfer";
 import { revExtEdits } from "../revext";
 import { diffWithProgress, readStableSource } from "../source-io";
 import type { RevExtAnnotationContext } from "./context";
