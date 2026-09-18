@@ -26,7 +26,7 @@ Open **Go to Review View** or select a file in the Code Review sidebar. The comp
 - After a saved edit on the right, the open diff resolves decorations and left-side actions against the latest saved generation while keeping the same baseline. If a deleted line is restored, its old left-side action becomes a safe no-op.
 - A replacement remains one deletion plus one addition; the extension does not guess that they form a “modified” line.
 - Use the line commands for selections. In the Explorer, right-click a tracked file to mark all of its reviewable changes as pending, in review, or reviewed.
-- To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>. Confirm delivery only when the terminal is ready to receive the text: a shell can execute embedded commands. Canceling sends nothing.
+- To send the current editor selection to an agent, use **Send Selection to Agent** from the editor right-click menu or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>. The selection is sent to the terminal immediately.
 - **Mark File Pending** also works for a clean tracked file: it makes every physical line in that file pending without changing review metadata for other files.
 - Deleting a source file hides it for the rest of the current VS Code session but preserves its review metadata. On the next startup, metadata and snapshots for files that still do not exist are removed.
 - By default, deleting a line containing only its line ending is reviewable;

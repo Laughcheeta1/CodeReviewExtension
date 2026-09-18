@@ -457,10 +457,7 @@ Reviewer resolution is cached per workspace and follows this order: cached
 identity, local Git identity, configured `reviewerName`/`reviewerEmail`, then
 interactive fallback. `sendSelectionToTerminal` sends fenced, line-labeled
 current editor text to the active terminal or creates a `Code Review Agent`
-terminal. Each invocation requires explicit confirmation before creating a
-terminal, starting a command, or delivering text: a shell can execute embedded
-newlines even when `sendText` does not append another newline. Confirmation is
-not cached because the foreground program can change between invocations.
+terminal. Delivery is immediate without a confirmation prompt.
 A configured `agentCommand` is started only when a new terminal is created and
 the workspace is trusted, using configuration scoped to the source workspace.
 

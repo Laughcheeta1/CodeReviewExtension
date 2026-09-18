@@ -33,7 +33,7 @@ export async function initializeAll(
   }
 }
 
-export async function sendSelection(service: ReviewService): Promise<void> {
+export function sendSelection(service: ReviewService): void {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined || editor.document.uri.scheme !== "file") {
     return;
@@ -47,14 +47,6 @@ export async function sendSelection(service: ReviewService): Promise<void> {
     editor.document.getText(),
     selectionRanges(editor),
   );
-  const approval = await vscode.window.showWarningMessage(
-    "Send the selected source to the terminal? A terminal running a shell may execute the text as commands.",
-    { modal: true },
-    "Send Selection",
-  );
-  if (approval !== "Send Selection") {
-    return;
-  }
   let terminal = vscode.window.activeTerminal;
   if (terminal === undefined) {
     terminal = createAgentTerminal(editor.document.uri);

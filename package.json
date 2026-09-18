@@ -2,7 +2,7 @@
   "name": "code-review-tracker",
   "displayName": "Code Review Tracker",
   "description": "Persistent, line-level code review tracking for VS Code.",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "publisher": "local",
   "license": "MIT",
   "engines": {

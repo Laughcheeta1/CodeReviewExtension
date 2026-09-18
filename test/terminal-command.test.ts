@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import Module, { createRequire } from "node:module";
 import test, { beforeEach } from "node:test";
-import type * as vscode from "vscode";
 import type { ReviewService } from "../src/review-service.ts";
 
 const source = { scheme: "file", fsPath: "/workspace/source.ts" };
@@ -12,8 +11,6 @@ const editor = {
 };
 const sent: [string, boolean][] = [];
 const terminal = { sendText: (text: string, newline: boolean) => sent.push([text, newline]), show: () => {} };
-let answer: string | undefined;
-let approval: (() => Promise<string | undefined>) | undefined;
 let trusted = true;
 let agentCommand = " agent --interactive ";
 let activeTerminal: typeof terminal | undefined;
@@ -21,7 +18,7 @@ let activeEditor: typeof editor | undefined;
 let relativePath: string | undefined;
 const creations: unknown[] = [];
 const configurations: unknown[][] = [];
-const warnings: { message: string; options: vscode.MessageOptions; actions: string[] }[] = [];
+const warnings: unknown[] = [];
 const fakeVscode = {
   workspace: {
     get isTrusted() { return trusted; },
@@ -34,9 +31,9 @@ const fakeVscode = {
   window: {
     get activeTextEditor() { return activeEditor; },
     get activeTerminal() { return activeTerminal; },
-    showWarningMessage: (message: string, options: vscode.MessageOptions, ...actions: string[]) => {
-      warnings.push({ message, options, actions });
-      return approval?.() ?? Promise.resolve(answer);
+    showWarningMessage: (...args: unknown[]) => {
+      warnings.push(args);
+      throw new Error("terminal confirmation prompt must not appear");
     },
     createTerminal: (options: unknown) => {
       creations.push(options);
@@ -62,8 +59,6 @@ const service = { relativePath: () => relativePath } as unknown as ReviewService
 const expectedPayload = "> Line 1 - 2, file source.ts:\n```\necho first\necho second\n```\n\n";
 
 beforeEach(() => {
-  answer = "Send Selection";
-  approval = undefined;
   trusted = true;
   agentCommand = " agent --interactive ";
   activeTerminal = undefined;
@@ -75,70 +70,48 @@ beforeEach(() => {
   warnings.length = 0;
 });
 
-test("approval precedes terminal creation, agent startup, and unchanged payload sending", async () => {
-  let approve!: (value: string) => void;
-  approval = () => new Promise<string>((resolve) => { approve = resolve; });
-  const pending = commands.sendSelection(service);
-  assert.equal(warnings.length, 1);
-  assert.equal(warnings[0]?.options.modal, true);
-  assert.match(warnings[0]?.message ?? "", /shell may execute/);
-  assert.deepEqual(warnings[0]?.actions, ["Send Selection"]);
-  assert.deepEqual(creations, []);
-  assert.deepEqual(sent, []);
-  assert.deepEqual(configurations, []);
-  approve("Send Selection");
-  await pending;
+test("sends selection without confirmation, starting the agent on terminal creation", () => {
+  commands.sendSelection(service);
+  assert.deepEqual(warnings, []);
   assert.deepEqual(creations, [{ name: "Code Review Agent", cwd: folder.uri }]);
   assert.deepEqual(configurations, [["codeReviewTracker", source]]);
   assert.deepEqual(sent, [["agent --interactive", true], [expectedPayload, false]]);
 });
 
-test("cancellation has no terminal or configuration side effects", async () => {
-  for (const existing of [undefined, terminal]) {
-    activeTerminal = existing;
-    answer = undefined;
-    await commands.sendSelection(service);
-    assert.deepEqual(creations, []);
-    assert.deepEqual(sent, []);
-    assert.deepEqual(configurations, []);
-  }
-});
-
-test("existing terminal requires approval on every invocation and starts no agent", async () => {
+test("existing terminal receives payload directly and starts no agent", () => {
   activeTerminal = terminal;
-  await commands.sendSelection(service);
-  answer = undefined;
-  await commands.sendSelection(service);
-  assert.equal(warnings.length, 2);
-  assert.deepEqual(sent, [[expectedPayload, false]]);
+  commands.sendSelection(service);
+  commands.sendSelection(service);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(sent, [[expectedPayload, false], [expectedPayload, false]]);
   assert.deepEqual(creations, []);
   assert.deepEqual(configurations, []);
 });
 
-test("Restricted Mode permits approved payload but never executes configured agent", async () => {
+test("Restricted Mode sends payload but never executes configured agent", () => {
   trusted = false;
-  await commands.sendSelection(service);
+  commands.sendSelection(service);
   assert.equal(creations.length, 1);
   assert.deepEqual(sent, [[expectedPayload, false]]);
 });
 
-test("blank agent configuration sends only the approved selection", async () => {
+test("blank agent configuration sends only the selection", () => {
   agentCommand = "   ";
-  await commands.sendSelection(service);
+  commands.sendSelection(service);
   assert.deepEqual(sent, [[expectedPayload, false]]);
 });
 
-test("missing editor or workspace source has no terminal side effects or prompt", async () => {
+test("missing editor or workspace source has no terminal side effects", () => {
   activeEditor = undefined;
-  await commands.sendSelection(service);
+  commands.sendSelection(service);
   activeEditor = {
     ...editor,
     document: { ...editor.document, uri: { ...source, scheme: "untitled" } },
   };
-  await commands.sendSelection(service);
+  commands.sendSelection(service);
   activeEditor = editor;
   relativePath = undefined;
-  await commands.sendSelection(service);
+  commands.sendSelection(service);
   assert.deepEqual(warnings, []);
   assert.deepEqual(creations, []);
   assert.deepEqual(sent, []);
